@@ -1,2 +1,4 @@
 chess_v3.10/
+__pycache__/
+
 stockfish.exe

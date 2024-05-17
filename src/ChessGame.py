@@ -133,9 +133,9 @@ class ChessGame:
         # sorted_features = sorted(feature_values, key=lambda x: x[1], reverse=True)
         # top_features = sorted_features[:MAX_POSITIONAL_FEAUTRES]
         
-        print("Top 5 features with highest values:")
+        print("\nPositional features:")
         for feature, value in feature_values:
-            print(f"{feature}: {value}")
+            print(f"\t{feature}: {value}")
 
     def _display_board(self, last_move=None):
         """Display the current board state with the last move highlighted."""
