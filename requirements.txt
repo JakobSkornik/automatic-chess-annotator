@@ -1,0 +1,7 @@
+cachetools==5.3.3
+chess==1.10.0
+chevy==0.2.2
+msgpack==1.0.8
+numpy==1.26.4
+python-chess==1.999
+scipy==1.13.0
