@@ -65,7 +65,7 @@ class ChessGame:
 
         self.board = self.game.board()
         last_move = None
-        color = chess.WHITE if n % 2 == 0 else chess.BLACK
+        color = chess.WHITE if n % 2 == 1 else chess.BLACK
 
         for i, move in enumerate(self.game.mainline_moves()):
             self.board.push(move)
@@ -104,7 +104,7 @@ class ChessGame:
 
         info = self.engine.analyse(self.board, chess.engine.Limit(time=0.1))
         score = info["score"].relative
-        print("Evaluation:", score)
+        print(f"""Evaluation for {"WHITE" if color else "BLACK"}: {score}""")
 
         self._print_features(color)
 
