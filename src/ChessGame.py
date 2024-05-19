@@ -5,33 +5,13 @@ import chess.svg
 from chevy.features import KingSafety, PawnStructure, BoardFeatures
 from IPython.display import display, SVG
 
+from src.features.chevy import (
+    CHEVY_BOARD_FEATURES,
+    CHEVY_KING_FEATURES,
+    CHEVY_PAWN_FEATURES,
+)
+
 MAX_POSITIONAL_FEAUTRES = 5
-
-CHEVY_KING_FEATURES = [
-    "king_mobility",
-    "king_centrality",
-    "king_attackers_looking_at_ring_1",
-    "king_defenders_at_ring_1",
-    "checked",
-    "castling_rights",
-]
-
-CHEVY_PAWN_FEATURES = [
-    "passed_pawns",
-    "isolated_pawns",
-    "blocked_pawns",
-    "central_pawns",
-]
-
-CHEVY_BOARD_FEATURES = [
-    "bishop_pair",
-    "fianchetto_queen",
-    "fianchetto_king",
-    "queens_mobility",
-    "open_files_rooks_count",
-    "connected_rooks",
-    "connectivity",
-]
 
 
 class ChessGame:
@@ -46,6 +26,7 @@ class ChessGame:
         self.engine_path = engine_path
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
         self._load_game(pgn_path, game_number)
+
         self.king_features = CHEVY_KING_FEATURES
         self.pawn_features = CHEVY_PAWN_FEATURES
         self.board_features = CHEVY_BOARD_FEATURES
@@ -123,18 +104,23 @@ class ChessGame:
         for feature in self.pawn_features:
             value = getattr(pawn_features, feature)
             feature_values.append((feature, value))
-        
+
         for feature in self.board_features:
             value = getattr(board_features, feature)
             feature_values.append((feature, value))
-        
-        # print(feature_values)
-        
-        # sorted_features = sorted(feature_values, key=lambda x: x[1], reverse=True)
-        # top_features = sorted_features[:MAX_POSITIONAL_FEAUTRES]
-        
+
+        numerical_features = []
+        for feature in feature_values:
+            if isinstance(feature[1], int):
+                numerical_features.append((feature[0], int(feature[1])))
+            elif isinstance(feature[1], list):
+                array_sum = 0
+                for i, value in enumerate(feature[1]):
+                    array_sum += value
+                numerical_features.append((f"{feature[0]}", array_sum))
+
         print("\nPositional features:")
-        for feature, value in feature_values:
+        for feature, value in numerical_features:
             print(f"\t{feature}: {value}")
 
     def _display_board(self, last_move=None):
