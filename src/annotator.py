@@ -52,18 +52,26 @@ class Annotator:
         :return: A string comment to be added to the PGN.
         """
 
+        move = move_eval["move"]
         tag = move_eval["evaluation"][0]
         scores = move_eval["evaluation"][1]
         explanation = move_eval["evaluation"][2]
-        move = move_eval["move"]
 
         if not scores:
             return ""
 
-        std, ltd, sts, lts, psts, plts, color, wcd, wc = scores
+        # std, ltd, sts, lts, psts, plts, color, wcd, wc = scores
+
+        std = scores.short_term_diff
+        ltd = scores.long_term_diff
+        sts = scores.short_term_ep
+        lts = scores.long_term_ep
+        psts = scores.prev_short_term_ep
+        plts = scores.prev_long_term_ep
+        color = scores.stm
 
         comment = f"{tag} {str(explanation)} " if tag else ""
-        score_report = f"(LT: {lts}, PT {plts}, d {ltd}, wcd {wcd}, ec {wc})"
+        score_report = f"EP: {plts:0.2f} -> {lts:0.2f} ({ltd:0.2f})"
 
         if debug or (tag and tag != "Not Quiescent"):
             return comment + score_report

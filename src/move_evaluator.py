@@ -3,6 +3,11 @@ import chess
 from enum import Enum
 from tqdm import tqdm
 
+from src.classes.AltMoveScore import AltMoveScore
+from src.classes.MovePoints import MovePoints
+from src.classes.Score import Score
+from src.classes.Wdl import Wdl
+
 
 # Tag enum
 class Tags(Enum):
@@ -43,10 +48,9 @@ class MoveEvaluator:
         n_moves = len(list(game.mainline_moves()))
         for move in tqdm(game.mainline_moves(), total=n_moves, disable=not prog_bar):
             board.push(move)
-            eval = self.get_score(board, prev_terms)
 
-            # Classify the move based on both shallow and deep evaluations
-            clsf = self.classify_move(eval, board, move)
+            score = self.get_score(board, prev_terms)
+            clsf = self.classify_move(score, board, move)
 
             move_evaluations.append(
                 {
@@ -58,8 +62,8 @@ class MoveEvaluator:
             )
 
             prev_terms = {
-                "short_term_info": eval["short_term_info"],
-                "long_term_info": eval["long_term_info"],
+                "short_term_info": score.short_term_info,
+                "long_term_info": score.long_term_info,
             }
 
             if debug:
@@ -75,43 +79,77 @@ class MoveEvaluator:
         :param prev_term_info: The engine's previous analysis info.
         """
 
+        stm = board.turn
+
         # Short-term evaluation at shallow depth
-        short_term_info = self.engine.analyse(
+        st_analysis = self.engine.analyse(
             board,
             chess.engine.Limit(depth=self.shallow_depth),
         )
+        st_score = st_analysis["score"]
+        st_wdl = self.get_wdl_from_score(st_score, stm)
 
         # Long-term evaluation at deep depth
-        long_term_info = self.engine.analyse(
+        lt_analysis = self.engine.analyse(
             board,
             chess.engine.Limit(depth=self.deep_depth),
         )
+        lt_score = lt_analysis["score"]
+        lt_wdl = self.get_wdl_from_score(lt_score, stm)
 
-        score = {
-            "short_term_info": short_term_info,
-            "long_term_info": long_term_info,
-            "prev_lterm_info": prev_terms["long_term_info"] if prev_terms else None,
-            "prev_sterm_info": prev_terms["short_term_info"] if prev_terms else None,
-        }
+        pst = prev_terms["short_term_info"] if prev_terms else None
+        plt = prev_terms["long_term_info"] if prev_terms else None
 
+        score = Score(st_wdl, lt_wdl, pst, plt)
         return score
 
-    def classify_move(self, evaluation, board, move):
+    def get_wdl_from_score(self, score, stm):
+        """
+        Adapted from:
+          - https://support.chess.com/en/articles/8572705-how-are-moves-classified-what-is-a-blunder-or-brilliant-etc
+
+        :param score: The evaluation score.
+        :param stm: The side to move.
+        :return : A Wdl object.
+        """
+
+        wdl = score.wdl()
+        wins, draws, losses = wdl[0], wdl[1], wdl[2]
+
+        score = wins + draws / 2
+        total = wins + draws + losses
+
+        score_rate = score / total
+        win_rate = wins / total
+        loss_rate = losses / total
+
+        # Win chance
+        bwc = win_rate if stm == chess.WHITE else loss_rate
+        wwc = win_rate if stm == chess.BLACK else loss_rate
+
+        # Score rate
+        bsr = score_rate if stm == chess.WHITE else 1 - score_rate
+        wsr = score_rate if stm == chess.BLACK else 1 - score_rate
+
+        wdl = Wdl(wwc, wsr, bwc, bsr)
+        return wdl
+
+    def classify_move(self, score, board, move):
         """
         Classifies a move based on short-term and long-term evaluation scores and other factors.
 
-        :param evaluation: The evaluation score at different depths after the move.
+        :param score: The evaluation score at different depths after the move.
         :param board: The current state of the board after the move.
         :param move: The move to be classified.
         :return: A string classifying the move as '!!', '!', '?', '??', or None.
         """
-        plti = evaluation["prev_lterm_info"]
 
-        scores = self._parse_eval(board, evaluation)
+        scores = self._process_score(board, score)
         if scores is None:
             return None, None
 
         # Obtain pv scores
+        plti = score.prev_lterm_info
         pv_scores = self.get_pv_scores(board, plti)
 
         # Blunder (??) (blunder can happen on non-quiescent moves)
@@ -129,7 +167,7 @@ class MoveEvaluator:
             return t, scores, e
 
         # Good move (!)
-        good, t, e = self.good_move_check(scores, pv_scores)
+        good, t, e = self.good_move_check(scores, pv_scores, move)
         if good:
             return t, scores, e
 
@@ -148,7 +186,8 @@ class MoveEvaluator:
         :param prev_term: The engine's previous analysis info.
         :return: A list of tuples containing the move and its evaluation score.
         """
-        MATE_SCORE = 10000
+
+        stm = board.turn
         pvs = []
 
         if not prev_term:
@@ -164,61 +203,64 @@ class MoveEvaluator:
             analysis = self.engine.analyse(
                 pv_board, chess.engine.Limit(depth=10, time=0.1)
             )
-            score = analysis["score"].white().score(mate_score=MATE_SCORE)
-            prev_score = prev_term["score"].white().score(mate_score=MATE_SCORE)
+            score = analysis["score"]
+            prev_score = prev_term
 
-            diff = score - prev_score
-            if board.turn == chess.WHITE:
-                diff = -diff
+            # Obtain wdl for current POV from previous board state
+            wdl = self.get_wdl_from_score(score, stm)
+            if stm == chess.WHITE:
+                diff = wdl.white_score_rate - prev_score.white_score_rate
+            else:
+                diff = wdl.black_score_rate - prev_score.black_score_rate
 
-            pvs.append((move, diff if score and prev_score else 0))
+            alt_move_score = AltMoveScore(move, diff)
+            pvs.append(alt_move_score)
 
         # sort pvs by score desc
-        pvs.sort(key=lambda x: x[1], reverse=True)
-        print(pvs[0][1])
+        pvs.sort(key=lambda x: x.diff, reverse=True)
         return pvs
 
-    def _parse_eval(self, board, evaluation):
+    def _process_score(self, board, score):
         """
-        Calculates the difference in evaluation scores between the current and previous moves.
+        Calculates the difference in evaluation scores between the current
+        and previous moves.
 
         :param board: The current state of the board.
-        :param evaluation: The evaluation score at different depths after the move.
+        :param score: The evaluation score at different depths after the move.
         :return: The difference in short-term and long-term evaluation scores.
         """
 
-        MATE_SCORE = 10000
+        stm = board.turn
 
-        sti = evaluation["short_term_info"]
-        lti = evaluation["long_term_info"]
+        # Expected points
+        if stm == chess.WHITE:
+            st_exp = score.short_term_info.white_score_rate
+            lt_exp = score.long_term_info.white_score_rate
+            pst_exp = (
+                score.prev_sterm_info.white_score_rate if score.prev_sterm_info else 0.5
+            )
+            plt_exp = (
+                score.prev_lterm_info.white_score_rate if score.prev_lterm_info else 0.5
+            )
+        else:
+            st_exp = score.short_term_info.black_score_rate
+            lt_exp = score.long_term_info.black_score_rate
+            pst_exp = (
+                score.prev_sterm_info.black_score_rate if score.prev_sterm_info else 0.5
+            )
+            plt_exp = (
+                score.prev_lterm_info.black_score_rate if score.prev_lterm_info else 0.5
+            )
 
-        psti = evaluation["prev_sterm_info"]
-        plti = evaluation["prev_lterm_info"]
+        std = st_exp - pst_exp
+        ltd = lt_exp - plt_exp
 
-        sts = sti["score"].white().score(mate_score=MATE_SCORE)
-        lts = lti["score"].white().score(mate_score=MATE_SCORE)
+        wcw = score.long_term_info.white_win_chance
+        wcb = score.long_term_info.black_win_chance
 
-        psts = (psti["score"].white().score(mate_score=MATE_SCORE)) if psti else 0
-        plts = (plti["score"].white().score(mate_score=MATE_SCORE)) if plti else 0
+        mp = MovePoints(std, ltd, st_exp, lt_exp, pst_exp, plt_exp, wcw, wcb, stm)
 
-        if plts is None or psts is None:
-            return None
-
-        std = sts - psts
-        ltd = lts - plts
-
-        lwdl = lti["score"].wdl().white().expectation()
-        pwdl = psti["score"].wdl().white().expectation() if psti else 0
-        win_chance_diff = lwdl - pwdl
-        win_chance = lwdl
-
-        # Technically we check if previous to make a move is white or black
-        if board.turn == chess.WHITE:
-            std = -std
-            ltd = -ltd
-            win_chance_diff = -win_chance_diff
-
-        return std, ltd, sts, lts, psts, plts, board.turn, win_chance_diff, win_chance
+        return mp
 
     def brilliant_move_check(self, scores, pv_scores, move):
         """
@@ -232,16 +274,19 @@ class MoveEvaluator:
                  with the tag and the explanation.
         """
 
-        BRILLIANT_MOVE = 150
-        LONG_DELTA_FACTOR = 0.8
-        BRILLIANT_MOVE_FACTOR = 0.7
+        # Diff limits
+        LIMITS = [0.1, 1]
+        BRILLIANT_LIMITS = [0.2, 1]
 
-        std = scores[0]
-        ltd = scores[1]
-        wcd = scores[7]
+        # Expected points limits
+        VERY_LOSING_LIMITS = [0, 0.3]
+        VERY_WINNING_LIMITS = [0.9, 1]
+        LONG_DELTA_FACTOR = 0.7
 
-        if wcd < 0.1:
-            return False, None, None
+        std = scores.short_term_diff
+        ltd = scores.long_term_diff
+        lt_exp = scores.long_term_ep
+        plt_exp = scores.prev_long_term_ep
 
         """ Scenario 1:
         
@@ -249,8 +294,12 @@ class MoveEvaluator:
         much higher than the short-term score. 
         """
 
-        if ltd >= BRILLIANT_MOVE and std <= LONG_DELTA_FACTOR * ltd:
-            explanation = f"The move is evaluated highly and has long-term score ({ltd}) much higher than the short-term score ({std})."
+        if (
+            self.is_in(ltd, BRILLIANT_LIMITS)
+            and std <= LONG_DELTA_FACTOR * ltd
+            and not self.is_in(lt_exp, VERY_LOSING_LIMITS)
+        ):
+            explanation = f"The move is evaluated highly and has long-term score ({ltd:0.2f}) much higher than the short-term score ({std:0.2f})."
             return True, Tags.BRILLIANT_MOVE_TAG.value, explanation
 
         """ Scenario 2:
@@ -262,17 +311,22 @@ class MoveEvaluator:
         if self._verify_pv_scores(pv_scores):
             return False, None, None
 
+        best_move_score = pv_scores[0].diff
+        second_best_move_score = pv_scores[1].diff
+
         if (
-            len(pv_scores) >= 2
-            and move == pv_scores[0][0]
-            and pv_scores[1][1] / (pv_scores[0][1] + 1e-7) >= BRILLIANT_MOVE_FACTOR
+            best_move_score > 0
+            and second_best_move_score <= 0
+            and self.is_in(ltd, LIMITS)
+            and not self.is_in(lt_exp, VERY_LOSING_LIMITS)
+            and not self.is_in(plt_exp, VERY_WINNING_LIMITS)
         ):
-            explanation = f"The move is the best move among the possible variations ({pv_scores[0][1]}) and is rated much higher than the second best move {pv_scores[1][0]} ({pv_scores[1][1]})."
-            return True, Tags.BRILLIANT_MOVE_TAG.value, explanation
+            explanation = f"The only positive move among possible variations."
+            return True, Tags.GOOD_MOVE_TAG.value, explanation
 
         return False, None, None
 
-    def good_move_check(self, scores, pv_scores):
+    def good_move_check(self, scores, pv_scores, move):
         """
         Checks if the move is a good move based on the evaluation
         scores and principal variations.
@@ -283,31 +337,55 @@ class MoveEvaluator:
                  with the tag and the explanation.
         """
 
-        ALLOWED_DELTA = 0.7
-        GOOD_MOVE = 50
+        # Diff limits
+        LIMITS = [0.02, 0.1]
 
-        std = scores[0]
-        ltd = scores[1]
-        wcd = scores[7]
+        # Expected points limits
+        LOSING_LIMITS = [0, 0.48]
+        EQUAL_LIMITS = [0.48, 0.52]
+        WINNING_LIMITS = [0.52, 1]
 
-        if wcd < 0.1:
-            return False, None, None
+        ltd = scores.long_term_diff
+        std = scores.short_term_diff
+        st_exp = scores.short_term_ep
+        lt_exp = scores.long_term_ep
+        plt_exp = scores.prev_long_term_ep
+        pst_exp = scores.prev_short_term_ep
 
         """ Scenario 1:
-        A good move leads to a better position and is not significantly worse 
-        than the best move.
+        Turning a losing position into a winning one.
         """
 
-        if self._verify_pv_scores(pv_scores):
-            return False, None, None
-
-        best_move_score = pv_scores[0][1]
         if (
-            std > GOOD_MOVE
-            and ltd > GOOD_MOVE
-            and ltd >= ALLOWED_DELTA * best_move_score
+            self.is_in(std, LIMITS)
+            and self.is_in(pst_exp, LOSING_LIMITS)
+            and self.is_in(st_exp, WINNING_LIMITS)
         ):
-            explanation = f"Leads to a noticeably better position ({ltd}) and is not significantly worse than the best move ({best_move_score})."
+            explanation = f"Turning a losing position into a winning one ({pst_exp:0.2f} -> {st_exp:0.2f})."
+            return True, Tags.GOOD_MOVE_TAG.value, explanation
+
+        """ Scenario 2:
+        Turning a losing position into an equal one.
+        """
+
+        if (
+            self.is_in(std, LIMITS)
+            and self.is_in(pst_exp, LOSING_LIMITS)
+            and self.is_in(st_exp, EQUAL_LIMITS)
+        ):
+            explanation = f"Turning a losing position into an equal one ({pst_exp:0.2f} -> {st_exp:0.2f})."
+            return True, Tags.GOOD_MOVE_TAG.value, explanation
+
+        """ Scenario 3:
+        Turning a drawn position into a winning one.
+        """
+
+        if (
+            self.is_in(std, LIMITS)
+            and self.is_in(pst_exp, EQUAL_LIMITS)
+            and self.is_in(st_exp, WINNING_LIMITS)
+        ):
+            explanation = f"Turning a drawn position into a winning one ({pst_exp:0.2f} -> {st_exp:0.2f})."
             return True, Tags.GOOD_MOVE_TAG.value, explanation
 
         return False, None, None
@@ -323,14 +401,13 @@ class MoveEvaluator:
                  with the tag and the explanation.
         """
 
-        GOOD_MOVE = 50
-        MISTAKE = -50
-        BLUNDER = -150
-        MISS_FACTOR = 0.6
+        # Diff limits
+        MISTAKE_LIMITS = [-0.2, -0.1]
+        POSITIVE_LIMITS = [0.0, 1]
 
-        std = scores[0]
-        ltd = scores[1]
-        wcd = scores[7]
+        ltd = scores.long_term_diff
+        lt_exp = scores.long_term_ep
+        plt_exp = scores.prev_long_term_ep
 
         """ Scenario 1:
 
@@ -340,17 +417,21 @@ class MoveEvaluator:
         if self._verify_pv_scores(pv_scores):
             return False, None, None
 
-        best_move_score = pv_scores[0][1]
-        if ltd <= MISS_FACTOR * best_move_score and best_move_score > GOOD_MOVE:
-            explanation = f"Missed opportunity ({ltd}) to make a good move {pv_scores[0][0]} ({best_move_score})."
+        best_move_score = pv_scores[0].diff
+        if self.is_in(ltd, MISTAKE_LIMITS) and self.is_in(
+            best_move_score, POSITIVE_LIMITS
+        ):
+            explanation = f"Missed opportunity ({ltd:0.2f}) to make a good move {pv_scores[0].move} ({best_move_score:0.2f})."
             return True, Tags.MISTAKE_TAG.value, explanation
 
         """ Scenario 2:
         
         A bad move leads to a slightly worse position.
         """
-        if ltd < MISTAKE and ltd > BLUNDER:
-            explanation = f"Leads to a slightly worse position ({ltd})."
+        if self.is_in(ltd, MISTAKE_LIMITS):
+            explanation = (
+                f"Leads to a slightly worse position ({plt_exp:0.2f} -> {lt_exp:0.2f})."
+            )
             return True, Tags.MISTAKE_TAG.value, explanation
 
         return False, None, None
@@ -364,22 +445,34 @@ class MoveEvaluator:
                  with the tag and the explanation.
         """
 
-        BLUNDER = -150
+        # Diff limits
+        BLUNDER_LIMITS = [-1, -0.2]
+        POSITIVE_LIMITS = [0.0, 1]
 
-        std = scores[0]
-        ltd = scores[1]
+        ltd = scores.long_term_diff
 
         """ Scenario 1:
-        Move that leads to a significantly worse position.
+
+        Missed opportunity to make a neutral or good move and massively
+        tanking your score.
         """
 
         if self._verify_pv_scores(pv_scores):
             return False, None, None
 
-        best_move_score = pv_scores[0][1]
+        best_move_score = pv_scores[0].diff
+        if self.is_in(ltd, BLUNDER_LIMITS) and self.is_in(
+            best_move_score, POSITIVE_LIMITS
+        ):
+            explanation = f"Missed opportunity ({ltd:0.2f}) to make a neutral or good move {pv_scores[0].move} ({best_move_score:0.2f}) and heavily tanking your score."
+            return True, Tags.BLUNDER_TAG.value, explanation
 
-        if ltd <= BLUNDER and best_move_score > 0:
-            explanation = f"Leads to a significantly worse position ({ltd}) with a clear better option available {pv_scores[0][0]} ({best_move_score})."
+        """ Scenario 2:
+        Move that leads to a significantly worse position.
+        """
+
+        if self.is_in(ltd, BLUNDER_LIMITS):
+            explanation = f"Leads to a significantly worse position ({ltd:0.2f}) with a clear better option available {pv_scores[0].move} ({best_move_score:0.2f})."
             return True, Tags.BLUNDER_TAG.value, explanation
 
         return False, None, None
@@ -446,6 +539,17 @@ class MoveEvaluator:
             return False
 
         return True
+
+    def is_in(self, value: float, range_tuple: tuple) -> bool:
+        """
+        Determines if a value is within a given range.
+
+        :param value: The value to be checked.
+        :param range_tuple: A tuple representing the range.
+        :return: True if the value is within the range, False otherwise.
+        """
+        lower_bound, upper_bound = sorted(range_tuple)  # Ensure the tuple is sorted
+        return lower_bound <= value <= upper_bound
 
     def close_engine(self):
         """
