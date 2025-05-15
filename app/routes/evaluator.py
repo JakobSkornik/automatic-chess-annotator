@@ -18,7 +18,7 @@ def evaluate(request: EvaluationRequest) -> AnalysisResponse:
         raise ValueError("Failed to parse PGN data.")
 
     # Initialize engine connector and analysis retriever
-    stockfish_path = os.path.join(os.path.dirname(__file__), "..", "stockfish.exe")
+    stockfish_path = os.path.join(os.path.dirname(__file__), "..", "stockfish")
     with EngineConnector(stockfish_path, default_time_limit=0.1) as connector:
         analysis_retriever = AnalysisRetriever(connector, shallow_depth=4, deep_depth=12)
         analysis = analysis_retriever.retrieve_analysis(game)
