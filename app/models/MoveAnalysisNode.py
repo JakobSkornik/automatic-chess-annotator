@@ -11,6 +11,7 @@ class MoveAnalysisNode(BaseModel):
     shallow_score: float
     deep_score: float
     trace: Dict
+    piece: str | None
     context: str
     phase: str
     capturedByWhite: Dict[str, int]

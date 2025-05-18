@@ -80,8 +80,9 @@ class AnalysisRetriever:
             shallow_score=0,
             deep_score=0,
             trace={},
-            context="mainline",  # Changed from mainline=True
+            context="mainline",
             phase=phase,
+            piece=None,  # No piece for root
         )
 
         # Add root FEN to mainline positions
@@ -124,6 +125,7 @@ class AnalysisRetriever:
             phase = self._determine_game_phase(board)
 
             # Create the node and add to tree
+            piece_initial = self._get_piece_initial(board, move)
             node = self._create_node(
                 parent=parent_id,
                 depth=current_depth,
@@ -136,6 +138,7 @@ class AnalysisRetriever:
                 phase=phase,
                 capturedByWhite=captures_white,
                 capturedByBlack=captures_black,
+                piece=piece_initial,
             )
 
             # Add node to tree
@@ -208,6 +211,16 @@ class AnalysisRetriever:
             # Analyze the position (directly, no cache)
             board = chess.Board(fen)
 
+            # Convert move to chess.Move if it's a string and not None
+            move_obj = None
+            if move and isinstance(move, str):
+                try:
+                    move_obj = chess.Move.from_uci(move)
+                except Exception:
+                    move_obj = None
+            elif isinstance(move, chess.Move):
+                move_obj = move
+
             # Run deep analysis only for mainline moves and top PV moves
             run_deep = is_mainline or is_top_pv
             analysis_result = self._analyze_position(board, run_deep_analysis=run_deep)
@@ -224,6 +237,7 @@ class AnalysisRetriever:
                 node = existing_node
             else:
                 # Create new node and add to tree
+                piece_initial = self._get_piece_initial(board, move_obj)
                 node = self._create_node(
                     parent=parent_id,
                     depth=job["depth"],
@@ -232,18 +246,17 @@ class AnalysisRetriever:
                     shallow_score=analysis_result["shallow_score"],
                     deep_score=analysis_result["deep_score"],
                     trace=analysis_result["trace"],
-                    context=context,  # Changed from mainline=is_mainline
+                    context=context,
                     phase=phase,
                     capturedByWhite=job["capturedByWhite"],
                     capturedByBlack=job["capturedByBlack"],
+                    piece=piece_initial,
                 )
                 tree[node.id] = node
 
             # Only enqueue PVs for mainline nodes - not for PV nodes themselves
             if is_mainline:
-                self._enqueue_alternative_moves(
-                    board, node.id, queue, tree
-                )
+                self._enqueue_alternative_moves(board, node.id, queue, tree)
                 self._enqueue_principal_variation(
                     board, node.id, queue, analysis_result, tree
                 )
@@ -455,6 +468,7 @@ class AnalysisRetriever:
 
                     # Since we don't know the node ID yet (it will be created when processed),
                     # we need to make sure we create a unique parent ID reference for next move
+                    piece_initial = self._get_piece_initial(pv_board, move)
                     temp_node = self._create_node(
                         parent=current_parent_id,
                         depth=pv_board.ply(),
@@ -467,6 +481,7 @@ class AnalysisRetriever:
                         phase=phase,
                         capturedByWhite=captures_white,
                         capturedByBlack=captures_black,
+                        piece=piece_initial,
                     )
                     tree[temp_node.id] = temp_node
 
@@ -484,7 +499,9 @@ class AnalysisRetriever:
         cumulative_captures_black = {k: 0 for k in "pnbrqk"}
 
         # First collect and sort all mainline nodes
-        mainline_nodes = [node for node in tree.values() if node.context == "mainline"]  # Changed from node.mainline
+        mainline_nodes = [
+            node for node in tree.values() if node.context == "mainline"
+        ]  # Changed from node.mainline
         mainline_nodes.sort(key=lambda x: x.depth)  # Sort by depth
 
         # Process them in order to maintain running capture totals
@@ -504,6 +521,8 @@ class AnalysisRetriever:
                 move=node.move if node.move != "start" else "",
                 shallow_score=node.shallow_score,
                 deep_score=node.deep_score,
+                phase=node.phase,
+                trace=node.trace,
                 bestContinuations=best_continuations,
                 # Use the cumulative captures rather than just this node's captures
                 capturedByWhite=cumulative_captures_white.copy(),
@@ -561,6 +580,7 @@ class AnalysisRetriever:
         phase: str = None,  # Add phase parameter with default
         capturedByWhite: Dict[str, int] = None,
         capturedByBlack: Dict[str, int] = None,
+        piece: str = None,
     ) -> MoveAnalysisNode:
         if capturedByWhite is None:
             capturedByWhite = {k: 0 for k in "pnbrqk"}
@@ -585,6 +605,7 @@ class AnalysisRetriever:
             phase=phase,  # Add phase
             capturedByWhite=capturedByWhite,
             capturedByBlack=capturedByBlack,
+            piece=piece,
         )
         self.node_counter += 1
         return node
@@ -614,3 +635,12 @@ class AnalysisRetriever:
                 all_pvs.append(pv_line)
 
         return all_pvs if all_pvs else None
+
+    def _get_piece_initial(self, board: chess.Board, move: chess.Move) -> str:
+        """Return the piece initial (k, q, r, n, b, p) for the move."""
+        if move is None:
+            return None
+        piece = board.piece_at(move.to_square)
+        if piece is None:
+            return None
+        return chess.piece_symbol(piece.piece_type).lower()

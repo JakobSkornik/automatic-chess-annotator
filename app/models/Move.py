@@ -7,5 +7,7 @@ class Move(BaseModel):
     shallow_score: float
     deep_score: float
     bestContinuations: List[Dict[str, str | float]]
+    trace: Dict
+    phase: str
     capturedByWhite: Dict[str, int]
     capturedByBlack: Dict[str, int]
