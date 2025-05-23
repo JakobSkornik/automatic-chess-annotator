@@ -1,59 +1,40 @@
+import asyncio
 import chess
-from chess.pgn import Game
-from typing import Optional, List, Dict
-from collections import deque
 import logging
+from chess.pgn import Game
+from typing import AsyncGenerator, Dict, List
 
 from app.core.engine.engine_connector import EngineConnector
-from app.models.AnalysisResponse import AnalysisResponse
-from app.models.Move import Move
+from app.models.Move import Move, PV
 from app.models.MoveAnalysisNode import MoveAnalysisNode
 from app.models.PgnMetadata import PgnMetadata
 
+ANALYSIS_STAGES = [0.05, 0.1, 0.2, 0.4]
+DEFAULT_PV_COUNT = 3
 MATE_SCORE = 1000000
 logger = logging.getLogger(__name__)
 
 
 class AnalysisRetriever:
-    def __init__(
-        self,
-        engine_connector: EngineConnector,
-        shallow_depth: int = 5,
-        deep_depth: int = 12,
-    ):
+    def __init__(self, engine_connector: EngineConnector, game: Game):
+        self.analysis_stages = ANALYSIS_STAGES
         self.engine_connector = engine_connector
-        self.shallow_depth = shallow_depth
-        self.deep_depth = deep_depth
-        self.node_counter = 0
+        self.game = game
+        self._node_id_counter = 0  # For trace tree node generation
 
-    def retrieve_analysis(self, game: Game) -> AnalysisResponse:
-        analysis_queue = deque()
-        tree = {}
-
-        metadata = self._extract_metadata(game)
-        self._initialize_queue_with_mainline(game, analysis_queue, tree)
-        self._process_analysis_queue(analysis_queue, tree)
-        moves = self._generate_move_list_from_tree(tree)
-
-        print(f"Analysis completed: {len(tree)} positions analyzed")
-        serialized_tree = {node_id: node.__dict__ for node_id, node in tree.items()}
-        return AnalysisResponse(
-            metadata=metadata, moves=moves, move_tree=serialized_tree
-        )
-
-    def _extract_metadata(self, game: Game) -> PgnMetadata:
+    def get_pgn_headers(self) -> PgnMetadata:
         """Extract game metadata from PGN headers."""
-        headers = game.headers
+        headers = self.game.headers
 
         return PgnMetadata(
-            white_name=headers.get("White", ""),
-            black_name=headers.get("Black", ""),
-            white_elo=(
+            whiteName=headers.get("White", ""),
+            blackName=headers.get("Black", ""),
+            whiteElo=(
                 int(headers.get("WhiteElo", 0))
                 if headers.get("WhiteElo", "").isdigit()
                 else None
             ),
-            black_elo=(
+            blackElo=(
                 int(headers.get("BlackElo", 0))
                 if headers.get("BlackElo", "").isdigit()
                 else None
@@ -63,584 +44,467 @@ class AnalysisRetriever:
             result=headers.get("Result", ""),
         )
 
-    def _initialize_queue_with_mainline(self, game: Game, queue: deque, tree: Dict):
-        board = chess.Board()
-        parent_id = -1
-
-        # For tracking mainline positions to avoid duplicate PV analysis
-        self.mainline_positions = set()
-
-        # Create root node
-        phase = self._determine_game_phase(board)
-        root_node = self._create_node(
-            parent=parent_id,
-            depth=0,
-            move="start",
-            fen=board.fen(),
-            shallow_score=0,
-            deep_score=0,
-            trace={},
-            context="mainline",
-            phase=phase,
-            piece=None,  # No piece for root
-        )
-
-        # Add root FEN to mainline positions
-        self.mainline_positions.add(board.fen())
-
-        # Add root node to tree
-        tree[root_node.id] = root_node
-
-        # Add starting position to queue
-        queue.append(
-            {
-                "fen": board.fen(),
-                "move": None,
-                "context": "mainline",
-                "parent_id": parent_id,
-                "depth": 0,
-                "node_id": root_node.id,
-                "capturedByWhite": {k: 0 for k in "pnbrqk"},
-                "capturedByBlack": {k: 0 for k in "pnbrqk"},
-            }
-        )
-
-        # Add mainline moves to queue
-        parent_id = root_node.id
-        current_depth = 0
-
-        for move in game.mainline_moves():
-            move_uci = move.uci()
-
-            # Track captures before making the move
-            captures_white, captures_black = self._track_captures(board, move)
-
-            board.push(move)
-            current_depth = board.ply()
-
-            # Add this position to mainline positions
-            self.mainline_positions.add(board.fen())
-
-            # Determine phase
-            phase = self._determine_game_phase(board)
-
-            # Create the node and add to tree
-            piece_initial = self._get_piece_initial(board, move)
-            node = self._create_node(
-                parent=parent_id,
-                depth=current_depth,
-                move=move_uci,
-                fen=board.fen(),
-                shallow_score=0,  # Placeholder, will be filled during analysis
-                deep_score=0,  # Placeholder, will be filled during analysis
-                trace={},  # Placeholder, will be filled during analysis
-                context="mainline",  # Changed from mainline=True
-                phase=phase,
-                capturedByWhite=captures_white,
-                capturedByBlack=captures_black,
-                piece=piece_initial,
-            )
-
-            # Add node to tree
-            tree[node.id] = node
-
-            queue.append(
-                {
-                    "fen": board.fen(),
-                    "move": move_uci,
-                    "context": "mainline",
-                    "parent_id": parent_id,
-                    "depth": current_depth,
-                    "node_id": node.id,
-                    "capturedByWhite": captures_white,
-                    "capturedByBlack": captures_black,
-                }
-            )
-
-            # Update parent ID for the next move
-            parent_id = node.id
-
-    def _track_captures(self, board: chess.Board, move: chess.Move) -> tuple:
-        """Track captures for a move and return updated capture counters."""
-        captures_white = {k: 0 for k in "pnbrqk"}
-        captures_black = {k: 0 for k in "pnbrqk"}
-
-        is_capture = board.is_capture(move)
-        if is_capture:
-            captured_piece_square = move.to_square
-            captured_piece = board.piece_type_at(captured_piece_square)
-
-            if captured_piece:
-                piece_symbol = chess.piece_symbol(captured_piece).lower()
-                if board.turn == chess.WHITE:
-                    captures_white[piece_symbol] = 1
-                else:
-                    captures_black[piece_symbol] = 1
-
-        return captures_white, captures_black
-
-    def _process_analysis_queue(self, queue: deque, tree: Dict):
-        while queue:
-            print(f"Queue length: {len(queue)}")
-            job = queue.popleft()
-            fen = job["fen"]
-            move = job["move"]
-            parent_id = job["parent_id"]
-            node_id = job.get("node_id")  # This could be None for alternative/PV moves
-            context = job["context"]  # Get the context type
-
-            # Handle both mainline and PV contexts
-            is_mainline = context == "mainline"
-            is_top_pv = context == "pv1" if not is_mainline else False
-
-            # Check if node already exists in tree
-            existing_node = None
-            if node_id is not None and node_id in tree:
-                existing_node = tree[node_id]
-            else:
-                # Look for a node with matching FEN and parent
-                for n in tree.values():
-                    if (
-                        n.fen == fen
-                        and n.parent == parent_id
-                        and n.move == (move if move else "start")
-                    ):
-                        existing_node = n
-                        break
-
-            # Analyze the position (directly, no cache)
-            board = chess.Board(fen)
-
-            # Convert move to chess.Move if it's a string and not None
-            move_obj = None
-            if move and isinstance(move, str):
-                try:
-                    move_obj = chess.Move.from_uci(move)
-                except Exception:
-                    move_obj = None
-            elif isinstance(move, chess.Move):
-                move_obj = move
-
-            # Run deep analysis only for mainline moves and top PV moves
-            run_deep = is_mainline or is_top_pv
-            analysis_result = self._analyze_position(board, run_deep_analysis=run_deep)
-
-            # Determine the game phase for this position
-            phase = self._determine_game_phase(board)
-
-            if existing_node:
-                # Update existing node with analysis results
-                existing_node.shallow_score = analysis_result["shallow_score"]
-                existing_node.deep_score = analysis_result["deep_score"]
-                existing_node.trace = analysis_result["trace"]
-                existing_node.phase = phase  # Update phase
-                node = existing_node
-            else:
-                # Create new node and add to tree
-                piece_initial = self._get_piece_initial(board, move_obj)
-                node = self._create_node(
-                    parent=parent_id,
-                    depth=job["depth"],
-                    move=move if move else "start",
-                    fen=fen,
-                    shallow_score=analysis_result["shallow_score"],
-                    deep_score=analysis_result["deep_score"],
-                    trace=analysis_result["trace"],
-                    context=context,
-                    phase=phase,
-                    capturedByWhite=job["capturedByWhite"],
-                    capturedByBlack=job["capturedByBlack"],
-                    piece=piece_initial,
-                )
-                tree[node.id] = node
-
-            # Only enqueue PVs for mainline nodes - not for PV nodes themselves
-            if is_mainline:
-                self._enqueue_alternative_moves(board, node.id, queue, tree)
-                self._enqueue_principal_variation(
-                    board, node.id, queue, analysis_result, tree
-                )
-
-    def _analyze_position(
-        self, board: chess.Board, run_deep_analysis: bool = True
-    ) -> Dict:
-        """Analyze a position without caching."""
-        # Define multipv parameter - use more for deep analysis
-        shallow_multipv = 4  # Just one line for shallow analysis
-        deep_multipv = 8  # Multiple lines for deep analysis
-
-        # Always run shallow analysis
-        shallow = self.engine_connector.analyse(
-            board, depth=self.shallow_depth, multiPv=shallow_multipv
-        )
-        shallow_score = self._extract_score(shallow)
-
-        # Only run deep analysis for mainline moves
-        if run_deep_analysis:
-            deep = self.engine_connector.analyse(
-                board, depth=self.deep_depth, multiPv=deep_multipv
-            )
-            deep_score = self._extract_score(deep)
-            pvs = self._extract_pv(deep)
-        else:
-            # For non-mainline moves, use shallow analysis results for deep score too
-            deep_score = shallow_score
-            pvs = self._extract_pv(shallow)
-
-        trace = self.engine_connector.trace()
-
-        # Handle case where trace is a string
-        if isinstance(trace, str):
-            trace = {"error": {"message": trace}}
-        else:
-            # Process trace to use only mg values and remove FinalEvaluation
-            trace = self._process_trace(trace)
-
-        return {
-            "shallow_score": shallow_score,
-            "deep_score": deep_score,
-            "trace": trace,
-            "pvs": pvs,  # Now returning multiple PVs
-        }
-
-    def _process_trace(self, trace: dict) -> dict:
+    def get_move_list(self) -> List[Move]:
         """
-        Process the engine trace to:
-        1. Keep both midgame (mg) and endgame (eg) values
-        2. Remove FinalEvaluation key
+        Returns a list of moves in the game.
+        If PGN parsing failed during init, this will return an empty list.
         """
-        if not isinstance(trace, dict):
-            return trace
-
-        processed_trace = {}
-
-        # Process each key in the trace
-        for key, value in trace.items():
-            # Skip FinalEvaluation key
-            if key == "FinalEvaluation":
-                continue
-
-            # Keep the original value structure with both mg and eg
-            processed_trace[key] = value
-
-        return processed_trace
-
-    def _determine_game_phase(self, board: chess.Board) -> str:
-        """
-        Determine the game phase based on piece count and other factors.
-        Returns "early", "mid", or "end".
-        """
-        # Count pieces
-        pieces = board.piece_map()
-        piece_count = len(pieces)
-
-        # Count pawns
-        pawn_count = sum(
-            1 for piece in pieces.values() if piece.piece_type == chess.PAWN
-        )
-
-        # Count major pieces (rooks and queens)
-        major_piece_count = sum(
-            1
-            for piece in pieces.values()
-            if piece.piece_type == chess.ROOK or piece.piece_type == chess.QUEEN
-        )
-
-        # Simple rules
-        if piece_count >= 24:  # Most pieces still on board
-            return "early"
-        elif piece_count <= 12 or (
-            pawn_count <= 8 and major_piece_count <= 3
-        ):  # Few pieces or few pawns and major pieces
-            return "end"
-        else:
-            return "mid"
-
-    def _enqueue_alternative_moves(
-        self, board: chess.Board, parent_id: int, queue: deque, tree: Dict
-    ):
-        for move in board.legal_moves:
-            move_uci = move.uci()
-
-            # Track captures properly
-            captures_white, captures_black = self._track_captures(board, move)
-
-            new_board = board.copy()
-            new_board.push(move)
-            new_fen = new_board.fen()
-
-            # Check if this position is already in the tree with this parent
-            skip_enqueue = False
-            for node in tree.values():
-                if node.fen == new_fen and node.parent == parent_id:
-                    skip_enqueue = True
-                    break
-
-            if skip_enqueue:
-                continue
-
-            queue.append(
-                {
-                    "fen": new_fen,
-                    "move": move_uci,
-                    "context": "alternative",
-                    "parent_id": parent_id,
-                    "depth": new_board.ply(),
-                    "node_id": None,
-                    "capturedByWhite": captures_white,
-                    "capturedByBlack": captures_black,
-                }
+        moves = [
+            Move(
+                position=self.game.board().fen(),
+                move="Start",
+                isAnalyzed=False,
+                context="mainline",
             )
+        ]
+        board = self.game.board()
 
-    def _enqueue_principal_variation(
-        self,
-        board: chess.Board,
-        parent_id: int,
-        queue: deque,
-        analysis_result: Dict,
-        tree: Dict,
-    ):
-        """Enqueue all principal variations for analysis."""
-        if "pvs" not in analysis_result or not analysis_result["pvs"]:
-            return
+        for chess_move in self.game.mainline_moves():
+            san_representation = board.san(chess_move)
+            board.push(chess_move)
+            fen_after_move = board.fen()
 
-        # Get all PVs from the analysis result
-        all_pvs = analysis_result["pvs"]
-
-        # Process each PV line (limited to top 2 for efficiency)
-        for pv_index, pv_line in enumerate(all_pvs[:2]):  # Only process top 2 lines
-            pv_board = board.copy()
-            current_parent_id = parent_id
-
-            # Add a tag for PV line number in the queue items
-            pv_tag = f"pv{pv_index+1}"
-
-            # Maximum number of moves to include from each PV
-            max_pv_depth = 5 if pv_index == 0 else 3  # More moves for first PV
-
-            # Process each move in the PV line
-            for move_idx, move_uci in enumerate(pv_line[:max_pv_depth]):
-                try:
-                    move = chess.Move.from_uci(move_uci)
-
-                    # Track captures properly for PV moves
-                    captures_white, captures_black = self._track_captures(
-                        pv_board, move
-                    )
-
-                    pv_board.push(move)
-                    new_fen = pv_board.fen()
-
-                    # Skip this PV move if it's in the mainline
-                    if new_fen in self.mainline_positions:
-                        break  # Skip the rest of this PV since it's following mainline
-
-                    # Check if this position is already in the tree with this parent
-                    skip_enqueue = False
-                    existing_node_id = None
-
-                    for node in tree.values():
-                        if node.fen == new_fen and node.parent == current_parent_id:
-                            skip_enqueue = True
-                            existing_node_id = node.id
-                            break
-
-                    if skip_enqueue:
-                        # If this position already exists, use it as parent for next PV move
-                        current_parent_id = existing_node_id
-                        continue
-
-                    # Determine phase for this PV position
-                    phase = self._determine_game_phase(pv_board)
-
-                    queue.append(
-                        {
-                            "fen": new_fen,
-                            "move": move_uci,
-                            "context": pv_tag,  # Use PV tag in context
-                            "parent_id": current_parent_id,
-                            "depth": pv_board.ply(),
-                            "node_id": None,  # Will be assigned when processed
-                            "capturedByWhite": captures_white,
-                            "capturedByBlack": captures_black,
-                        }
-                    )
-
-                    # Since we don't know the node ID yet (it will be created when processed),
-                    # we need to make sure we create a unique parent ID reference for next move
-                    piece_initial = self._get_piece_initial(pv_board, move)
-                    temp_node = self._create_node(
-                        parent=current_parent_id,
-                        depth=pv_board.ply(),
-                        move=move_uci,
-                        fen=new_fen,
-                        shallow_score=0,  # Placeholder
-                        deep_score=0,  # Placeholder
-                        trace={},  # Placeholder
-                        context=pv_tag,  # Changed from mainline=False, now using the pv1/pv2 tag
-                        phase=phase,
-                        capturedByWhite=captures_white,
-                        capturedByBlack=captures_black,
-                        piece=piece_initial,
-                    )
-                    tree[temp_node.id] = temp_node
-
-                    # Update parent ID for the next move in sequence
-                    current_parent_id = temp_node.id
-
-                except chess.IllegalMoveError:
-                    break
-
-    def _generate_move_list_from_tree(
-        self, tree: Dict[int, MoveAnalysisNode]
-    ) -> List[Move]:
-        moves = []
-        cumulative_captures_white = {k: 0 for k in "pnbrqk"}
-        cumulative_captures_black = {k: 0 for k in "pnbrqk"}
-
-        # First collect and sort all mainline nodes
-        mainline_nodes = [
-            node for node in tree.values() if node.context == "mainline"
-        ]  # Changed from node.mainline
-        mainline_nodes.sort(key=lambda x: x.depth)  # Sort by depth
-
-        # Process them in order to maintain running capture totals
-        for node in mainline_nodes:
-            # Add current node's captures to the running totals
-            for piece, count in node.capturedByWhite.items():
-                cumulative_captures_white[piece] += count
-
-            for piece, count in node.capturedByBlack.items():
-                cumulative_captures_black[piece] += count
-
-            # Find best continuations from PV in the tree
-            best_continuations = self._find_best_continuations(node, tree)
-
-            move_entry = Move(
-                position=node.fen,
-                move=node.move if node.move != "start" else "",
-                shallow_score=node.shallow_score,
-                deep_score=node.deep_score,
-                phase=node.phase,
-                trace=node.trace,
-                bestContinuations=best_continuations,
-                # Use the cumulative captures rather than just this node's captures
-                capturedByWhite=cumulative_captures_white.copy(),
-                capturedByBlack=cumulative_captures_black.copy(),
+            move_obj = Move(
+                position=fen_after_move,
+                move=san_representation,
+                context="mainline",
+                isAnalyzed=False,
             )
-            moves.append(move_entry)
+            moves.append(move_obj)
 
         return moves
 
-    def _find_best_continuations(
-        self, node: MoveAnalysisNode, tree: Dict[int, MoveAnalysisNode]
-    ) -> List[str]:
-        """Find the best continuations (PV) for a given node."""
-        continuations = []
-        seen_moves = set()  # Track moves we've already added
-
-        # Find direct child nodes
-        child_nodes = [n for n in tree.values() if n.parent == node.id]
-
-        # Sort by score (best moves first)
-        if child_nodes:
-            # Sort based on whose turn it is
-            board = chess.Board(node.fen)
-            if board.turn == chess.WHITE:
-                # White to move - highest score is best
-                child_nodes.sort(key=lambda n: n.shallow_score, reverse=True)
-            else:
-                # Black to move - lowest score is best
-                child_nodes.sort(key=lambda n: n.shallow_score)
-
-            # Get moves from top 5 best child nodes, avoiding duplicates
-            for child in child_nodes[:5]:
-                if (
-                    child.move
-                    and child.move != "start"
-                    and child.move not in seen_moves
-                ):
-                    continuations.append(
-                        {"move": child.move, "score": child.shallow_score}
-                    )
-                    seen_moves.add(child.move)  # Mark this move as seen
-
-        return continuations
-
-    def _create_node(
-        self,
-        parent: int,
-        depth: int,
-        move: str,
-        fen: str,
-        shallow_score: int,
-        deep_score: int,
-        trace: Dict,
-        context: str,  # Changed from mainline: bool
-        phase: str = None,  # Add phase parameter with default
-        capturedByWhite: Dict[str, int] = None,
-        capturedByBlack: Dict[str, int] = None,
-        piece: str = None,
-    ) -> MoveAnalysisNode:
-        if capturedByWhite is None:
-            capturedByWhite = {k: 0 for k in "pnbrqk"}
-        if capturedByBlack is None:
-            capturedByBlack = {k: 0 for k in "pnbrqk"}
-
-        # If phase wasn't provided, determine it now
-        if phase is None:
-            board = chess.Board(fen)
-            phase = self._determine_game_phase(board)
-
-        node = MoveAnalysisNode(
-            id=self.node_counter,
-            depth=depth,
-            parent=parent,
-            move=move,
-            fen=fen,
-            shallow_score=shallow_score,
-            deep_score=deep_score,
-            trace=trace,
-            context=context,  # Changed from mainline
-            phase=phase,  # Add phase
-            capturedByWhite=capturedByWhite,
-            capturedByBlack=capturedByBlack,
-            piece=piece,
-        )
-        self.node_counter += 1
-        return node
-
-    @staticmethod
-    def _extract_score(analysis_result: dict) -> int:
-        score = analysis_result[0].get("score")
-        return score.white().score(mate_score=MATE_SCORE)
-
-    @staticmethod
-    def _extract_pv(analysis_result: dict) -> Optional[List[List[str]]]:
-        """Extract all principal variations from analysis result.
-
-        Args:
-            analysis_result: Analysis result from engine
-
-        Returns:
-            List of principal variations, where each PV is a list of move UCIs
-            or None if no PVs found
+    def get_analysis_stages(self) -> List[int]:
         """
-        all_pvs = []
+        Returns the analysis stages for the engine.
+        """
+        return self.analysis_stages
 
-        # Process all analysis entries (multiple PVs)
-        for entry in analysis_result:
-            if "pv" in entry and entry["pv"]:
-                pv_line = [move.uci() for move in entry["pv"]]
-                all_pvs.append(pv_line)
+    def analyze_move(self, move: Move, stage: float) -> Move:
+        """
+        Analyzes a move using the engine and returns the analysis result.
+        """
 
-        return all_pvs if all_pvs else None
+        # Set the position on the board
+        board = chess.Board(move.position)
 
-    def _get_piece_initial(self, board: chess.Board, move: chess.Move) -> str:
-        """Return the piece initial (k, q, r, n, b, p) for the move."""
-        if move is None:
+        # Analyze the move using the engine
+        analysis_results = self.engine_connector.analyse(
+            board, time_limit=stage, multiPv=DEFAULT_PV_COUNT
+        )
+
+        best_pv = analysis_results[0]
+        move.score = best_pv.get("score").white().score()
+        move.trace = self.engine_connector.trace()
+        move.phase = self._determine_game_phase(board)
+        move.capturedByWhite, move.capturedByBlack = self.get_all_captured_pieces(board)
+        pvs = []
+
+        for pv in analysis_results:
+            board = chess.Board(move.position)
+            moves = []
+            for pv_move in pv.get("pv"):
+                moves.append(str(pv_move))
+                board.push_san(str(pv_move))
+
+            pv_obj = PV(
+                score=pv.get("score").white().score(mate_score=MATE_SCORE) or 0.0,
+                moves=moves,
+            )
+            pvs.append(pv_obj)
+
+        move.isAnalyzed = True
+        move.pvs = pvs
+        return move
+
+    def move_trace(self, move: Move) -> Dict:
+        """
+        Returns the trace of a move.
+        """
+        board = chess.Board(move.position)
+        self.engine_connector.analyse(board, time_limit=0.01, multiPv=1)
+        trace = self.engine_connector.trace()
+        return trace
+
+    def _get_piece_for_move(
+        self, board_before_move: chess.Board, san_move: str
+    ) -> str | None:
+        """Helper to determine the piece (e.g., wP, bN) that made a move."""
+        try:
+            move = board_before_move.parse_san(san_move)
+            piece = board_before_move.piece_at(move.from_square)
+            if piece:
+                color_char = "w" if piece.color == chess.WHITE else "b"
+                return f"{color_char}{piece.symbol().upper()}"
             return None
-        piece = board.piece_at(move.to_square)
-        if piece is None:
+        except (
+            chess.InvalidMoveError
+        ):  # Handle cases where SAN might be slightly off or board state unexpected
+            logger.warning(
+                f"Could not parse SAN '{san_move}' on board FEN: {board_before_move.fen()}"
+            )
             return None
-        return chess.piece_symbol(piece.piece_type).lower()
+        except Exception as e:
+            logger.error(f"Error in _get_piece_for_move for SAN '{san_move}': {e}")
+            return None
+
+    def get_all_captured_pieces(
+        self, board: chess.Board
+    ) -> tuple[Dict[str, int], Dict[str, int]]:
+        """
+        Counts the missing original pieces for both players.
+        The first dictionary returned contains Black pieces captured by White.
+        The second dictionary returned contains White pieces captured by Black.
+        Keys are piece symbols (p, n, b, r, q), values are counts.
+        """
+        initial_piece_counts = {
+            chess.PAWN: 8,
+            chess.KNIGHT: 2,
+            chess.BISHOP: 2,
+            chess.ROOK: 2,
+            chess.QUEEN: 1,
+        }
+
+        # Standard algebraic notation for pieces (lowercase)
+        piece_to_symbol = {
+            chess.PAWN: "p",
+            chess.KNIGHT: "n",
+            chess.BISHOP: "b",
+            chess.ROOK: "r",
+            chess.QUEEN: "q",
+        }
+
+        # Stores Black's pieces that White has captured
+        black_pieces_captured_by_white: Dict[str, int] = {}
+        # Stores White's pieces that Black has captured
+        white_pieces_captured_by_black: Dict[str, int] = {}
+
+        for piece_type, initial_count in initial_piece_counts.items():
+            symbol = piece_to_symbol[piece_type]
+
+            # Count White's current pieces of this type
+            current_white_pieces_on_board = len(board.pieces(piece_type, chess.WHITE))
+            # Difference is the number of White pieces of this type captured by Black
+            num_white_captured = initial_count - current_white_pieces_on_board
+            if num_white_captured > 0:
+                white_pieces_captured_by_black[symbol] = num_white_captured
+
+            # Count Black's current pieces of this type
+            current_black_pieces_on_board = len(board.pieces(piece_type, chess.BLACK))
+            # Difference is the number of Black pieces of this type captured by White
+            num_black_captured = initial_count - current_black_pieces_on_board
+            if num_black_captured > 0:
+                black_pieces_captured_by_white[symbol] = num_black_captured
+
+        # The function is expected to return (pieces_captured_by_white, pieces_captured_by_black)
+        return black_pieces_captured_by_white, white_pieces_captured_by_black
+
+    def _determine_game_phase(self, board: chess.Board) -> str:
+        """
+        Determine the game phase based on piece count and move number.
+        Returns "early", "mid", or "end".
+
+        Source: https://lichess.org/forum/general-chess-discussion/opening--middle--end-what-defines-the-phase
+        """
+        # --- Piece Counts ---
+        white_knights = len(board.pieces(chess.KNIGHT, chess.WHITE))
+        white_bishops = len(board.pieces(chess.BISHOP, chess.WHITE))
+        white_rooks = len(board.pieces(chess.ROOK, chess.WHITE))
+        white_queens = len(board.pieces(chess.QUEEN, chess.WHITE))
+
+        black_knights = len(board.pieces(chess.KNIGHT, chess.BLACK))
+        black_bishops = len(board.pieces(chess.BISHOP, chess.BLACK))
+        black_rooks = len(board.pieces(chess.ROOK, chess.BLACK))
+        black_queens = len(board.pieces(chess.QUEEN, chess.BLACK))
+
+        # Sum of all minor (Knights, Bishops) and major (Rooks, Queens) pieces on the board
+        current_minor_major_pieces_count = (
+            white_knights
+            + white_bishops
+            + white_rooks
+            + white_queens
+            + black_knights
+            + black_bishops
+            + black_rooks
+            + black_queens
+        )
+
+        # --- Phase Determination ---
+
+        # 1. Early Game (Opening)
+        # The game starts in the "early" phase.
+        # Transition out of early game after a certain number of moves, e.g., 10 full moves.
+        # This also implies that pieces are somewhat developed.
+        if board.fullmove_number <= 10:  # Threshold for early game
+            return "early"
+
+        # 2. End Game
+        # "when there are less than 7 minor and major pieces on the board the end-game has begun"
+        if current_minor_major_pieces_count < 7:
+            return "end"
+
+        # 3. Mid Game
+        # If the game is not in the early phase and not yet in the end game, it's considered mid-game.
+        # This covers scenarios where the position is complex, pieces are developed,
+        # and potentially 2 or more sets of minor/major pieces have been exchanged.
+        # (Initial minor/major pieces = 14. If >=4 are off, count <= 10.
+        # If count is between 7 and 10 (inclusive) and not early, it's mid).
+        return "mid"
+
+    async def stream_trace_tree_nodes(
+        self, initial_mainline_moves: List[Move]
+    ) -> AsyncGenerator[MoveAnalysisNode, None]:
+        """
+        Asynchronously generates MoveAnalysisNode objects for a trace tree.
+        Each move in a PV will also become a node.
+        """
+        self._node_id_counter = 0  # Reset for each new tree generation
+        # Queue stores: (current_san_in_pv: str,
+        #                remaining_sans_in_pv_line: List[str],
+        #                parent_node_id: int,
+        #                board_fen_before_current_san: str,
+        #                original_score_of_pv_line: float | None,
+        #                is_first_move_in_this_pv_line: bool)
+        nodes_to_process_queue = asyncio.Queue()
+        quick_analysis_stage = self.analysis_stages[0] if self.analysis_stages else 0.05
+
+        # 1. Process "Start" Node
+        self._node_id_counter += 1
+        start_node_id = self._node_id_counter
+        start_board = chess.Board()  # ply() is 0 here
+        start_move_obj_data = Move(
+            position=start_board.fen(),
+            move="Start",
+            isAnalyzed=False,  # Will be set to True by analyze_move
+            context="mainline",
+        )
+
+        analyzed_start_move = self.analyze_move(
+            start_move_obj_data, quick_analysis_stage
+        )
+        # User's convention: parent -1 for root, depth from board.ply()
+        start_node = MoveAnalysisNode(
+            id=start_node_id,
+            parent=-1,
+            depth=start_board.ply(),
+            move=analyzed_start_move,
+            piece=None,
+        )
+        yield start_node
+
+        if analyzed_start_move and analyzed_start_move.pvs:
+            for pv_info in analyzed_start_move.pvs[
+                :3
+            ]:  # pv_info contains score and moves (list of SANs)
+                if pv_info.moves:  # pv_info.moves is List[str]
+                    first_pv_san = pv_info.moves[0]
+                    remaining_sans_for_line = pv_info.moves[1:]
+                    original_score_for_line = pv_info.score
+
+                    await nodes_to_process_queue.put(
+                        (
+                            first_pv_san,
+                            remaining_sans_for_line,
+                            start_node_id,  # Parent is the start_node
+                            analyzed_start_move.position,  # FEN of the board before this PV's first move
+                            original_score_for_line,
+                            True,  # is_first_move_in_this_pv_line
+                        )
+                    )
+
+        # 2. Process Initial Mainline Moves
+        current_parent_id = start_node_id
+        current_board = chess.Board()  # ply() is 0, tracks mainline state
+        for client_move in initial_mainline_moves:
+            if client_move.move == "Start":
+                if (
+                    current_board.ply() == 0
+                    and start_board.fen() == current_board.fen()
+                ):
+                    continue
+
+            self._node_id_counter += 1
+            mainline_node_id = self._node_id_counter
+
+            board_before_this_move_fen = current_board.fen()
+            piece_moved = self._get_piece_for_move(current_board, client_move.move)
+
+            try:
+                actual_chess_move = current_board.parse_san(client_move.move)
+                current_board.push(actual_chess_move)  # ply() increments here
+            except Exception as e:
+                logger.error(
+                    f"Failed to parse/push mainline move {client_move.move} on board {board_before_this_move_fen}: {e}"
+                )
+                continue
+            fen_after_move = current_board.fen()
+            current_depth = current_board.ply()
+
+            # Construct Move object for mainline, preserving client's isAnalyzed and pvs if present
+            mainline_move_obj = Move(
+                position=fen_after_move,
+                move=client_move.move,
+                isAnalyzed=client_move.isAnalyzed,
+                context="mainline",
+                pvs=client_move.pvs,  # Carry over PVs if already analyzed by client/previous step
+                # Score, trace, phase, captures will be added by analyze_move if not already analyzed
+            )
+
+            if (
+                not mainline_move_obj.isAnalyzed or not mainline_move_obj.pvs
+            ):  # Analyze if needed
+                analyzed_mainline_move = self.analyze_move(
+                    mainline_move_obj, quick_analysis_stage
+                )
+            else:
+                # If already analyzed and has PVs, ensure other fields like phase, captures are present
+                # For simplicity, we can re-set them based on the current board state if they are missing
+                # or assume analyze_move would populate them if called.
+                # If client_move already has all fields, this is fine.
+                # Let's ensure phase and captures are set if we don't re-analyze.
+                if not mainline_move_obj.phase:
+                    mainline_move_obj.phase = self._determine_game_phase(current_board)
+                if (
+                    not mainline_move_obj.capturedByWhite
+                    and not mainline_move_obj.capturedByBlack
+                ):
+                    (
+                        mainline_move_obj.capturedByWhite,
+                        mainline_move_obj.capturedByBlack,
+                    ) = self.get_all_captured_pieces(current_board)
+                # Trace might be missing if not analyzed by this backend.
+                # If trace is critical and not present, a light analysis/trace call might be needed.
+                # For now, we assume client_move.pvs implies sufficient prior analysis.
+                analyzed_mainline_move = mainline_move_obj
+
+            node = MoveAnalysisNode(
+                id=mainline_node_id,
+                parent=current_parent_id,
+                depth=current_depth,
+                move=analyzed_mainline_move,
+                piece=piece_moved,
+            )
+            yield node
+
+            if analyzed_mainline_move.pvs:
+                for pv_info in analyzed_mainline_move.pvs[:3]:
+                    if pv_info.moves:
+                        first_pv_san = pv_info.moves[0]
+                        remaining_sans_for_line = pv_info.moves[1:]
+                        original_score_for_line = pv_info.score
+                        await nodes_to_process_queue.put(
+                            (
+                                first_pv_san,
+                                remaining_sans_for_line,
+                                mainline_node_id,  # Parent is the current mainline_node
+                                analyzed_mainline_move.position,  # FEN after mainline_move_obj
+                                original_score_for_line,
+                                True,  # is_first_move_in_this_pv_line
+                            )
+                        )
+            current_parent_id = mainline_node_id
+
+        # 3. Process PV Queue (now processes each move in a PV line)
+        while not nodes_to_process_queue.empty():
+            (
+                current_san_to_process,
+                remaining_sans_in_line,
+                parent_id_for_current_san,
+                board_fen_before_current_san,
+                original_line_score,
+                is_first_in_pv_line,
+            ) = await nodes_to_process_queue.get()
+
+            self._node_id_counter += 1
+            current_pv_node_id = self._node_id_counter
+
+            temp_board_for_pv = chess.Board(board_fen_before_current_san)
+            piece_moved_in_pv = self._get_piece_for_move(
+                temp_board_for_pv, current_san_to_process
+            )
+
+            try:
+                actual_pv_chess_move = temp_board_for_pv.parse_san(
+                    current_san_to_process
+                )
+                temp_board_for_pv.push(actual_pv_chess_move)  # ply() increments here
+            except Exception as e:
+                logger.error(
+                    f"Failed to parse/push PV move {current_san_to_process} on board {board_fen_before_current_san}: {e}"
+                )
+                nodes_to_process_queue.task_done()
+                continue
+
+            fen_after_current_san = temp_board_for_pv.fen()
+            current_pv_depth = temp_board_for_pv.ply()
+
+            # For PV moves, we only want trace. Score and PV line are from parent's analysis.
+            # Create a Move object for this specific step in the PV.
+
+            # Score for this specific Move object in the PV line
+            # Typically, only the first move of an engine's PV output has the direct evaluation score for that line.
+            # Subsequent moves in the PV are just the sequence.
+            move_obj_score = original_line_score if is_first_in_pv_line else None
+
+            # The 'pvs' for this move object will be the continuation of its own line.
+            move_obj_pvs = []
+            if remaining_sans_in_line:  # If this is not the last move of the PV
+                # The PV associated with this move is the rest of the line, with the original line's score
+                move_obj_pvs.append(
+                    PV(score=original_line_score, moves=remaining_sans_in_line)
+                )
+
+            # Get trace for the current PV move's resulting position
+            # Create a minimal Move object just for the trace call, as move_trace uses move.position
+            move_for_trace_call = Move(
+                position=fen_after_current_san,
+                move=current_san_to_process,
+                context="variation",
+                isAnalyzed=False,
+            )
+            trace_data = self.move_trace(move_for_trace_call)
+
+            # Determine phase and captures for the board state after this PV move
+            current_phase = self._determine_game_phase(temp_board_for_pv)
+            captures_white, captures_black = self.get_all_captured_pieces(
+                temp_board_for_pv
+            )
+
+            # Construct the final Move object for this PV step
+            processed_pv_move_obj = Move(
+                position=fen_after_current_san,
+                move=current_san_to_process,
+                score=move_obj_score,
+                pvs=move_obj_pvs,
+                trace=trace_data,
+                isAnalyzed=True,  # Considered analyzed as it's part of an engine's PV
+                context="variation",
+                phase=current_phase,
+                capturedByWhite=captures_white,
+                capturedByBlack=captures_black,
+            )
+
+            node = MoveAnalysisNode(
+                id=current_pv_node_id,
+                parent=parent_id_for_current_san,
+                depth=current_pv_depth,
+                move=processed_pv_move_obj,
+                piece=piece_moved_in_pv,
+            )
+            yield node
+
+            # If there are more moves in this PV line, enqueue the next one
+            if remaining_sans_in_line:
+                next_san_in_line = remaining_sans_in_line[0]
+                further_remaining_sans = remaining_sans_in_line[1:]
+                await nodes_to_process_queue.put(
+                    (
+                        next_san_in_line,
+                        further_remaining_sans,
+                        current_pv_node_id,  # Parent is the node just created
+                        fen_after_current_san,  # Board state after the current_san_to_process
+                        original_line_score,  # Propagate the original score of the line
+                        False,  # This is a continuation, not the first in its PV line
+                    )
+                )
+            nodes_to_process_queue.task_done()

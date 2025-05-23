@@ -10,6 +10,7 @@ from typing import Optional
 
 MULTIPV = 5
 
+
 class EngineConnector:
     """
     A connector class to manage interactions with a UCI chess engine.
@@ -38,8 +39,13 @@ class EngineConnector:
         except Exception as e:
             raise RuntimeError(f"Failed to start engine at {self.engine_path}: {e}")
 
-    def analyse(self, board: chess.Board, depth: Optional[int] = None,
-                time_limit: Optional[float] = None, multiPv: Optional[int] = 1) -> dict:
+    def analyse(
+        self,
+        board: chess.Board,
+        depth: Optional[int] = None,
+        time_limit: Optional[float] = None,
+        multiPv: Optional[int] = 1,
+    ) -> dict:
         """
         Analyzes a given board position using the chess engine.
 
