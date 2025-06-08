@@ -8,7 +8,7 @@ This module provides the EngineConnector class, a thin wrapper around a UCI ches
 import chess.engine
 from typing import Optional
 
-MULTIPV = 5
+MULTIPV = 3
 
 
 class EngineConnector:
@@ -16,15 +16,16 @@ class EngineConnector:
     A connector class to manage interactions with a UCI chess engine.
     """
 
-    def __init__(self, engine_path: str, default_time_limit: float = 0.2):
+    def __init__(self, engine_path: str):
         """
         Initializes the EngineConnector by launching the UCI engine.
 
         :param engine_path: The filesystem path to the engine executable.
-        :param default_time_limit: The default time (in seconds) to use for engine analyses.
         """
         self.engine_path = engine_path
-        self.default_time_limit = default_time_limit
+        self.hash_size = 32
+        self.threads = 4
+        self.use_nnue = False
         self.engine = self._start_engine()
 
     def _start_engine(self) -> chess.engine.SimpleEngine:
@@ -35,6 +36,7 @@ class EngineConnector:
         """
         try:
             engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
+            engine.configure({"Hash": self.hash_size, "Threads": self.threads, "Use NNUE": self.use_nnue })
             return engine
         except Exception as e:
             raise RuntimeError(f"Failed to start engine at {self.engine_path}: {e}")

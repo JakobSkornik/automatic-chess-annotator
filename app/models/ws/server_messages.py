@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from typing import Dict, List
 from app.models.Move import Move
-from app.models.MoveAnalysisNode import MoveAnalysisNode
 from app.models.PgnMetadata import PgnMetadata
 from app.models.ws.message_types import ServerMessageType
 
@@ -21,15 +20,19 @@ class MoveListPayload(BaseModel):
 
 class DetailedAnalysisPayload(BaseModel):
     move: Move
+    pvs: List[List[Move]]
 
 
-class TraceTreeNodePayload(BaseModel):
-    node: MoveAnalysisNode
+class AnalysisProgressPayload(BaseModel):
+    current_move: int
+    total_moves: int
+    percentage: float
+    current_phase: str  # "analyzing_move" or "analyzing_pvs"
+    current_move_san: str
 
-
-class TraceTreeNodesBatchPayload(BaseModel):
-    nodes: List[MoveAnalysisNode]
-
+class FullAnalysisCompletePayload(BaseModel):
+    moves: List[Move]
+    pvs: Dict[int, List[List[Move]]]
 
 class ServerMessage(BaseModel):
     type: ServerMessageType
@@ -38,6 +41,6 @@ class ServerMessage(BaseModel):
         | ErrorPayload
         | MoveListPayload
         | DetailedAnalysisPayload
-        | TraceTreeNodePayload
-        | TraceTreeNodesBatchPayload
+        | AnalysisProgressPayload
+        | FullAnalysisCompletePayload
     )

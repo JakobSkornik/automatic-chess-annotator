@@ -12,10 +12,14 @@ from app.core.engine.engine_connector import EngineConnector
 from app.core.io.pgn_reader import PGNReader
 from app.core.websocket.ws_manager import send_ws_message, parse_client_ws_message
 
-from app.models.ws.server_messages import ErrorPayload, SessionMetadataPayload, TraceTreeNodePayload
+from app.models.ws.server_messages import (
+    SessionMetadataPayload,
+    DetailedAnalysisPayload,
+    AnalysisProgressPayload,
+    FullAnalysisCompletePayload,
+)
 from app.models.ws.message_types import ServerMessageType, ClientMessageType
-from app.models.Move import Move, PV
-from app.models.MoveAnalysisNode import MoveAnalysisNode
+from app.models.Move import Move
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +78,17 @@ class AnalysisSession:
         # For trace tree node IDs
         self._node_id_counter: int = 0
 
+        # WebSocket connections
+        self.websockets: List[WebSocket] = []
+        self._analysis_in_progress = False
+
+    async def add_websocket(self, websocket: WebSocket):
+        self.websockets.append(websocket)
+
+    async def remove_websocket(self, websocket: WebSocket):
+        if websocket in self.websockets:
+            self.websockets.remove(websocket)
+
     async def submit_request(self, request: SessionJob):
         """Submits a client request to the processing queue."""
         await self.request_queue.put(request)
@@ -104,9 +119,7 @@ class AnalysisSession:
                         stage = client_message.payload["stage"]
                         await self._handle_analyze_move(move, stage, ws)
 
-                    elif (
-                        client_message.type == ClientMessageType.GET_TRACE_TREE
-                    ):  # New handler
+                    elif client_message.type == ClientMessageType.GET_TRACE_TREE:
                         mainline_moves_data = client_message.payload.get(
                             "mainlineMoves", []
                         )
@@ -115,15 +128,31 @@ class AnalysisSession:
                         ]
                         await self._handle_get_trace_tree(ws, initial_mainline_moves)
 
+                    # Updated to handle the new message type
+                    elif client_message.type == ClientMessageType.GET_GAME_ANALYSIS:
+                        await self._handle_full_game_analysis(ws)
+
+                    else:
+                        await send_ws_message(
+                            ws,
+                            ServerMessageType.ERROR,
+                            {"message": "Unknown message type."},
+                        )
+                        self.request_queue.task_done()
+
                     self.request_queue.task_done()
 
                 except Exception as e:
                     logger.error(f"Error processing message {client_message.type}: {e}")
+                    await send_ws_message(
+                        ws,
+                        ServerMessageType.ERROR,
+                        {"message": f"Error processing request: {str(e)}"},
+                    )
                     self.request_queue.task_done()
 
                 # Check for new higher priority messages after each processing step
-                # This allows new requests to interrupt ongoing analysis if needed
-                await asyncio.sleep(0)  # Yield to the event loop so other tasks can run
+                await asyncio.sleep(0.001)
 
         except asyncio.CancelledError:
             logger.info(
@@ -132,7 +161,6 @@ class AnalysisSession:
         except Exception as e:
             detail = f"Critical error in request processing loop {self.session_id}: {e}"
             logger.error(detail, exc_info=True)
-
         finally:
             logger.info(f"Session {self.session_id}: Exiting request processing loop.")
 
@@ -144,7 +172,6 @@ class AnalysisSession:
                 ws_msg = await parse_client_ws_message(raw_data, ws)
 
                 if ws_msg:
-
                     if ws_msg.type == ClientMessageType.GET_SESSION_METADATA:
                         job = SessionJob(
                             type=ws_msg.type,
@@ -164,7 +191,7 @@ class AnalysisSession:
                         await self.submit_request(job)
 
                     elif ws_msg.type == ClientMessageType.GET_DETAILED_ANALYSIS:
-                        stages = self.get_analysis_stages()
+                        stages = self._get_analysis_stages()
                         prio = 3
                         for stage in stages:
                             job = SessionJob(
@@ -179,13 +206,16 @@ class AnalysisSession:
                             prio = prio + 1
                             await self.submit_request(job)
 
-                    elif ws_msg.type == ClientMessageType.GET_TRACE_TREE:
+                    # Updated to handle the new message type
+                    elif ws_msg.type == ClientMessageType.GET_GAME_ANALYSIS:
                         job = SessionJob(
-                            type=ws_msg.type,
+                            type=ClientMessageType.GET_GAME_ANALYSIS,
                             payload=ws_msg.payload,
-                            task_prio=1,
+                            task_prio=1,  # High priority
                             timestamp=time.time(),
                         )
+                        # Clear the request queue before starting a full game analysis
+                        self.request_queue = asyncio.PriorityQueue()
                         await self.submit_request(job)
 
                     else:
@@ -205,13 +235,8 @@ class AnalysisSession:
             logger.info(f"Session {self.session_id}: Exiting request processing loop.")
 
     async def _handle_get_session_metadata(self, ws: WebSocket):
-        """
-        Handles the logic for GET_SESSION_METADATA message type.
-        Sends the session metadata back to the client.
-        """
-
+        """Handles the logic for GET_SESSION_METADATA message type."""
         headers = self.analysis_retriever.get_pgn_headers()
-
         metadata_payload = SessionMetadataPayload(headers=headers)
         await send_ws_message(ws, ServerMessageType.SESSION_METADATA, metadata_payload)
 
@@ -222,79 +247,98 @@ class AnalysisSession:
         await send_ws_message(ws, ServerMessageType.MOVE_LIST, move_list_payload)
 
     async def _handle_analyze_move(
-        self, move: Move, stage: float, ws: WebSocket
-    ) -> Move:
-        """
-        Analyzes a move using the engine and returns the analysis result.
-        """
-        updated_move = self.analysis_retriever.analyze_move(move, stage)
-        updated_move_payload = {"move": updated_move}
-        await send_ws_message(
-            ws, ServerMessageType.ANALYSIS_UPDATE, updated_move_payload
-        )
-
-    async def _send_analysis_node(self, ws: WebSocket, node: MoveAnalysisNode):
-        """Sends a single MoveAnalysisNode to the client."""
-        payload = TraceTreeNodePayload(node=node)
-        await send_ws_message(ws, ServerMessageType.TRACE_TREE_NODE, payload)
-
-    async def _handle_get_trace_tree(
-        self, ws: WebSocket, initial_mainline_moves: List[Move]
+        self, move_to_analyze: Move, stage: float, ws: WebSocket
     ):
-        """
-        Handles GET_TRACE_TREE request by streaming MoveAnalysisNode objects
-        obtained from the AnalysisRetriever in batches.
-        """
-        logger.info(
-            f"Session {self.session_id}: Starting trace tree generation for {len(initial_mainline_moves)} mainline moves."
+        """Handles the logic for GET_DETAILED_ANALYSIS message type."""
+        analyzed_main_move, pvs_list_of_list_of_moves = (
+            self.analysis_retriever.analyze_move(move_to_analyze, stage)
         )
-        nodes_sent_count = 0
-        current_batch = []
-        batch_size = 100
-        
+
+        pvs_for_payload = [
+            [pv_move.model_dump() for pv_move in pv_sequence]
+            for pv_sequence in pvs_list_of_list_of_moves
+        ]
+
+        payload = DetailedAnalysisPayload(
+            move=analyzed_main_move.model_dump(), pvs=pvs_for_payload
+        )
+        await send_ws_message(ws, ServerMessageType.ANALYSIS_UPDATE, payload)
+
+    async def _handle_full_game_analysis(self, ws: WebSocket):
+        """Handles full game analysis with progress updates"""
+        if self._analysis_in_progress:
+            await send_ws_message(
+                ws, ServerMessageType.ERROR, {"message": "Analysis already in progress"}
+            )
+            return
+
         try:
-            async for node in self.analysis_retriever.stream_trace_tree_nodes(
-                initial_mainline_moves
+            self._analysis_in_progress = True
+            logger.info(f"Starting full game analysis for session {self.session_id}")
+
+            # Define progress callback that sends WebSocket updates
+            async def progress_callback(
+                current_move: int, total_moves: int, phase: str, move_san: str
             ):
-                current_batch.append(node)
-                
-                # When batch reaches desired size, send it
-                if len(current_batch) >= batch_size:
-                    await self._send_nodes_batch(ws, current_batch)
-                    nodes_sent_count += len(current_batch)
-                    current_batch = []
-                    
-            # Send any remaining nodes in a final batch
-            if current_batch:
-                await self._send_nodes_batch(ws, current_batch)
-                nodes_sent_count += len(current_batch)
-                
+                percentage = (current_move / total_moves) * 100
+
+                progress_payload = AnalysisProgressPayload(
+                    current_move=current_move,
+                    total_moves=total_moves,
+                    percentage=percentage,
+                    current_phase=phase,
+                    current_move_san=move_san,
+                )
+
+                await send_ws_message(
+                    ws,
+                    ServerMessageType.ANALYSIS_PROGRESS,
+                    progress_payload.model_dump(),
+                )
+
+            analyzed_moves, all_pvs = (
+                await self.analysis_retriever.get_full_game_analysis_with_progress(
+                    progress_callback=progress_callback
+                )
+            )
+
+            # Convert the results to serializable format
+            serialized_moves = [move.model_dump() for move in analyzed_moves]
+            serialized_pvs = {}
+            for move_idx, pvs_list in all_pvs.items():
+                serialized_pvs[move_idx] = [
+                    [pv_move.model_dump() for pv_move in pv_sequence]
+                    for pv_sequence in pvs_list
+                ]
+
+            # Send final result
+            complete_payload = FullAnalysisCompletePayload(
+                moves=serialized_moves, pvs=serialized_pvs
+            )
+
+            await send_ws_message(
+                ws,
+                ServerMessageType.FULL_ANALYSIS_COMPLETE,
+                complete_payload.model_dump(),
+            )
+
+            logger.info(f"Completed full game analysis for session {self.session_id}")
+
         except Exception as e:
             logger.error(
-                f"Session {self.session_id}: Error during trace tree streaming: {e}",
+                f"Error during full analysis for session {self.session_id}: {e}",
                 exc_info=True,
             )
             await send_ws_message(
                 ws,
                 ServerMessageType.ERROR,
-                ErrorPayload(message=f"Error generating trace tree: {e}"),
+                {"message": f"Error during full analysis: {str(e)}"},
             )
+        finally:
+            self._analysis_in_progress = False
 
-        logger.info(
-            f"Session {self.session_id}: Finished processing trace tree request. Sent {nodes_sent_count} nodes."
-        )
-
-    async def _send_nodes_batch(self, ws: WebSocket, nodes: List[MoveAnalysisNode]):
-        """Sends a batch of MoveAnalysisNode objects to the client."""
-        from app.models.ws.server_messages import TraceTreeNodesBatchPayload
-        
-        payload = TraceTreeNodesBatchPayload(nodes=nodes)
-        await send_ws_message(ws, ServerMessageType.TRACE_TREE_NODE_BATCH, payload)
-
-    def get_analysis_stages(self) -> List[int]:
-        """
-        Returns the analysis stages for the engine.
-        """
+    def _get_analysis_stages(self) -> List[int]:
+        """Returns the analysis stages for the engine."""
         return self.analysis_retriever.get_analysis_stages()
 
     def _get_piece_for_move(
@@ -308,9 +352,7 @@ class AnalysisSession:
                 color_char = "w" if piece.color == chess.WHITE else "b"
                 return f"{color_char}{piece.symbol().upper()}"
             return None
-        except (
-            chess.InvalidMoveError
-        ):  # Handle cases where SAN might be slightly off or board state unexpected
+        except chess.InvalidMoveError:
             logger.warning(
                 f"Could not parse SAN '{san_move}' on board FEN: {board_before_move.fen()}"
             )
