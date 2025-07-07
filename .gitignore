@@ -1,0 +1,10 @@
+chess_v3.10/
+__pycache__/
+
+config.py
+chess_positions.csv
+stockfish.exe
+*.html
+lichess.pgn
+lichess2.pgn
+sf_features.csv
