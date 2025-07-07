@@ -217,7 +217,7 @@ class AnalysisRetriever:
                     position=fen_after_pv_move,
                     move=uci_for_pv_move,
                     context=f"pv_{pv_idx}_step_{pv_move_idx}",
-                    isAnalyzed=True,  # Mark as analyzed since we calculated trace
+                    isAnalyzed=False,  # Mark as analyzed since we calculated trace
                     trace=trace_for_pv_move_pos,
                     piece=self._get_piece_for_move(
                         board_before_move=board_before_move, san_move=uci_for_pv_move
