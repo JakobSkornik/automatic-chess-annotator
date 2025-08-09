@@ -151,34 +151,61 @@ class AnalysisRetriever:
     def analyze_move(
         self, main_move_obj: Move, stage: float
     ) -> Tuple[Move, List[List[Move]]]:
-        """Enhanced version that focuses on trace calculation for PVs"""
-        board_for_main_analysis = chess.Board(main_move_obj.position)
+        """Compute main move eval on the after-move position, and PVs on the position before the move."""
+        # Board AFTER the move (stored in Move.position) – used for the move's own eval/metadata
+        board_after_move = chess.Board(main_move_obj.position)
 
-        analysis_results_from_engine = self.engine_connector.analyse(
-            board_for_main_analysis, depth=stage, multiPv=DEFAULT_PV_COUNT
+        # Evaluate the position after the move for the move's score and trace
+        after_results = self.engine_connector.analyse(
+            board_after_move, depth=stage, multiPv=1
         )
+        if isinstance(after_results, list):
+            after_primary = after_results[0]
+        else:
+            after_primary = after_results
 
-        # Analyze main move
+        # Analyze main move (score refers to the position after the move)
         main_move_obj.score = (
-            analysis_results_from_engine[0]
+            after_primary
             .get("score")
             .white()
             .score(mate_score=MATE_SCORE)
         )
-        main_move_obj.trace = self.engine_connector.trace()
-        main_move_obj.phase = self._determine_game_phase(board_for_main_analysis)
+        # Capture trace for the after-move position (before any PV queries overwrite it)
+        try:
+            main_move_obj.trace = self.engine_connector.trace()
+        except Exception:
+            main_move_obj.trace = None
+        main_move_obj.phase = self._determine_game_phase(board_after_move)
         (
             main_move_obj.capturedByWhite,
             main_move_obj.capturedByBlack,
-        ) = self._get_all_captured_pieces(board_for_main_analysis)
+        ) = self._get_all_captured_pieces(board_after_move)
         main_move_obj.isAnalyzed = True
 
         all_pvs_as_list_of_moves: List[List[Move]] = []
 
-        # Process each PV variation
-        for pv_idx, pv_data_from_engine in enumerate(analysis_results_from_engine):
+        # Compute PVs from the position BEFORE the move
+        # Reconstruct the board before this move using PGN and the move depth
+        board_before_move = self.game.board()
+        try:
+            target_depth = max(0, int(main_move_obj.depth) - 1)
+        except Exception:
+            target_depth = 0
+
+        for idx, game_move in enumerate(self.game.mainline_moves()):
+            if idx >= target_depth:
+                break
+            board_before_move.push(game_move)
+
+        pv_results = self.engine_connector.analyse(
+            board_before_move, depth=stage, multiPv=DEFAULT_PV_COUNT
+        )
+
+        # Process each PV variation (from the BEFORE-move position)
+        for pv_idx, pv_data_from_engine in enumerate(pv_results):
             current_pv_as_moves_list: List[Move] = []
-            board_for_this_pv = chess.Board(main_move_obj.position)
+            board_for_this_pv = chess.Board(board_before_move.fen())
 
             pv_score_for_first_step = None
             if pv_data_from_engine.get("score"):
@@ -195,7 +222,7 @@ class AnalysisRetriever:
             # Process each move in this PV
             for pv_move_idx, pv_chess_move in enumerate(engine_pv_moves):
                 uci_for_pv_move = pv_chess_move.uci()
-                board_before_move = board_for_this_pv.copy()
+                board_before_move_for_pv = board_for_this_pv.copy()
                 board_for_this_pv.push(pv_chess_move)
                 fen_after_pv_move = board_for_this_pv.fen()
 
@@ -217,10 +244,10 @@ class AnalysisRetriever:
                     position=fen_after_pv_move,
                     move=uci_for_pv_move,
                     context=f"pv_{pv_idx}_step_{pv_move_idx}",
-                    isAnalyzed=False,  # Mark as analyzed since we calculated trace
+                    isAnalyzed=False,
                     trace=trace_for_pv_move_pos,
                     piece=self._get_piece_for_move(
-                        board_before_move=board_before_move, san_move=uci_for_pv_move
+                        board_before_move=board_before_move_for_pv, san_move=uci_for_pv_move
                     ),
                     depth=main_move_obj.depth + pv_move_idx + 1,
                 )
@@ -245,24 +272,29 @@ class AnalysisRetriever:
     def _get_piece_for_move(
         self, board_before_move: chess.Board, san_move: str
     ) -> str | None:
-        """Helper to determine the piece (e.g., wP, bN) that made a move."""
+        """Helper to determine the piece (e.g., wP, bN) that made a move.
+
+        Tries SAN first, then falls back to UCI to be robust with input formats.
+        """
+        move_obj = None
         try:
-            move = board_before_move.parse_san(san_move)
-            piece = board_before_move.piece_at(move.from_square)
-            if piece:
-                color_char = "w" if piece.color == chess.WHITE else "b"
-                return f"{color_char}{piece.symbol().upper()}"
+            move_obj = board_before_move.parse_san(san_move)
+        except Exception:
+            try:
+                move_obj = chess.Move.from_uci(san_move)
+                if move_obj not in board_before_move.legal_moves:
+                    move_obj = None
+            except Exception:
+                move_obj = None
+
+        if move_obj is None:
             return None
-        except (
-            chess.InvalidMoveError
-        ):  # Handle cases where SAN might be slightly off or board state unexpected
-            logger.warning(
-                f"Could not parse SAN '{san_move}' on board FEN: {board_before_move.fen()}"
-            )
-            return None
-        except Exception as e:
-            logger.error(f"Error in _get_piece_for_move for SAN '{san_move}': {e}")
-            return None
+
+        piece = board_before_move.piece_at(move_obj.from_square)
+        if piece:
+            color_char = "w" if piece.color == chess.WHITE else "b"
+            return f"{color_char}{piece.symbol().upper()}"
+        return None
 
     def _get_all_captured_pieces(
         self, board: chess.Board

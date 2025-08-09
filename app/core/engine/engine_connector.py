@@ -60,14 +60,14 @@ class EngineConnector:
         :return: A dictionary with the engine's analysis result.
         """
         if depth is None and time_limit is None:
-            # Use default time limit if no parameters provided
-            time_limit = self.default_time_limit
+            # Sensible minimal default time limit
+            time_limit = 0.1
 
         if not multiPv:
             multiPv = MULTIPV
 
         limit = chess.engine.Limit(depth=depth, time=time_limit)
-        result = self.engine.analyse(board, limit, multipv=MULTIPV)
+        result = self.engine.analyse(board, limit, multipv=multiPv)
         return result
 
     def trace(self) -> dict:
