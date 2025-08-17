@@ -1,6 +1,11 @@
 from pydantic import BaseModel
 from typing import Dict, Optional
 
+class AnalysisStage:
+    SHALLOW = "shallow"
+    DEEP = "deep"
+    FINAL = "final"
+
 class Move(BaseModel):
     id: int
     position: str
@@ -14,3 +19,6 @@ class Move(BaseModel):
     phase: Optional[str] = None
     capturedByWhite: Optional[Dict[str, int]] = None
     capturedByBlack: Optional[Dict[str, int]] = None
+    analysisStage: Optional[str] = None  # AnalysisStage
+    analysisVersion: Optional[int] = None
+    hiddenFeatures: Optional[Dict] = None

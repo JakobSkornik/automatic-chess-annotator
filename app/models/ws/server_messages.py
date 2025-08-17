@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Dict, List, Optional
 from app.models.Move import Move
 from app.models.PgnMetadata import PgnMetadata
 from app.models.ws.message_types import ServerMessageType
@@ -34,6 +34,26 @@ class FullAnalysisCompletePayload(BaseModel):
     moves: List[Move]
     pvs: Dict[int, List[List[Move]]]
 
+
+class CommentPayload(BaseModel):
+    moveId: int
+    context: str  # 'mainline' | 'preview'
+    text: str
+    featuresUsed: List[str]
+    hiddenFeatures: Optional[Dict] = None
+    analysisVersion: Optional[int] = None
+    generatedAt: Optional[str] = None
+
+
+class CommentHistoryPayload(BaseModel):
+    items: List[CommentPayload]
+
+
+class AiCommentPayload(BaseModel):
+    moveId: int
+    context: str  # 'mainline' | 'preview'
+    data: Dict  # strictly formatted JSON from AI
+
 class ServerMessage(BaseModel):
     type: ServerMessageType
     payload: (
@@ -43,4 +63,7 @@ class ServerMessage(BaseModel):
         | DetailedAnalysisPayload
         | AnalysisProgressPayload
         | FullAnalysisCompletePayload
+        | CommentPayload
+        | CommentHistoryPayload
+        | AiCommentPayload
     )

@@ -10,7 +10,8 @@ from typing import List, Optional
 from app.core.engine.analysis_retriever import AnalysisRetriever
 from app.core.engine.engine_connector import EngineConnector
 from app.core.io.pgn_reader import PGNReader
-from app.core.websocket.ws_manager import send_ws_message, parse_client_ws_message
+from app.core.websocket.ws_manager import WebSocketManager, send_ws_message, parse_client_ws_message
+from app.core.commentary.commenting_service import CommentingService
 
 from app.models.ws.server_messages import (
     SessionMetadataPayload,
@@ -73,6 +74,8 @@ class AnalysisSession:
 
         self.engine_connector: EngineConnector = engine_connector
         self.analysis_retriever = AnalysisRetriever(engine_connector, self.pgn_game)
+        self.ws_manager = WebSocketManager()
+        self.commenting_service = CommentingService(self.ws_manager)
         logger.info(f"AnalysisSession {self.session_id} created.")
 
         # For trace tree node IDs
@@ -84,10 +87,12 @@ class AnalysisSession:
 
     async def add_websocket(self, websocket: WebSocket):
         self.websockets.append(websocket)
+        self.ws_manager.add_websocket(websocket)
 
     async def remove_websocket(self, websocket: WebSocket):
         if websocket in self.websockets:
             self.websockets.remove(websocket)
+        self.ws_manager.remove_websocket(websocket)
 
     async def submit_request(self, request: SessionJob):
         """Submits a client request to the processing queue."""
@@ -264,6 +269,44 @@ class AnalysisSession:
         )
         await send_ws_message(ws, ServerMessageType.ANALYSIS_UPDATE, payload)
 
+        # Only generate comments for the final analysis stage
+        if analyzed_main_move.analysisStage != "final":
+            return
+
+        # Emit comment if final stage
+        try:
+            # Augment trace with mainline UCI sequence up to this depth for ECO
+            try:
+                seq = []
+                if self.pgn_game is not None:
+                    board = self.pgn_game.board()
+                    for idx, mv in enumerate(self.pgn_game.mainline_moves()):
+                        if idx >= analyzed_main_move.depth:
+                            break
+                        seq.append(board.uci(mv))
+                        board.push(mv)
+                if seq:
+                    if not analyzed_main_move.trace:
+                        analyzed_main_move.trace = {}
+                    analyzed_main_move.trace["mainlineUci"] = seq
+            except Exception as e:
+                logger.error(f"Error augmenting trace: {e}")
+            
+            previous_move = self.analysis_retriever.get_move_by_depth(analyzed_main_move.depth - 1)
+            ctx = "preview" if analyzed_main_move.context == "preview" else "mainline"
+            comment = await self.commenting_service.generate_comment(
+                analyzed_main_move, previous_move, pvs_list_of_list_of_moves, context=ctx
+            )
+            if comment:
+                logger.info(f"Sending opening comment for move {comment.moveId}: {comment.text}")
+                await send_ws_message(
+                    ws,
+                    ServerMessageType.COMMENT_UPDATE,
+                    comment.model_dump(),
+                )
+        except Exception as e:
+            logger.error(f"Error generating comment: {e}")
+
     async def _handle_full_game_analysis(self, ws: WebSocket):
         """Handles full game analysis with progress updates"""
         if self._analysis_in_progress:
@@ -321,6 +364,39 @@ class AnalysisSession:
                 ServerMessageType.FULL_ANALYSIS_COMPLETE,
                 complete_payload.model_dump(),
             )
+
+            # Emit comments for all final-stage moves
+            try:
+                analyzed_moves_with_scores = []
+                for idx, move in enumerate(analyzed_moves):
+                    if getattr(move, "analysisStage", None) == "final":
+                        # Augment trace with mainline UCI sequence for ECO
+                        try:
+                            seq = [m.move for m in analyzed_moves[:idx+1] if m.move]
+                            if seq:
+                                if not move.trace:
+                                    move.trace = {}
+                                move.trace["mainlineUci"] = seq
+                        except Exception as e:
+                            logger.error(f"Error augmenting trace for full analysis: {e}")
+
+                        previous_move = analyzed_moves_with_scores[-1] if analyzed_moves_with_scores else None
+                        comment = await self.commenting_service.generate_comment(
+                            move,
+                            previous_move,
+                            all_pvs.get(idx),
+                            context="mainline",
+                        )
+                        if comment:
+                            logger.info(f"Sending opening comment for move {comment.moveId}: {comment.text}")
+                            await send_ws_message(
+                                ws,
+                                ServerMessageType.COMMENT_UPDATE,
+                                comment.model_dump(),
+                            )
+                    analyzed_moves_with_scores.append(move)
+            except Exception as e:
+                logger.error(f"Error generating batch comments: {e}")
 
             logger.info(f"Completed full game analysis for session {self.session_id}")
 

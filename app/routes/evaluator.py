@@ -52,6 +52,30 @@ async def submit_pgn_for_analysis(request_data: SubmitPgnRequest):
     }
 
 
+@router.get("/status")
+async def get_backend_status():
+    try:
+        engine_info = {
+            "engine_path": global_engine_connector.engine_path,
+            "hash": global_engine_connector.hash_size,
+            "threads": global_engine_connector.threads,
+        }
+    except Exception as e:
+        engine_info = {"error": str(e)}
+
+    try:
+        sessions_count = len(active_sessions)
+    except Exception:
+        sessions_count = 0
+
+    try:
+        ok = True if global_engine_connector.engine is not None else False
+    except Exception:
+        ok = False
+
+    return {"ok": ok, "engine": engine_info, "active_sessions": sessions_count}
+
+
 @router.websocket("/ws/analysis/{session_id}")
 async def websocket_analysis_endpoint(ws: WebSocket, session_id: str):
     await ws.accept()
@@ -61,6 +85,8 @@ async def websocket_analysis_endpoint(ws: WebSocket, session_id: str):
     if not analysis_session:
         await send_ws_error(ws, "Analysis session not found.", close_connection=True)
         return
+
+    await analysis_session.add_websocket(ws)
 
     try:
         ws_input_task = asyncio.create_task(analysis_session.process_ws_message(ws))
@@ -79,6 +105,8 @@ async def websocket_analysis_endpoint(ws: WebSocket, session_id: str):
                 detail = f"Failed to send final unhandled error message to WebSocket for session {session_id}."
                 logger.error(detail)
     finally:
+        if analysis_session:
+            await analysis_session.remove_websocket(ws)
         if session_id in active_sessions:
             current_session_to_close = active_sessions.pop(session_id)
             try:

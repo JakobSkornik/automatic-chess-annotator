@@ -1,58 +1,84 @@
+from __future__ import annotations
+import asyncio
+import json
 import logging
-from typing import Optional, Any, Dict
+from typing import List, Any, Optional, Dict
 
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
+from app.models.ws.server_messages import ServerMessage
 from app.models.ws.client_messages import ClientMessage
 from app.models.ws.message_types import ServerMessageType
-from app.models.ws.server_messages import ServerMessage, ErrorPayload
-
+from app.models.ws.message_types import ServerMessageType
 
 logger = logging.getLogger(__name__)
 
-# --- WebSocket Sending Helpers ---
 
+class WebSocketManager:
+    """Manages active WebSocket connections."""
 
-async def send_ws_error(
-    websocket: WebSocket,
-    message: str,
-    details: Optional[Dict[str, Any]] = None,
-    close_connection: bool = False,
-):
-    """Sends a standardized error message over WebSocket."""
-    error_payload = ErrorPayload(message=message, details=details)
-    await websocket.send_json(
-        ServerMessage(type=ServerMessageType.ERROR, payload=error_payload).model_dump()
-    )
-    if close_connection:
-        await websocket.close()
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    def add_websocket(self, websocket: WebSocket):
+        self.active_connections.append(websocket)
+
+    def remove_websocket(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def send_comment(self, payload: Any):
+        """Sends a comment to all connected clients."""
+        logger.info(f"Sending AI comment for move {payload.moveId}: {payload.data['summary']}")
+        for connection in self.active_connections:
+            try:
+                await send_ws_message(
+                    connection,
+                    ServerMessageType.AI_COMMENT_UPDATE,
+                    payload.model_dump(),
+                )
+            except WebSocketDisconnect:
+                self.remove_websocket(connection)
+            except Exception as e:
+                logger.error(f"Error sending comment: {e}")
 
 
 async def send_ws_message(
-    websocket: WebSocket, message_type: ServerMessageType, payload: Any
+    ws: WebSocket, type: ServerMessageType, payload: dict | ServerMessage
 ):
-    """Sends a generic server message over WebSocket."""
-    await websocket.send_json(
-        ServerMessage(type=message_type, payload=payload).model_dump()
-    )
+    """Sends a message to a single WebSocket client."""
+    if isinstance(payload, BaseModel):
+        payload_dict = payload.model_dump()
+    else:
+        payload_dict = payload
+
+    message_to_send = {"type": type.value, "payload": payload_dict}
+    try:
+        await ws.send_text(json.dumps(message_to_send))
+    except WebSocketDisconnect:
+        logger.warning("WebSocket disconnected before message could be sent.")
+    except Exception as e:
+        logger.error(f"Error sending WebSocket message: {e}")
 
 
-# --- WebSocket Parsing and Handling Logic ---
+async def send_ws_error(ws: WebSocket, message: str, close_connection: bool = False):
+    """Sends an error message to a single WebSocket client."""
+    await send_ws_message(ws, ServerMessageType.ERROR, {"message": message})
+    if close_connection:
+        await ws.close()
 
 
 async def parse_client_ws_message(
-    raw_data: str, websocket: WebSocket
-) -> Optional[ClientMessage]:
-    """Parses incoming WebSocket message string to Pydantic model."""
+    raw_data: str, ws: WebSocket
+) -> ClientMessage | None:
+    """Parses an incoming client message."""
     try:
-        return ClientMessage.model_validate_json(raw_data)
-    except Exception as pydantic_error:
-        logger.warning(
-            f"Invalid WS message format from client: {pydantic_error}. Raw: {raw_data[:100]}"
-        )
-        await send_ws_error(
-            websocket,
-            "Invalid message format.",
-            details={"error": str(pydantic_error)},
-        )
+        data = json.loads(raw_data)
+        return ClientMessage(**data)
+    except json.JSONDecodeError:
+        await send_ws_error(ws, "Invalid JSON format.")
+        return None
+    except Exception as e:
+        await send_ws_error(ws, f"Error parsing message: {e}")
         return None

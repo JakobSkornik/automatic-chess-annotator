@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Tuple, Callable
 from app.core.engine.engine_connector import EngineConnector
 from app.models.Move import Move
 from app.models.PgnMetadata import PgnMetadata
+from app.models.Move import AnalysisStage
+from app.core.commentary.features.positional_features import compute_hidden_features
 
 # ANALYSIS_STAGES = [0.05, 0.1, 0.2, 0.4]
 ANALYSIS_STAGES = [4, 8, 16]
@@ -20,7 +22,7 @@ class AnalysisRetriever:
         self.engine_connector = engine_connector
         self.game = game
         self.id_counter = 0
-        self.analyzed_game = []
+        self.analyzed_game: List[Move] = self.get_move_list()
 
     def get_pgn_headers(self) -> PgnMetadata:
         """Extract game metadata from PGN headers."""
@@ -82,6 +84,15 @@ class AnalysisRetriever:
             depth += 1
 
         return moves
+
+    def get_move_by_depth(self, depth: int) -> Optional[Move]:
+        """
+        Returns a move from the analyzed game by its depth.
+        """
+        for move in self.analyzed_game:
+            if move.depth == depth:
+                return move
+        return None
 
     def get_analysis_stages(self) -> List[float]:  # Corrected type hint
         """
@@ -177,11 +188,24 @@ class AnalysisRetriever:
         except Exception:
             main_move_obj.trace = None
         main_move_obj.phase = self._determine_game_phase(board_after_move)
+        # Hidden features on the after-move position
+        try:
+            main_move_obj.hiddenFeatures = compute_hidden_features(board_after_move)
+        except Exception as e:
+            logger.error(
+                f"Hidden features computation failed at depth {main_move_obj.depth} FEN={board_after_move.fen()}: {e}"
+            )
+            main_move_obj.hiddenFeatures = {"error": str(e)}
         (
             main_move_obj.capturedByWhite,
             main_move_obj.capturedByBlack,
         ) = self._get_all_captured_pieces(board_after_move)
         main_move_obj.isAnalyzed = True
+        # Mark stage as final if this is the last configured stage
+        main_move_obj.analysisStage = (
+            AnalysisStage.FINAL if stage == max(self.analysis_stages) else AnalysisStage.DEEP
+        )
+        main_move_obj.analysisVersion = 1
 
         all_pvs_as_list_of_moves: List[List[Move]] = []
 

@@ -8,3 +8,4 @@ stockfish.exe
 lichess.pgn
 lichess2.pgn
 sf_features.csv
+.env
