@@ -10,3 +10,5 @@ lichess2.pgn
 sf_features.csv
 .env
 .env.dev
+
+.env.dev
