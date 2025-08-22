@@ -57,17 +57,17 @@ class CommentingService:
                 # We will create a separate task to generate the AI comment
                 # and send it back to the frontend when it's ready.
                 logger.info(f"Key moment detected for move {move.id}: {key_moment_type}. Triggering AI comment generation.")
-                asyncio.create_task(self.generate_ai_comment(move, context))
+                asyncio.create_task(self.generate_ai_comment(move, context, pvs_for_move))
 
         return None
 
-    async def generate_ai_comment(self, move: Move, context: str):
+    async def generate_ai_comment(self, move: Move, context: str, pvs_for_move: Optional[List[List[Move]]] = None):
         """
         Generates a comment using the AI comment service and sends it to the client.
         """
         # For now, we'll just use the move's trace as the features.
         features = move.trace or {}
-        comment_text = await self._ai_comment_service.generate_comment(move, features)
+        comment_text = await self._ai_comment_service.generate_comment(move, features, pvs_for_move)
 
         # Create the payload and send it to the client.
         payload = AiCommentPayload(

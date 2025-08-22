@@ -5,7 +5,7 @@ import uuid
 import time
 
 from fastapi import WebSocket
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from app.core.engine.analysis_retriever import AnalysisRetriever
 from app.core.engine.engine_connector import EngineConnector
@@ -84,6 +84,10 @@ class AnalysisSession:
         # WebSocket connections
         self.websockets: List[WebSocket] = []
         self._analysis_in_progress = False
+
+        # Persist analyzed results for the session so commentary/key-moments can use full history
+        self._move_results_by_depth: Dict[int, Move] = {}
+        self._pvs_by_depth: Dict[int, List[List[Move]]] = {}
 
     async def add_websocket(self, websocket: WebSocket):
         self.websockets.append(websocket)
@@ -275,6 +279,13 @@ class AnalysisSession:
 
         # Emit comment if final stage
         try:
+            # Persist analyzed result in the session for future context
+            try:
+                self._move_results_by_depth[analyzed_main_move.depth] = analyzed_main_move
+                self._pvs_by_depth[analyzed_main_move.depth] = pvs_list_of_list_of_moves
+            except Exception:
+                pass
+
             # Augment trace with mainline UCI sequence up to this depth for ECO
             try:
                 seq = []
@@ -292,7 +303,51 @@ class AnalysisSession:
             except Exception as e:
                 logger.error(f"Error augmenting trace: {e}")
             
-            previous_move = self.analysis_retriever.get_move_by_depth(analyzed_main_move.depth - 1)
+            # Prefer previously analyzed move stored in this session, fallback to initial move list
+            previous_move = self._move_results_by_depth.get(analyzed_main_move.depth - 1) or \
+                self.analysis_retriever.get_move_by_depth(analyzed_main_move.depth - 1)
+
+            # Attach score context for AI (prevScore, scoreDelta, scoreTrend) and explicit POV/mover info
+            try:
+                if not analyzed_main_move.hiddenFeatures:
+                    analyzed_main_move.hiddenFeatures = {}
+                if isinstance(analyzed_main_move.hiddenFeatures, dict):
+                    analyzed_main_move.hiddenFeatures.setdefault("_ai", {})
+                    ai_meta = analyzed_main_move.hiddenFeatures["_ai"]
+                    if previous_move and previous_move.score is not None and analyzed_main_move.score is not None:
+                        ai_meta["prevScore"] = previous_move.score
+                        ai_meta["scoreDelta"] = analyzed_main_move.score - previous_move.score
+                        ai_meta["scoreNow"] = analyzed_main_move.score
+                        ai_meta["scorePov"] = "white"  # engine scores are white POV centipawns
+                        try:
+                            ai_meta["scoreSwingPawns"] = (ai_meta["scoreDelta"] or 0.0) / 100.0
+                            ai_meta["evalBeforePawns"] = (ai_meta["prevScore"] or 0.0) / 100.0
+                            ai_meta["evalAfterPawns"] = (ai_meta["scoreNow"] or 0.0) / 100.0
+                            ai_meta["swingPawnsAbs"] = abs(ai_meta["scoreSwingPawns"])
+                        except Exception:
+                            pass
+                        # Determine mover and benefited side
+                        moved_by_white = (analyzed_main_move.depth % 2 == 1)
+                        ai_meta["movedBy"] = "white" if moved_by_white else "black"
+                        if isinstance(ai_meta.get("scoreDelta"), (int, float)):
+                            benefited = "white" if ai_meta["scoreDelta"] > 0 else ("black" if ai_meta["scoreDelta"] < 0 else None)
+                            if benefited is not None:
+                                ai_meta["sideBenefited"] = benefited
+                                ai_meta["moverMistake"] = (benefited != ai_meta["movedBy"])
+                    # Build simple trend from last few stored moves
+                    trend: List[float] = []
+                    for d in range(analyzed_main_move.depth - 3, analyzed_main_move.depth):
+                        if d <= 0:
+                            continue
+                        mv = self._move_results_by_depth.get(d)
+                        if mv and mv.score is not None:
+                            trend.append(mv.score)
+                    if analyzed_main_move.score is not None:
+                        trend.append(analyzed_main_move.score)
+                    if trend:
+                        ai_meta["scoreTrend"] = trend
+            except Exception:
+                pass
             ctx = "preview" if analyzed_main_move.context == "preview" else "mainline"
             comment = await self.commenting_service.generate_comment(
                 analyzed_main_move, previous_move, pvs_list_of_list_of_moves, context=ctx
@@ -367,6 +422,15 @@ class AnalysisSession:
 
             # Emit comments for all final-stage moves
             try:
+                # Persist the whole game results into the session for downstream consumers
+                try:
+                    for idx, move in enumerate(analyzed_moves):
+                        self._move_results_by_depth[move.depth] = move
+                        if idx in all_pvs:
+                            self._pvs_by_depth[move.depth] = all_pvs[idx]
+                except Exception:
+                    pass
+
                 analyzed_moves_with_scores = []
                 for idx, move in enumerate(analyzed_moves):
                     if getattr(move, "analysisStage", None) == "final":

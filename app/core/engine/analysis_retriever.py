@@ -188,14 +188,14 @@ class AnalysisRetriever:
         except Exception:
             main_move_obj.trace = None
         main_move_obj.phase = self._determine_game_phase(board_after_move)
-        # Hidden features on the after-move position
+        # Hidden features on the after-move position + before/after delta for strategic context
         try:
-            main_move_obj.hiddenFeatures = compute_hidden_features(board_after_move)
+            after_features = compute_hidden_features(board_after_move)
         except Exception as e:
             logger.error(
-                f"Hidden features computation failed at depth {main_move_obj.depth} FEN={board_after_move.fen()}: {e}"
+                f"Hidden features (after) failed at depth {main_move_obj.depth} FEN={board_after_move.fen()}: {e}"
             )
-            main_move_obj.hiddenFeatures = {"error": str(e)}
+            after_features = {"error": str(e)}
         (
             main_move_obj.capturedByWhite,
             main_move_obj.capturedByBlack,
@@ -221,6 +221,59 @@ class AnalysisRetriever:
             if idx >= target_depth:
                 break
             board_before_move.push(game_move)
+
+        # Compute features for BEFORE position and a small delta map for AI context
+        try:
+            before_features = compute_hidden_features(board_before_move)
+        except Exception as e:
+            logger.error(
+                f"Hidden features (before) failed at depth {main_move_obj.depth} FEN={board_before_move.fen()}: {e}"
+            )
+            before_features = {"error": str(e)}
+
+        def _compute_features_delta(before: dict, after: dict) -> dict:
+            # Focus on numeric and boolean keys that matter strategically
+            delta: dict = {"white": {}, "black": {}, "openFiles": {}}
+            try:
+                # Open files count deltas
+                if isinstance(before.get("openFiles"), dict) and isinstance(after.get("openFiles"), dict):
+                    try:
+                        delta["openFiles"]["openCount"] = len(after["openFiles"].get("open", [])) - len(before["openFiles"].get("open", []))
+                        delta["openFiles"]["semiOpenWhiteCount"] = len(after["openFiles"].get("semiOpenWhite", [])) - len(before["openFiles"].get("semiOpenWhite", []))
+                        delta["openFiles"]["semiOpenBlackCount"] = len(after["openFiles"].get("semiOpenBlack", [])) - len(before["openFiles"].get("semiOpenBlack", []))
+                    except Exception:
+                        pass
+                for side in ("white", "black"):
+                    b = before.get(side, {}) if isinstance(before.get(side, {}), dict) else {}
+                    a = after.get(side, {}) if isinstance(after.get(side, {}), dict) else {}
+                    def diff_num(key: str):
+                        if isinstance(b.get(key), int) and isinstance(a.get(key), int):
+                            delta[side][key] = a[key] - b[key]
+                    for k in ("doubledPawns", "isolatedPawns", "passedPawns", "attackedPieces", "attackingPieces", "rooksOnOpenFiles", "rooksOnSemiOpenFiles"):
+                        diff_num(k)
+                    # Booleans as changed flags
+                    for k in ("hasBishopPair", "canCastleKingSide", "canCastleQueenSide", "connectedRooks"):
+                        if isinstance(b.get(k), bool) and isinstance(a.get(k), bool):
+                            if a[k] != b[k]:
+                                delta[side][f"{k}Changed"] = True
+                return delta
+            except Exception:
+                return {}
+
+        try:
+            positional_delta = _compute_features_delta(before_features, after_features)
+        except Exception:
+            positional_delta = {}
+
+        # Attach features in a backward-compatible way: keep after at top-level, nest before/delta under _ai
+        main_move_obj.hiddenFeatures = after_features
+        try:
+            if isinstance(main_move_obj.hiddenFeatures, dict):
+                main_move_obj.hiddenFeatures.setdefault("_ai", {})
+                main_move_obj.hiddenFeatures["_ai"]["before"] = before_features
+                main_move_obj.hiddenFeatures["_ai"]["delta"] = positional_delta
+        except Exception:
+            pass
 
         pv_results = self.engine_connector.analyse(
             board_before_move, depth=stage, multiPv=DEFAULT_PV_COUNT
