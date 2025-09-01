@@ -15,6 +15,9 @@ AI_SYSTEM_PROMPT = (
     "- Use movedBy and sideBenefited/moverMistake if present to label blunders correctly.\n"
     "- Prefer evalBeforePawns/evalAfterPawns if present; otherwise divide centipawns by 100 and format to 2 decimals.\n"
     "- Mention a concrete feature from featuresDelta and, if helpful, the first PV move.\n"
+    "- Prioritize big swings (|scoreSwingPawns| >= 1.0), blunders/mistakes, and clear tactical/structural features.\n"
+    "- Ignore low-value noise: minor material/king safety changes < 0.2 pawns unless decisive context.\n"
+    "- Prefer keyMomentType when present (blunder, mistake, missed_opportunity).\n"
     "- Keep it to ONE short sentence.\n\n"
     "Output ONLY valid JSON: {\"summary\": \"...\" }"
 )
@@ -135,6 +138,11 @@ class AICommentService:
         move: Move,
         features: Dict[str, Any],
         pvs_for_move: Optional[List[List[Move]]] = None,
+        *,
+        model: str | None = None,
+        effort: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         """
         Generates a humanized comment for a given move and its features.
@@ -147,7 +155,7 @@ class AICommentService:
             try:
                 # New Responses API
                 response = await self.client.responses.create(
-                    model="gpt-5-mini",
+                    model=model or "gpt-5-mini",
                     input=[
                         {
                             "role": "system",
@@ -162,7 +170,8 @@ class AICommentService:
                             ],
                         },
                     ],
-                    reasoning={"effort": "low"},
+                    reasoning={"effort": (effort or "low")},
+                    # temperature=temperature,
                 )
 
                 # Try common fields for Responses API
@@ -182,13 +191,14 @@ class AICommentService:
                 print(f"Error in Responses API: {e}")
                 # Fallback to Chat Completions API
                 response = await self.client.chat.completions.create(
-                    model="gpt-5",
+                    model=model or "gpt-5",
                     messages=[
                         {"role": "system", "content": AI_SYSTEM_PROMPT},
                         {"role": "user", "content": build_ai_prompt(move, pvs_for_move)},
                     ],
                     response_format={"type": "json_object"},
-                    max_completion_tokens=60,
+                    max_completion_tokens=max_tokens or 60,
+                    temperature=temperature,
                 )
                 content = response.choices[0].message.content
                 if content:

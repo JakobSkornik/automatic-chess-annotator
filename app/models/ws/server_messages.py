@@ -54,6 +54,23 @@ class AiCommentPayload(BaseModel):
     context: str  # 'mainline' | 'preview'
     data: Dict  # strictly formatted JSON from AI
 
+
+class AiGenerationStatusPayload(BaseModel):
+    moveId: int
+    context: str  # 'mainline' | 'preview'
+    status: str  # 'start' | 'end'
+    startedAt: Optional[float] = None
+    endedAt: Optional[float] = None
+    model: Optional[str] = None
+    effort: Optional[str] = None
+
+
+class ModelParamsUpdatedPayload(BaseModel):
+    model: str
+    effort: str
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+
 class ServerMessage(BaseModel):
     type: ServerMessageType
     payload: (
@@ -66,4 +83,6 @@ class ServerMessage(BaseModel):
         | CommentPayload
         | CommentHistoryPayload
         | AiCommentPayload
+        | AiGenerationStatusPayload
+        | ModelParamsUpdatedPayload
     )

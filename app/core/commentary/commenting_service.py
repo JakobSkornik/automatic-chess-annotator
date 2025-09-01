@@ -9,6 +9,7 @@ from app.models.ws.server_messages import CommentPayload, AiCommentPayload
 from app.core.commentary.openings.eco_book import ECOBook
 from app.core.commentary.key_moment_detector import KeyMomentDetector
 from app.core.commentary.ai_comment_service import AICommentService
+from app.core.commentary.advanced_comment_service import AdvancedCommentService
 from app.core.websocket.ws_manager import WebSocketManager
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,12 @@ class CommentingService:
         self._eco = ECOBook()
         self._key_moment_detector = KeyMomentDetector()
         self._ai_comment_service = AICommentService()
+        self._advanced_service = AdvancedCommentService()
         self._ws_manager = ws_manager
+        self._model_params = {"model": "gpt-5-mini", "effort": "low", "temperature": 0.2, "maxTokens": 120}
+
+    def update_model_params(self, params: dict) -> None:
+        self._model_params.update(params or {})
 
     async def generate_comment(
         self,
@@ -35,10 +41,7 @@ class CommentingService:
         pvs_for_move: Optional[List[List[Move]]],
         context: str,
     ) -> Optional[CommentPayload]:
-        # Opening book: if we are still in book, emit opening comment (both stages)
-        opening_comment = self._maybe_opening_comment(move)
-        if opening_comment:
-            return opening_comment
+        # Do not emit opening text; pass opening context into AI input instead.
 
         # If there is no opening comment, check for a key moment.
         prev_score = previous_move.score if previous_move else "N/A"
@@ -53,21 +56,73 @@ class CommentingService:
                     move.hiddenFeatures = {}
                 move.hiddenFeatures["keyMomentType"] = key_moment_type
 
-                # This is a key moment, so we will generate a comment.
-                # We will create a separate task to generate the AI comment
-                # and send it back to the frontend when it's ready.
-                logger.info(f"Key moment detected for move {move.id}: {key_moment_type}. Triggering AI comment generation.")
-                asyncio.create_task(self.generate_ai_comment(move, context, pvs_for_move))
+        # Always attempt AI comment generation for quiescent moves (generation method will skip noisy moves)
+        asyncio.create_task(self.generate_ai_comment(move, context, pvs_for_move, previous_move))
 
         return None
 
-    async def generate_ai_comment(self, move: Move, context: str, pvs_for_move: Optional[List[List[Move]]] = None):
+    async def generate_ai_comment(self, move: Move, context: str, pvs_for_move: Optional[List[List[Move]]] = None, previous_move: Optional[Move] = None):
         """
         Generates a comment using the AI comment service and sends it to the client.
         """
-        # For now, we'll just use the move's trace as the features.
-        features = move.trace or {}
-        comment_text = await self._ai_comment_service.generate_comment(move, features, pvs_for_move)
+        # Only comment on quiescent moves (no capture, no check) to avoid horizon noise
+        try:
+            san = (move.trace or {}).get("san", "") if isinstance(move.trace, dict) else ""
+            is_capture = "x" in san
+            is_check = "+" in san or "#" in san
+            if is_capture or is_check:
+                return
+        except Exception:
+            pass
+
+        # Opening context to include in input and allow AI to mention
+        opening_ctx = {}
+        try:
+            if isinstance(move.trace, dict):
+                opening_ctx = {"eco": move.trace.get("openingCode"), "name": move.trace.get("openingName"), "variation": None}
+                # Try to enrich via ECOBook using mainline UCI if available
+                seq = move.trace.get("mainlineUci") if isinstance(move.trace.get("mainlineUci"), list) else []
+                if seq:
+                    info = self._eco.match(seq)
+                    if info:
+                        opening_ctx["eco"] = getattr(info, "code", opening_ctx.get("eco"))
+                        # Build label with variation if present
+                        nm = getattr(info, "name", None)
+                        var = getattr(info, "variation", None)
+                        if nm:
+                            opening_ctx["name"] = nm
+                        if var:
+                            opening_ctx["variation"] = var
+        except Exception:
+            opening_ctx = {}
+        # Emit start status
+        try:
+            from app.models.ws.server_messages import AiGenerationStatusPayload
+            import time as _t
+            await self._ws_manager.send_generation_status(
+                AiGenerationStatusPayload(
+                    moveId=move.id,
+                    context=context,
+                    status="start",
+                    startedAt=_t.time(),
+                    model=str(self._model_params.get("model")),
+                    effort=str(self._model_params.get("effort")),
+                )
+            )
+        except Exception:
+            pass
+
+        # Build compact, PV-aware input for two-step pipeline
+        compact = self._advanced_service.build_compact_input(
+            move, previous_move=previous_move, pvs_for_move=pvs_for_move, opening=opening_ctx
+        )
+        comment_text = await self._advanced_service.analyze_and_compose(
+            compact,
+            model=self._model_params.get("model"),
+            effort=self._model_params.get("effort"),
+            temperature=self._model_params.get("temperature"),
+            max_tokens=self._model_params.get("maxTokens"),
+        )
 
         # Create the payload and send it to the client.
         payload = AiCommentPayload(
@@ -76,6 +131,23 @@ class CommentingService:
             data={"summary": comment_text, "bullets": []},
         )
         await self._ws_manager.send_comment(payload)
+
+        # Emit end status
+        try:
+            from app.models.ws.server_messages import AiGenerationStatusPayload
+            import time as _t
+            await self._ws_manager.send_generation_status(
+                AiGenerationStatusPayload(
+                    moveId=move.id,
+                    context=context,
+                    status="end",
+                    endedAt=_t.time(),
+                    model=str(self._model_params.get("model")),
+                    effort=str(self._model_params.get("effort")),
+                )
+            )
+        except Exception:
+            pass
 
     @staticmethod
     def _is_white_move(depth: int) -> bool:

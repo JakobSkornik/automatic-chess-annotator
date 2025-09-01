@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from app.models.ws.server_messages import ServerMessage
 from app.models.ws.client_messages import ClientMessage
 from app.models.ws.message_types import ServerMessageType
-from app.models.ws.message_types import ServerMessageType
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +41,20 @@ class WebSocketManager:
                 self.remove_websocket(connection)
             except Exception as e:
                 logger.error(f"Error sending comment: {e}")
+
+    async def send_generation_status(self, payload: Any):
+        """Broadcast AI generation status (start/end) to clients."""
+        for connection in list(self.active_connections):
+            try:
+                await send_ws_message(
+                    connection,
+                    ServerMessageType.AI_GENERATION_STATUS,
+                    payload.model_dump() if hasattr(payload, "model_dump") else payload,
+                )
+            except WebSocketDisconnect:
+                self.remove_websocket(connection)
+            except Exception as e:
+                logger.error(f"Error sending generation status: {e}")
 
 
 async def send_ws_message(

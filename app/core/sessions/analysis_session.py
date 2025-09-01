@@ -20,6 +20,7 @@ from app.models.ws.server_messages import (
     FullAnalysisCompletePayload,
 )
 from app.models.ws.message_types import ServerMessageType, ClientMessageType
+from app.models.ws.server_messages import ModelParamsUpdatedPayload
 from app.models.Move import Move
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,18 @@ class AnalysisSession:
         self.analysis_retriever = AnalysisRetriever(engine_connector, self.pgn_game)
         self.ws_manager = WebSocketManager()
         self.commenting_service = CommentingService(self.ws_manager)
+        # Default AI model parameters for this session
+        self.model_params: Dict = {
+            "model": "gpt-5-mini",
+            "effort": "low",
+            "temperature": 0.2,
+            "maxTokens": 120,
+        }
+        # Initialize commenting service params
+        try:
+            self.commenting_service.update_model_params(self.model_params)
+        except Exception:
+            pass
         logger.info(f"AnalysisSession {self.session_id} created.")
 
         # For trace tree node IDs
@@ -140,6 +153,9 @@ class AnalysisSession:
                     # Updated to handle the new message type
                     elif client_message.type == ClientMessageType.GET_GAME_ANALYSIS:
                         await self._handle_full_game_analysis(ws)
+
+                    elif client_message.type == ClientMessageType.SET_MODEL_PARAMS:
+                        await self._handle_set_model_params(ws, client_message.payload)
 
                     else:
                         await send_ws_message(
@@ -227,6 +243,15 @@ class AnalysisSession:
                         self.request_queue = asyncio.PriorityQueue()
                         await self.submit_request(job)
 
+                    elif ws_msg.type == ClientMessageType.SET_MODEL_PARAMS:
+                        job = SessionJob(
+                            type=ClientMessageType.SET_MODEL_PARAMS,
+                            payload=ws_msg.payload,
+                            task_prio=1,
+                            timestamp=time.time(),
+                        )
+                        await self.submit_request(job)
+
                     else:
                         await send_ws_message(
                             ws,
@@ -242,6 +267,33 @@ class AnalysisSession:
             logger.error(f"Error in WebSocket listening task for session.: {e}")
         finally:
             logger.info(f"Session {self.session_id}: Exiting request processing loop.")
+
+    async def _handle_set_model_params(self, ws: WebSocket, payload: dict):
+        try:
+            # Update session model params with provided keys
+            for key in ["model", "effort", "temperature", "maxTokens"]:
+                if key in payload and payload[key] is not None:
+                    self.model_params[key] = payload[key]
+
+            # Inform commenting service of updated params
+            try:
+                self.commenting_service.update_model_params(self.model_params)
+            except Exception:
+                pass
+
+            # Broadcast updated params to the requesting client
+            await send_ws_message(
+                ws,
+                ServerMessageType.MODEL_PARAMS_UPDATED,
+                ModelParamsUpdatedPayload(
+                    model=self.model_params.get("model", "gpt-5-mini"),
+                    effort=self.model_params.get("effort", "low"),
+                    temperature=self.model_params.get("temperature"),
+                    maxTokens=self.model_params.get("maxTokens"),
+                ).model_dump(),
+            )
+        except Exception as e:
+            await send_ws_message(ws, ServerMessageType.ERROR, {"message": f"Failed to set model params: {e}"})
 
     async def _handle_get_session_metadata(self, ws: WebSocket):
         """Handles the logic for GET_SESSION_METADATA message type."""
