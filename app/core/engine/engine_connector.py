@@ -6,6 +6,8 @@ This module provides the EngineConnector class, a thin wrapper around a UCI ches
 """
 
 import chess.engine
+import platform
+import os
 from typing import Optional
 
 MULTIPV = 3
@@ -107,3 +109,11 @@ class EngineConnector:
         Ensures the engine is properly closed on exiting the context.
         """
         self.close()
+
+# Global Engine Connector Instance
+stockfish_executable = (
+    "stockfish.exe" if platform.system() == "Windows" else "stockfish"
+)
+# Navigate from app/core/engine/ to root
+stockfish_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", stockfish_executable))
+global_engine_connector = EngineConnector(stockfish_path)

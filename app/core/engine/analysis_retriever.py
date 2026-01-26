@@ -1,5 +1,7 @@
 import chess
 import logging
+import time
+import uuid
 from chess.pgn import Game
 from typing import Dict, List, Optional, Tuple, Callable
 
@@ -8,6 +10,9 @@ from app.models.Move import Move
 from app.models.PgnMetadata import PgnMetadata
 from app.models.Move import AnalysisStage
 from app.core.commentary.features.positional_features import compute_hidden_features
+from app.models.GameJson import GameJson, GameMetadata, GameMove, AnalysisInfo, Variation, MoveScore
+from app.core.io.pgn_reader import PGNReader
+from app.core.commentary.key_moment_detector import KeyMomentDetector
 
 # ANALYSIS_STAGES = [0.05, 0.1, 0.2, 0.4]
 ANALYSIS_STAGES = [4, 8, 16]
@@ -23,6 +28,7 @@ class AnalysisRetriever:
         self.game = game
         self.id_counter = 0
         self.analyzed_game: List[Move] = self.get_move_list()
+        self.key_moment_detector = KeyMomentDetector()
 
     def get_pgn_headers(self) -> PgnMetadata:
         """Extract game metadata from PGN headers."""
@@ -138,7 +144,7 @@ class AnalysisRetriever:
                 
                 # Update progress for PV analysis
                 if progress_callback:
-                    progress_callback(
+                    await progress_callback(
                         move_idx, 
                         total_moves, 
                         "analyzing_pvs", 
@@ -475,3 +481,191 @@ class AnalysisRetriever:
         # (Initial minor/major pieces = 14. If >=4 are off, count <= 10.
         # If count is between 7 and 10 (inclusive) and not early, it's mid).
         return "mid"
+
+
+async def run_full_analysis_to_json(
+    pgn_string: str, 
+    engine_connector: EngineConnector, 
+    progress_callback: Callable[[float, str], None]
+) -> GameJson:
+    pgn_reader = PGNReader()
+    game = pgn_reader.read_game_from_string(pgn_string)
+    if not game:
+        raise ValueError("Invalid PGN")
+
+    retriever = AnalysisRetriever(engine_connector, game)
+    headers = retriever.get_pgn_headers()
+    
+    # Metadata
+    metadata = GameMetadata(
+        id=str(uuid.uuid4()),
+        white=headers.whiteName,
+        black=headers.blackName,
+        result=headers.result,
+        date=game.headers.get("Date"),
+        eventId=headers.event,
+        whiteElo=headers.whiteElo,
+        blackElo=headers.blackElo,
+        opening=headers.opening
+    )
+
+    # Moves
+    moves_list = retriever.get_move_list()
+    total_moves = len(moves_list)
+    game_moves: List[GameMove] = []
+    
+    previous_move_obj: Optional[Move] = None
+    
+    for idx, move_obj in enumerate(moves_list):
+        progress = (idx / total_moves) * 100
+        await progress_callback(progress, f"Analyzing move {idx + 1}/{total_moves}")
+        
+        analyzed_move, pvs = retriever.analyze_move(move_obj, stage=16) # Fixed depth 16 for now
+        
+        # Key Moment Detection
+        comment = None
+        key_moment = retriever.key_moment_detector.detect(
+            analyzed_move, 
+            previous_move_obj,
+            list(pvs) if pvs else None
+        )
+        if key_moment:
+            move_score = analyzed_move.score if analyzed_move.score is not None else 0
+            prev_score = previous_move_obj.score if previous_move_obj and previous_move_obj.score is not None else 0
+            diff = move_score - prev_score
+            # Adjust diff perspective for display if needed, but KeyMomentDetector already checks
+            # Just create a simple string
+            comment = f"{key_moment.replace('_', ' ').capitalize()} (Score change: {diff/100:.2f})"
+
+        # Convert PVs to Variations
+        variations: List[Variation] = []
+        for rank, pv_sequence in enumerate(pvs):
+            if not pv_sequence:
+                continue
+                
+            first_move = pv_sequence[0]
+            # Need strict line array
+            line_san = [m.move for m in pv_sequence] # m.move is UCI? No, let's check Move class usage in analyze_move
+            # In analyze_move:
+            # move=uci_for_pv_move (which is uci)
+            # So m.move is UCI string.
+            
+            # We want SAN for the line for display? The schema says "line: List[str]". 
+            # Frontend usually displays SAN.
+            # To get SAN, we need to walk the board from the position BEFORE the move.
+            
+            # Reconstruct board state for SAN generation
+            board_for_san = chess.Board(move_obj.position)
+            # Wait, pvs are from BEFORE the move. 
+            # In analyze_move: "Compute PVs from the position BEFORE the move"
+            # So we need board state before this move.
+            
+            # We can get it from the previous move's position or replaying game.
+            # Ideally we have it. 
+            
+            # Let's replay efficiently? Or just accept UCI for now? 
+            # Plan example says "line": ["e4", "e5", ...]. Those look like SAN.
+            
+            # Let's regenerate SAN.
+            # Reconstruct board before current move
+            board_pv_start = game.board()
+            for m in game.mainline_moves():
+                if board_pv_start.fullmove_number * 2 - (1 if board_pv_start.turn == chess.WHITE else 0) >= move_obj.depth: 
+                     # This logic is tricky with depth.
+                     pass
+            
+            # Simpler: just replay moves up to idx
+            board_pv_start = game.board()
+            mainline_moves = list(game.mainline_moves())
+            for i in range(idx):
+                board_pv_start.push(mainline_moves[i])
+                
+            # Now generate SAN for the PV line
+            san_line = []
+            board_trace = board_pv_start.copy()
+            for pm in pv_sequence:
+                try:
+                    # pm.move is UCI
+                    m_uci = chess.Move.from_uci(pm.move)
+                    san = board_trace.san(m_uci)
+                    san_line.append(san)
+                    board_trace.push(m_uci)
+                except:
+                    san_line.append(pm.move) # Fallback to UCI
+
+            score_val = first_move.score
+            # Check for mate
+            mate = None
+            cp = None
+            if score_val is not None:
+                if abs(score_val) > MATE_SCORE - 1000:
+                    # It is mate
+                    moves_to_mate = MATE_SCORE - abs(score_val)
+                    if score_val < 0:
+                        mate = -moves_to_mate
+                    else:
+                        mate = moves_to_mate
+                else:
+                    cp = score_val
+
+            variations.append(Variation(
+                rank=rank + 1,
+                move_san=san_line[0] if san_line else "",
+                score=MoveScore(cp=cp, mate=mate),
+                line=san_line
+            ))
+
+        # Main move score
+        score_val = analyzed_move.score
+        mate = None
+        cp = None
+        if score_val is not None:
+            if abs(score_val) > MATE_SCORE - 1000:
+                moves_to_mate = MATE_SCORE - abs(score_val)
+                if score_val < 0:
+                    mate = -moves_to_mate
+                else:
+                    mate = moves_to_mate
+            else:
+                cp = score_val
+
+        # Get SAN for main move
+        # move_obj.move is uci or san?
+        # In get_move_list: move=san_representation (uci)
+        # We need SAN.
+        board_before = game.board()
+        mainline_moves = list(game.mainline_moves())
+        for i in range(idx):
+            board_before.push(mainline_moves[i])
+        
+        try:
+             # move_obj.move is UCI
+            chess_move_obj = chess.Move.from_uci(move_obj.move)
+            san_main = board_before.san(chess_move_obj)
+        except:
+            san_main = move_obj.move
+
+        game_moves.append(GameMove(
+            mn=board_before.fullmove_number,
+            color="w" if board_before.turn == chess.WHITE else "b",
+            san=san_main,
+            uci=move_obj.move,
+            fen=move_obj.position,
+            score=MoveScore(cp=cp, mate=mate),
+            variations=variations,
+            comment=comment, # Populate detected key moment
+            classification=key_moment # Also use as classification
+        ))
+        
+        previous_move_obj = analyzed_move
+        
+    return GameJson(
+        metadata=metadata,
+        moves=game_moves,
+        analysis_info=AnalysisInfo(
+            engine="Stockfish",
+            depth=16,
+            multipv=DEFAULT_PV_COUNT,
+            timestamp=time.time()
+        )
+    )

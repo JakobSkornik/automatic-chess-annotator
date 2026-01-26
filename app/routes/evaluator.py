@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from typing import Dict
 
-from app.core.engine.engine_connector import EngineConnector
+from app.core.engine.engine_connector import EngineConnector, global_engine_connector
 from app.core.sessions.analysis_session import AnalysisSession
 from app.core.websocket.ws_manager import send_ws_error
 
@@ -17,13 +17,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/evaluator", tags=["Evaluator"])
 
 active_sessions: Dict[str, AnalysisSession] = {}
-
-# Determine Stockfish path based on OS
-stockfish_executable = (
-    "stockfish.exe" if platform.system() == "Windows" else "stockfish"
-)
-stockfish_path = os.path.join(os.path.dirname(__file__), "..", stockfish_executable)
-global_engine_connector = EngineConnector(stockfish_path)
 
 
 @router.post("/submit_pgn")
