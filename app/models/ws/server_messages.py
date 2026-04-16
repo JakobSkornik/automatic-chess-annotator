@@ -55,6 +55,16 @@ class AiCommentPayload(BaseModel):
     data: Dict  # strictly formatted JSON from AI
 
 
+class EpisodeNarrativePayload(BaseModel):
+    episode_index: int
+    title: str
+    narrative: str
+
+
+class GameNarrativePayload(BaseModel):
+    narrative: str
+
+
 class AiGenerationStatusPayload(BaseModel):
     moveId: int
     context: str  # 'mainline' | 'preview'
@@ -83,6 +93,8 @@ class ServerMessage(BaseModel):
         | CommentPayload
         | CommentHistoryPayload
         | AiCommentPayload
+        | EpisodeNarrativePayload
+        | GameNarrativePayload
         | AiGenerationStatusPayload
         | ModelParamsUpdatedPayload
     )

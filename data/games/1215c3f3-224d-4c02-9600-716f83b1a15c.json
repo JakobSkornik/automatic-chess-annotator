@@ -1,0 +1,448 @@
+{
+  "metadata": {
+    "id": "1215c3f3-224d-4c02-9600-716f83b1a15c",
+    "white": "Caruana,F",
+    "black": "Nakamura,Hi",
+    "result": "1/2-1/2",
+    "date": "2024.04.04",
+    "eventId": "FIDE Candidates 2024",
+    "whiteElo": 2803,
+    "blackElo": 2789,
+    "opening": "Sicilian"
+  },
+  "moves": [
+    {
+      "mn": 1,
+      "color": "w",
+      "san": "e4",
+      "uci": "e2e4",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+      "score": {
+        "cp": 19,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "d4",
+          "score": {
+            "cp": 16,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "Nf6",
+            "Nf3",
+            "e6",
+            "c4",
+            "d5",
+            "Nc3",
+            "Be7",
+            "cxd5",
+            "exd5",
+            "Bf4",
+            "O-O",
+            "e3",
+            "Ne4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "e4",
+          "score": {
+            "cp": 15,
+            "mate": null
+          },
+          "line": [
+            "e4",
+            "c5",
+            "Nf3",
+            "e6",
+            "Nc3",
+            "Nc6",
+            "Bb5",
+            "Nge7",
+            "O-O",
+            "a6",
+            "Bxc6",
+            "Nxc6",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Be7",
+            "Nxc6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "c4",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "c4",
+            "e6",
+            "d4",
+            "d5",
+            "Nc3",
+            "Nf6",
+            "Nf3",
+            "Bb4",
+            "e3",
+            "Ne4",
+            "Qc2",
+            "Nc6",
+            "Bd3",
+            "Ng5"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "quiet",
+      "tactical_motifs": [],
+      "is_critical": false,
+      "episode_index": 0
+    },
+    {
+      "mn": 1,
+      "color": "b",
+      "san": "c5",
+      "uci": "c7c5",
+      "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+      "score": {
+        "cp": 16,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "e6",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "e6",
+            "d4",
+            "d5",
+            "Nc3",
+            "Nf6",
+            "exd5",
+            "exd5",
+            "Nf3",
+            "Be7",
+            "Bd3",
+            "Nc6",
+            "Bf4",
+            "a6",
+            "O-O",
+            "O-O",
+            "Ne2",
+            "Bg4",
+            "c3"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "c5",
+          "score": {
+            "cp": 12,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Nf3",
+            "e6",
+            "Nc3",
+            "Nc6",
+            "Bb5",
+            "Nd4",
+            "O-O",
+            "a6",
+            "Bd3",
+            "Ne7",
+            "Nxd4",
+            "cxd4",
+            "Ne2",
+            "Nc6",
+            "c3",
+            "Bc5",
+            "b4",
+            "Bb6",
+            "cxd4",
+            "Nxd4",
+            "b5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "e5",
+          "score": {
+            "cp": 22,
+            "mate": null
+          },
+          "line": [
+            "e5",
+            "Nf3",
+            "Nc6",
+            "Bb5",
+            "a6",
+            "Bxc6",
+            "dxc6",
+            "O-O",
+            "Qf6",
+            "d4",
+            "exd4",
+            "Bg5",
+            "Qd6",
+            "e5",
+            "Qd5",
+            "Nxd4",
+            "Bc5",
+            "Be3"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "excellent",
+      "event_type": "quiet",
+      "tactical_motifs": [],
+      "is_critical": false,
+      "episode_index": 0
+    },
+    {
+      "mn": 2,
+      "color": "w",
+      "san": "Nf3",
+      "uci": "g1f3",
+      "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+      "score": {
+        "cp": 9,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nf3",
+          "score": {
+            "cp": 10,
+            "mate": null
+          },
+          "line": [
+            "Nf3",
+            "e6",
+            "Nc3",
+            "Nc6",
+            "Bb5",
+            "Nge7",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Ng6",
+            "Be3",
+            "Be7",
+            "O-O",
+            "a6",
+            "Be2",
+            "O-O",
+            "Qd2"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nc3",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "Nc3",
+            "Nc6",
+            "Nf3",
+            "e6",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Nf6",
+            "a3",
+            "a6",
+            "Be2",
+            "Be7",
+            "O-O",
+            "O-O",
+            "Nxc6",
+            "bxc6",
+            "e5",
+            "Nd5",
+            "Ne4",
+            "Qc7",
+            "Nd6",
+            "Bxd6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Be2",
+          "score": {
+            "cp": 3,
+            "mate": null
+          },
+          "line": [
+            "Be2",
+            "Nc6",
+            "Nf3",
+            "Nf6",
+            "Nc3",
+            "e6",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Bb4",
+            "O-O",
+            "Bxc3",
+            "Nxc6",
+            "bxc6",
+            "bxc3",
+            "Nxe4",
+            "Qd4",
+            "Nf6",
+            "Kh1"
+          ]
+        }
+      ],
+      "comment": "[move:Nf3]Developing the kingside knight to f3 both contests e5 and readies quick O-O while keeping options like Nc3 or c4 open; the engine PVs (Nc3 or Be2 transpositions) confirm Nf3 is the most flexible, principled choice. The small evaluation dip is a move-order nuance rather than a weakness  --  Black's ...c5 has already created a semi-open center, but White's knights and potential kingside castle preserve typical Sicilian plans and reasonable king safety.",
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 2,
+      "color": "b",
+      "san": "d6",
+      "uci": "d7d6",
+      "fen": "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3",
+      "score": {
+        "cp": 11,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "e6",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "e6",
+            "Nc3",
+            "Nc6",
+            "Bb5",
+            "Nge7",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "a6",
+            "Be2",
+            "Nxd4",
+            "Qxd4",
+            "Nc6",
+            "Qd3",
+            "Be7",
+            "O-O",
+            "Qc7",
+            "a3",
+            "b5"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nc6",
+          "score": {
+            "cp": 10,
+            "mate": null
+          },
+          "line": [
+            "Nc6",
+            "Nc3",
+            "e6",
+            "Bb5",
+            "Nge7",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Nxd4",
+            "Qxd4",
+            "a6",
+            "Be2",
+            "Nc6",
+            "Qd3",
+            "b5",
+            "O-O",
+            "Qc7",
+            "Be3",
+            "Be7"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "d6",
+          "score": {
+            "cp": 20,
+            "mate": null
+          },
+          "line": [
+            "d6",
+            "d4",
+            "cxd4",
+            "Qxd4",
+            "e5",
+            "Qd3",
+            "Be7",
+            "Be3",
+            "Nf6",
+            "Nc3",
+            "O-O",
+            "h3",
+            "Be6",
+            "O-O-O",
+            "Nbd7",
+            "g4",
+            "a6"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "quiet",
+      "tactical_motifs": [],
+      "is_critical": false,
+      "episode_index": 0
+    }
+  ],
+  "episodes": [
+    {
+      "episode_index": 0,
+      "title": "Moves 1-4 (positional_play)",
+      "start_move": 1,
+      "end_move": 2,
+      "narrative": "White grabs central space with 1.e4 and follows with 3.Nf3, aiming to control d4 and complete kingside development from f3. Black answers with the characteristic Sicilian 1...c5, immediately challenging White's center on the c- and d-files, and 3...d6 shores up Black's pawn structure on d6 while preparing ...Nf6 and a flexible pawn break like ...e5 or ...d5. The critical idea in this brief opening phase is the tension over d4: 2...c5 created the imbalance and 3...d6 stabilized Black's setup, leaving a roughly equal, maneuvering middlegame with minor fluctuations in evaluation.",
+      "dominant_theme": "positional_play"
+    }
+  ],
+  "game_narrative": "The game began as a classical Sicilian struggle: White seized central space with 1.e4 and 3.Nf3 while Black answered energetically with 1...c5 and 3...d6, setting up a flexible, counterattacking structure. The opening character was sharp but restrained, with Black's ...d6 stabilizing the center and both sides maneuvering their knights and pawns for control of the d4- and c5-squares. The critical phase revolved around the unresolved tension over d4, where neither side could force a decisive breakthrough and play transitioned into a maneuvering middlegame. As a result, the game settled into balanced strategic play with only minor fluctuations in evaluation and no decisive tactical opportunities for either side.",
+  "analysis_info": {
+    "engine": "Stockfish",
+    "depth": 16,
+    "multipv": 3,
+    "timestamp": 1776377955.2562978
+  }
+}

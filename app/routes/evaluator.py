@@ -8,6 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from typing import Dict
 
 from app.core.engine.engine_connector import EngineConnector, global_engine_connector
+from app.core.io.pgn_reader import PGNReader
 from app.core.sessions.analysis_session import AnalysisSession
 from app.core.websocket.ws_manager import send_ws_error
 
@@ -24,6 +25,11 @@ async def submit_pgn_for_analysis(request_data: SubmitPgnRequest):
     pgn_string = request_data.pgn_string
     if not pgn_string:
         raise HTTPException(status_code=400, detail="PGN string is required.")
+
+    try:
+        PGNReader.validate_single_game(pgn_string)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     session_id = str(uuid.uuid4())
     try:

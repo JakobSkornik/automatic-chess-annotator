@@ -1,18 +1,42 @@
+from __future__ import annotations
+
 import chess
 import logging
+import os
 import time
 import uuid
+from dataclasses import dataclass
 from chess.pgn import Game
-from typing import Dict, List, Optional, Tuple, Callable
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from app.core.engine.engine_connector import EngineConnector
 from app.models.Move import Move
 from app.models.PgnMetadata import PgnMetadata
 from app.models.Move import AnalysisStage
 from app.core.commentary.features.positional_features import compute_hidden_features
-from app.models.GameJson import GameJson, GameMetadata, GameMove, AnalysisInfo, Variation, MoveScore
+from app.models.GameJson import (
+    GameJson,
+    GameMetadata,
+    GameMove,
+    AnalysisInfo,
+    Variation,
+    MoveScore,
+    EpisodeSummary,
+)
 from app.core.io.pgn_reader import PGNReader
 from app.core.commentary.key_moment_detector import KeyMomentDetector
+from app.core.commentary.advanced_comment_service import AdvancedCommentService
+from app.core.commentary.chroma_rag_retriever import get_default_retriever
+from app.core.commentary.rag_retriever import rag_results_to_ws_refs
+from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
+from app.core.commentary.event_extractor import ChessEventExtractor
+from app.core.commentary.episode_segmenter import EpisodeSegmenter
+from app.models.chess_events import (
+    AnalyzedMoveData,
+    Episode,
+    GameAnalysisContext,
+    MoveEvent,
+)
 
 # ANALYSIS_STAGES = [0.05, 0.1, 0.2, 0.4]
 ANALYSIS_STAGES = [4, 8, 16]
@@ -483,11 +507,177 @@ class AnalysisRetriever:
         return "mid"
 
 
-async def run_full_analysis_to_json(
-    pgn_string: str, 
-    engine_connector: EngineConnector, 
-    progress_callback: Callable[[float, str], None]
-) -> GameJson:
+def _board_before_mainline_move(game: Game, move_index: int) -> chess.Board:
+    board = game.board()
+    for i, gm in enumerate(game.mainline_moves()):
+        if i >= move_index:
+            break
+        board.push(gm)
+    return board
+
+
+def _score_to_move_score(score_val: Optional[float]) -> MoveScore:
+    if score_val is None:
+        return MoveScore(cp=None, mate=None)
+    if abs(score_val) > MATE_SCORE - 1000:
+        moves_to_mate = MATE_SCORE - abs(score_val)
+        if score_val < 0:
+            mate = -moves_to_mate
+        else:
+            mate = moves_to_mate
+        return MoveScore(cp=None, mate=mate)
+    return MoveScore(cp=int(round(score_val)), mate=None)
+
+
+@dataclass
+class EnginePipelineState:
+    """Mutable state shared between engine phase and LLM commentary phase."""
+
+    game: Game
+    retriever: AnalysisRetriever
+    moves_list: List[Move]
+    analyzed_rows: List[AnalyzedMoveData]
+    move_events: List[MoveEvent]
+    episodes: List[Episode]
+    context: GameAnalysisContext
+    metadata: GameMetadata
+    ply_to_episode: Dict[int, int]
+
+
+def assemble_game_json(state: EnginePipelineState) -> GameJson:
+    """Build GameJson from pipeline state (engine + optional LLM fields)."""
+    game = state.game
+    retriever = state.retriever
+    moves_list = state.moves_list
+    analyzed_rows = state.analyzed_rows
+    move_events = state.move_events
+    episodes = state.episodes
+    context = state.context
+    ply_to_episode = state.ply_to_episode
+
+    episode_summaries: List[EpisodeSummary] = []
+    for ep in episodes:
+        start_mn = (ep.start_ply + 1) // 2
+        end_mn = (ep.end_ply + 1) // 2
+        episode_summaries.append(
+            EpisodeSummary(
+                episode_index=ep.episode_index,
+                title=ep.title,
+                start_move=start_mn,
+                end_move=end_mn,
+                narrative=ep.narrative_summary,
+                dominant_theme=ep.dominant_theme,
+            )
+        )
+
+    game_moves: List[GameMove] = []
+    for idx, row in enumerate(analyzed_rows):
+        move_obj = moves_list[idx]
+        analyzed_move = row.analyzed_move
+        pvs = row.pvs if isinstance(row.pvs, list) else []
+
+        key_moment = retriever.key_moment_detector.detect(
+            analyzed_move,
+            analyzed_rows[idx - 1].analyzed_move if idx > 0 else None,
+            list(pvs) if pvs else None,
+        )
+
+        me = move_events[idx] if idx < len(move_events) else None
+        comment: Optional[str] = None
+        if me and me.is_critical:
+            try:
+                hf = analyzed_move.hiddenFeatures or {}
+                llm = hf.get("_llm") if isinstance(hf, dict) else None
+                if isinstance(llm, dict) and llm.get("comment"):
+                    comment = str(llm["comment"])
+            except Exception:
+                comment = None
+        if not comment and key_moment:
+            ps = analyzed_move.score if analyzed_move.score is not None else 0
+            prev_s = (
+                analyzed_rows[idx - 1].analyzed_move.score
+                if idx > 0 and analyzed_rows[idx - 1].analyzed_move.score is not None
+                else 0
+            )
+            comment = f"{key_moment.replace('_', ' ').capitalize()} (Score change: {(ps - prev_s) / 100:.2f})"
+
+        variations: List[Variation] = []
+        board_pv_start = _board_before_mainline_move(game, idx)
+        for rank, pv_sequence in enumerate(pvs):
+            if not pv_sequence:
+                continue
+            first_move = pv_sequence[0]
+            san_line: List[str] = []
+            board_trace = board_pv_start.copy()
+            for pm in pv_sequence:
+                try:
+                    m_uci = chess.Move.from_uci(pm.move)
+                    san_line.append(board_trace.san(m_uci))
+                    board_trace.push(m_uci)
+                except Exception:
+                    san_line.append(str(pm.move))
+
+            score_val = first_move.score
+            variations.append(
+                Variation(
+                    rank=rank + 1,
+                    move_san=san_line[0] if san_line else "",
+                    score=_score_to_move_score(score_val),
+                    line=san_line,
+                )
+            )
+
+        board_before = _board_before_mainline_move(game, idx)
+        try:
+            chess_move_obj = chess.Move.from_uci(move_obj.move)
+            san_main = board_before.san(chess_move_obj)
+        except Exception:
+            san_main = move_obj.move
+
+        ep_idx = ply_to_episode.get(move_obj.depth)
+
+        game_moves.append(
+            GameMove(
+                mn=board_before.fullmove_number,
+                color="w" if board_before.turn == chess.WHITE else "b",
+                san=san_main,
+                uci=move_obj.move,
+                fen=move_obj.position,
+                score=_score_to_move_score(analyzed_move.score),
+                variations=variations,
+                comment=comment,
+                classification=key_moment,
+                move_quality=me.move_quality.value if me else None,
+                event_type=me.event_type.value if me else None,
+                tactical_motifs=[m.value for m in (me.tactical_motifs if me else [])],
+                is_critical=bool(me.is_critical if me else False),
+                episode_index=ep_idx,
+            )
+        )
+
+    return GameJson(
+        metadata=state.metadata,
+        moves=game_moves,
+        episodes=episode_summaries,
+        game_narrative=context.game_narrative,
+        analysis_info=AnalysisInfo(
+            engine="Stockfish",
+            depth=16,
+            multipv=DEFAULT_PV_COUNT,
+            timestamp=time.time(),
+        ),
+    )
+
+
+async def run_engine_analysis_to_json(
+    pgn_string: str,
+    engine_connector: EngineConnector,
+    progress_callback: Callable[[float, str], Awaitable[None]],
+    *,
+    metadata_id: Optional[str] = None,
+) -> Tuple[GameJson, EnginePipelineState]:
+    """Passes 1–3: engine analysis, event extraction, episode segmentation. Heuristic comments only."""
+    PGNReader.validate_single_game(pgn_string)
     pgn_reader = PGNReader()
     game = pgn_reader.read_game_from_string(pgn_string)
     if not game:
@@ -495,10 +685,9 @@ async def run_full_analysis_to_json(
 
     retriever = AnalysisRetriever(engine_connector, game)
     headers = retriever.get_pgn_headers()
-    
-    # Metadata
+
     metadata = GameMetadata(
-        id=str(uuid.uuid4()),
+        id=metadata_id or str(uuid.uuid4()),
         white=headers.whiteName,
         black=headers.blackName,
         result=headers.result,
@@ -506,166 +695,239 @@ async def run_full_analysis_to_json(
         eventId=headers.event,
         whiteElo=headers.whiteElo,
         blackElo=headers.blackElo,
-        opening=headers.opening
+        opening=headers.opening,
     )
 
-    # Moves
     moves_list = retriever.get_move_list()
     total_moves = len(moves_list)
-    game_moves: List[GameMove] = []
-    
+    analyzed_rows: List[AnalyzedMoveData] = []
     previous_move_obj: Optional[Move] = None
-    
+
     for idx, move_obj in enumerate(moves_list):
-        progress = (idx / total_moves) * 100
-        await progress_callback(progress, f"Analyzing move {idx + 1}/{total_moves}")
-        
-        analyzed_move, pvs = retriever.analyze_move(move_obj, stage=16) # Fixed depth 16 for now
-        
-        # Key Moment Detection
-        comment = None
-        key_moment = retriever.key_moment_detector.detect(
-            analyzed_move, 
-            previous_move_obj,
-            list(pvs) if pvs else None
-        )
-        if key_moment:
-            move_score = analyzed_move.score if analyzed_move.score is not None else 0
-            prev_score = previous_move_obj.score if previous_move_obj and previous_move_obj.score is not None else 0
-            diff = move_score - prev_score
-            # Adjust diff perspective for display if needed, but KeyMomentDetector already checks
-            # Just create a simple string
-            comment = f"{key_moment.replace('_', ' ').capitalize()} (Score change: {diff/100:.2f})"
+        progress = (idx / max(total_moves, 1)) * 90.0
+        await progress_callback(progress, f"Engine: move {idx + 1}/{total_moves}")
 
-        # Convert PVs to Variations
-        variations: List[Variation] = []
-        for rank, pv_sequence in enumerate(pvs):
-            if not pv_sequence:
-                continue
-                
-            first_move = pv_sequence[0]
-            # Need strict line array
-            line_san = [m.move for m in pv_sequence] # m.move is UCI? No, let's check Move class usage in analyze_move
-            # In analyze_move:
-            # move=uci_for_pv_move (which is uci)
-            # So m.move is UCI string.
-            
-            # We want SAN for the line for display? The schema says "line: List[str]". 
-            # Frontend usually displays SAN.
-            # To get SAN, we need to walk the board from the position BEFORE the move.
-            
-            # Reconstruct board state for SAN generation
-            board_for_san = chess.Board(move_obj.position)
-            # Wait, pvs are from BEFORE the move. 
-            # In analyze_move: "Compute PVs from the position BEFORE the move"
-            # So we need board state before this move.
-            
-            # We can get it from the previous move's position or replaying game.
-            # Ideally we have it. 
-            
-            # Let's replay efficiently? Or just accept UCI for now? 
-            # Plan example says "line": ["e4", "e5", ...]. Those look like SAN.
-            
-            # Let's regenerate SAN.
-            # Reconstruct board before current move
-            board_pv_start = game.board()
-            for m in game.mainline_moves():
-                if board_pv_start.fullmove_number * 2 - (1 if board_pv_start.turn == chess.WHITE else 0) >= move_obj.depth: 
-                     # This logic is tricky with depth.
-                     pass
-            
-            # Simpler: just replay moves up to idx
-            board_pv_start = game.board()
-            mainline_moves = list(game.mainline_moves())
-            for i in range(idx):
-                board_pv_start.push(mainline_moves[i])
-                
-            # Now generate SAN for the PV line
-            san_line = []
-            board_trace = board_pv_start.copy()
-            for pm in pv_sequence:
-                try:
-                    # pm.move is UCI
-                    m_uci = chess.Move.from_uci(pm.move)
-                    san = board_trace.san(m_uci)
-                    san_line.append(san)
-                    board_trace.push(m_uci)
-                except:
-                    san_line.append(pm.move) # Fallback to UCI
-
-            score_val = first_move.score
-            # Check for mate
-            mate = None
-            cp = None
-            if score_val is not None:
-                if abs(score_val) > MATE_SCORE - 1000:
-                    # It is mate
-                    moves_to_mate = MATE_SCORE - abs(score_val)
-                    if score_val < 0:
-                        mate = -moves_to_mate
-                    else:
-                        mate = moves_to_mate
-                else:
-                    cp = score_val
-
-            variations.append(Variation(
-                rank=rank + 1,
-                move_san=san_line[0] if san_line else "",
-                score=MoveScore(cp=cp, mate=mate),
-                line=san_line
-            ))
-
-        # Main move score
-        score_val = analyzed_move.score
-        mate = None
-        cp = None
-        if score_val is not None:
-            if abs(score_val) > MATE_SCORE - 1000:
-                moves_to_mate = MATE_SCORE - abs(score_val)
-                if score_val < 0:
-                    mate = -moves_to_mate
-                else:
-                    mate = moves_to_mate
-            else:
-                cp = score_val
-
-        # Get SAN for main move
-        # move_obj.move is uci or san?
-        # In get_move_list: move=san_representation (uci)
-        # We need SAN.
-        board_before = game.board()
-        mainline_moves = list(game.mainline_moves())
-        for i in range(idx):
-            board_before.push(mainline_moves[i])
-        
+        board_before = _board_before_mainline_move(game, idx)
+        fen_before = board_before.fen()
         try:
-             # move_obj.move is UCI
             chess_move_obj = chess.Move.from_uci(move_obj.move)
             san_main = board_before.san(chess_move_obj)
-        except:
+        except Exception:
             san_main = move_obj.move
 
-        game_moves.append(GameMove(
-            mn=board_before.fullmove_number,
-            color="w" if board_before.turn == chess.WHITE else "b",
-            san=san_main,
-            uci=move_obj.move,
-            fen=move_obj.position,
-            score=MoveScore(cp=cp, mate=mate),
-            variations=variations,
-            comment=comment, # Populate detected key moment
-            classification=key_moment # Also use as classification
-        ))
-        
-        previous_move_obj = analyzed_move
-        
-    return GameJson(
-        metadata=metadata,
-        moves=game_moves,
-        analysis_info=AnalysisInfo(
-            engine="Stockfish",
-            depth=16,
-            multipv=DEFAULT_PV_COUNT,
-            timestamp=time.time()
+        analyzed_move, pvs = retriever.analyze_move(move_obj, stage=16)
+
+        try:
+            if analyzed_move.hiddenFeatures is None:
+                analyzed_move.hiddenFeatures = {}
+            if isinstance(analyzed_move.hiddenFeatures, dict):
+                analyzed_move.hiddenFeatures.setdefault("_ai", {})
+                ai_meta = analyzed_move.hiddenFeatures["_ai"]
+                ai_meta["prevScore"] = previous_move_obj.score if previous_move_obj else None
+                ai_meta["scoreNow"] = analyzed_move.score
+                if ai_meta.get("prevScore") is not None and ai_meta.get("scoreNow") is not None:
+                    ai_meta["scoreDelta"] = ai_meta["scoreNow"] - ai_meta["prevScore"]
+        except Exception:
+            pass
+
+        analyzed_rows.append(
+            AnalyzedMoveData(
+                index=idx,
+                ply=move_obj.depth,
+                san=san_main,
+                uci=move_obj.move,
+                fen_before=fen_before,
+                fen_after=move_obj.position,
+                score_cp=analyzed_move.score,
+                phase_raw=str(analyzed_move.phase or "mid"),
+                pvs=list(pvs) if pvs else [],
+                hidden_features=analyzed_move.hiddenFeatures or {},
+                trace=analyzed_move.trace,
+                captured_by_white=analyzed_move.capturedByWhite or {},
+                captured_by_black=analyzed_move.capturedByBlack or {},
+                analyzed_move=analyzed_move,
+            )
         )
+        previous_move_obj = analyzed_move
+
+    await progress_callback(92.0, "Extracting events and episodes...")
+    extractor = ChessEventExtractor()
+    move_events = extractor.extract_events(game, analyzed_rows)
+    segmenter = EpisodeSegmenter()
+    episodes = segmenter.segment(move_events)
+
+    ply_to_episode: Dict[int, int] = {}
+    for ep in episodes:
+        for me in ep.move_events:
+            ply_to_episode[me.ply] = ep.episode_index
+
+    opening_name = None
+    opening_eco = None
+    for me in move_events:
+        if me.opening_name:
+            opening_name = me.opening_name
+        if me.opening_eco:
+            opening_eco = me.opening_eco
+        if opening_name and opening_eco:
+            break
+
+    context = GameAnalysisContext(
+        metadata={"white": headers.whiteName, "black": headers.blackName, "result": headers.result},
+        move_events=move_events,
+        episodes=episodes,
+        critical_moments=[e for e in move_events if e.is_critical],
+        opening_name=opening_name,
+        opening_eco=opening_eco,
     )
+
+    await progress_callback(95.0, "Engine analysis complete.")
+    state = EnginePipelineState(
+        game=game,
+        retriever=retriever,
+        moves_list=moves_list,
+        analyzed_rows=analyzed_rows,
+        move_events=move_events,
+        episodes=episodes,
+        context=context,
+        metadata=metadata,
+        ply_to_episode=ply_to_episode,
+    )
+    return assemble_game_json(state), state
+
+
+def _pv_line_for_ai_payload(row: Optional[AnalyzedMoveData]) -> List[Dict[str, str]]:
+    """SAN + FEN after each ply of PV1 for interactive commentary hover boards."""
+    if not row or not row.pvs or not row.pvs[0]:
+        return []
+    out: List[Dict[str, str]] = []
+    board = chess.Board(row.fen_before)
+    for pm in row.pvs[0]:
+        uci = getattr(pm, "move", None)
+        if not uci:
+            break
+        try:
+            chm = chess.Move.from_uci(str(uci))
+            san = board.san(chm)
+            board.push(chm)
+            out.append({"san": san, "fen": board.fen()})
+        except Exception:
+            break
+    return out
+
+
+async def run_llm_commentary(
+    state: EnginePipelineState,
+    advanced_commenter: AdvancedCommentService,
+    *,
+    progress_callback: Optional[Callable[[float, str], Awaitable[None]]] = None,
+    commentary_callback: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
+    llm_model: Optional[str] = None,
+    llm_effort: Optional[str] = None,
+) -> None:
+    """Pass 4: LLM commentary for critical moves, episodes, and game narrative (streams via callback)."""
+    mdl = llm_model or os.environ.get("LLM_DEFAULT_MODEL", "gpt-5-mini")
+    eff = llm_effort or os.environ.get("LLM_DEFAULT_EFFORT", "low")
+    analyzed_rows = state.analyzed_rows
+    move_events = state.move_events
+    episodes = state.episodes
+    context = state.context
+    ply_to_episode = state.ply_to_episode
+
+    critical_list = [me for me in move_events if me.is_critical]
+    n_crit = max(len(critical_list), 1)
+    crit_idx = 0
+
+    for me in move_events:
+        if not me.is_critical:
+            continue
+        ep = next((e for e in episodes if e.episode_index == ply_to_episode.get(me.ply)), None)
+        pct = 95.0 + (crit_idx / n_crit) * 3.0
+        crit_idx += 1
+        if progress_callback:
+            await progress_callback(pct, f"LLM: critical move {me.san} (ply {me.ply})")
+        row = analyzed_rows[me.move_index] if 0 <= me.move_index < len(analyzed_rows) else None
+        try:
+            text, rag_results = await advanced_commenter.analyze_and_compose_event(
+                me,
+                ep,
+                context,
+                model=mdl,
+                effort=eff,
+                key_moment_type=me.key_moment_type,
+                analyzed_row=row,
+            )
+            if text:
+                for r in analyzed_rows:
+                    if r.ply == me.ply:
+                        if isinstance(r.analyzed_move.hiddenFeatures, dict):
+                            r.analyzed_move.hiddenFeatures.setdefault("_llm", {})
+                            r.analyzed_move.hiddenFeatures["_llm"]["comment"] = text
+                        break
+            # Frontend GameStateManager uses move id = mainline index + 1 (see loadGameFromJson).
+            move_id = me.move_index + 1
+            if commentary_callback and text:
+                resolved_tokens = resolve_tokens_for_comment(text, me.fen_before, me.fen_after)
+                await commentary_callback(
+                    "AI_COMMENT_UPDATE",
+                    {
+                        "moveId": move_id,
+                        "context": "mainline",
+                        "data": {
+                            "summary": text,
+                            "commentary": text,
+                            "pv_line": _pv_line_for_ai_payload(row),
+                            "resolved_tokens": resolved_tokens,
+                            "rag_refs": rag_results_to_ws_refs(rag_results),
+                        },
+                    },
+                )
+        except Exception as e:
+            logger.error(f"LLM move commentary failed at ply {me.ply}: {e}")
+
+    if progress_callback:
+        await progress_callback(98.5, "LLM: episode narratives...")
+    for ep in episodes:
+        try:
+            ep.narrative_summary = await advanced_commenter.generate_episode_commentary(
+                ep, model=mdl, effort=eff
+            )
+            if commentary_callback and ep.narrative_summary:
+                await commentary_callback(
+                    "EPISODE_NARRATIVE",
+                    {
+                        "episode_index": ep.episode_index,
+                        "title": ep.title,
+                        "narrative": ep.narrative_summary,
+                    },
+                )
+        except Exception as e:
+            logger.error(f"Episode commentary failed: {e}")
+
+    try:
+        context.game_narrative = await advanced_commenter.generate_game_narrative(
+            context, model=mdl, effort=eff
+        )
+        if commentary_callback and context.game_narrative:
+            await commentary_callback(
+                "GAME_NARRATIVE",
+                {"narrative": context.game_narrative},
+            )
+    except Exception as e:
+        logger.error(f"Game narrative failed: {e}")
+
+    if progress_callback:
+        await progress_callback(99.0, "Commentary complete.")
+
+
+async def run_full_analysis_to_json(
+    pgn_string: str,
+    engine_connector: EngineConnector,
+    progress_callback: Callable[[float, str], Awaitable[None]],
+) -> GameJson:
+    """Run engine + LLM in one call (no WebSocket); useful for tests or batch."""
+    game_json, state = await run_engine_analysis_to_json(
+        pgn_string, engine_connector, progress_callback
+    )
+    advanced_commenter = AdvancedCommentService(rag_retriever=get_default_retriever())
+    await run_llm_commentary(state, advanced_commenter, progress_callback=progress_callback)
+    return assemble_game_json(state)

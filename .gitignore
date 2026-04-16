@@ -11,4 +11,4 @@ sf_features.csv
 .env
 .env.dev
 
-.env.dev
+data/rag_corpus/

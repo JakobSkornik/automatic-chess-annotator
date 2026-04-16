@@ -4,12 +4,25 @@ import asyncio
 import logging
 from typing import Dict, List, Optional, Any
 
+import chess
+from chess.pgn import Game
+
+from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
+
 from app.models.Move import Move, AnalysisStage
+from app.models.chess_events import GameAnalysisContext
+from app.core.commentary.event_extractor import (
+    ChessEventExtractor,
+    build_analyzed_row_from_interactive,
+)
 from app.models.ws.server_messages import CommentPayload, AiCommentPayload
 from app.core.commentary.openings.eco_book import ECOBook
 from app.core.commentary.key_moment_detector import KeyMomentDetector
 from app.core.commentary.ai_comment_service import AICommentService
 from app.core.commentary.advanced_comment_service import AdvancedCommentService
+from app.core.commentary.chroma_rag_retriever import get_default_retriever
+from app.core.commentary.rag_retriever import rag_results_to_ws_refs
+from app.core.commentary.narrative_tracker import NarrativeTracker
 from app.core.websocket.ws_manager import WebSocketManager
 
 logger = logging.getLogger(__name__)
@@ -22,13 +35,19 @@ class CommentingService:
     Later, it will leverage a position graph, feature extractors, and templates.
     """
 
-    def __init__(self, ws_manager: WebSocketManager) -> None:
+    def __init__(
+        self,
+        ws_manager: WebSocketManager,
+        pgn_game: Optional[Game] = None,
+    ) -> None:
         self._version: int = 1
         self._eco = ECOBook()
         self._key_moment_detector = KeyMomentDetector()
         self._ai_comment_service = AICommentService()
-        self._advanced_service = AdvancedCommentService()
+        self._advanced_service = AdvancedCommentService(rag_retriever=get_default_retriever())
+        self._narrative = NarrativeTracker()
         self._ws_manager = ws_manager
+        self._pgn_game: Optional[Game] = pgn_game
         self._model_params = {"model": "gpt-5-mini", "effort": "low", "temperature": 0.2, "maxTokens": 120}
 
     def update_model_params(self, params: dict) -> None:
@@ -43,7 +62,8 @@ class CommentingService:
     ) -> Optional[CommentPayload]:
         # Do not emit opening text; pass opening context into AI input instead.
 
-        # If there is no opening comment, check for a key moment.
+        # Detect key moments
+        key_moment_type: Optional[str] = None
         prev_score = previous_move.score if previous_move else "N/A"
         logger.info(
             f"Checking for key moment on move {move.depth}. "
@@ -56,37 +76,38 @@ class CommentingService:
                     move.hiddenFeatures = {}
                 move.hiddenFeatures["keyMomentType"] = key_moment_type
 
-        # Always attempt AI comment generation for quiescent moves (generation method will skip noisy moves)
-        asyncio.create_task(self.generate_ai_comment(move, context, pvs_for_move, previous_move))
+        # Update the narrative tracker with this move
+        opening_ctx = self._extract_opening_context(move)
+        self._narrative.update(
+            ply=move.depth,
+            score=move.score,
+            key_moment_type=key_moment_type,
+            hidden_features=move.hiddenFeatures,
+            opening=opening_ctx,
+        )
+
+        # Generate AI comment (with narrative context and key moment type)
+        asyncio.create_task(
+            self.generate_ai_comment(move, context, pvs_for_move, previous_move, key_moment_type)
+        )
 
         return None
 
-    async def generate_ai_comment(self, move: Move, context: str, pvs_for_move: Optional[List[List[Move]]] = None, previous_move: Optional[Move] = None):
-        """
-        Generates a comment using the AI comment service and sends it to the client.
-        """
-        # Only comment on quiescent moves (no capture, no check) to avoid horizon noise
-        try:
-            san = (move.trace or {}).get("san", "") if isinstance(move.trace, dict) else ""
-            is_capture = "x" in san
-            is_check = "+" in san or "#" in san
-            if is_capture or is_check:
-                return
-        except Exception:
-            pass
-
-        # Opening context to include in input and allow AI to mention
-        opening_ctx = {}
+    def _extract_opening_context(self, move: Move) -> Dict[str, Any]:
+        """Extract opening ECO/name/variation from a move's trace data."""
+        opening_ctx: Dict[str, Any] = {}
         try:
             if isinstance(move.trace, dict):
-                opening_ctx = {"eco": move.trace.get("openingCode"), "name": move.trace.get("openingName"), "variation": None}
-                # Try to enrich via ECOBook using mainline UCI if available
+                opening_ctx = {
+                    "eco": move.trace.get("openingCode"),
+                    "name": move.trace.get("openingName"),
+                    "variation": None,
+                }
                 seq = move.trace.get("mainlineUci") if isinstance(move.trace.get("mainlineUci"), list) else []
                 if seq:
                     info = self._eco.match(seq)
                     if info:
                         opening_ctx["eco"] = getattr(info, "code", opening_ctx.get("eco"))
-                        # Build label with variation if present
                         nm = getattr(info, "name", None)
                         var = getattr(info, "variation", None)
                         if nm:
@@ -95,6 +116,26 @@ class CommentingService:
                             opening_ctx["variation"] = var
         except Exception:
             opening_ctx = {}
+        return opening_ctx
+
+    async def generate_ai_comment(
+        self,
+        move: Move,
+        context: str,
+        pvs_for_move: Optional[List[List[Move]]] = None,
+        previous_move: Optional[Move] = None,
+        key_moment_type: Optional[str] = None,
+    ):
+        """
+        Generates a comment using the AI comment service and sends it to the client.
+        """
+        # Previously, captures and checks were skipped to avoid horizon noise.
+        # This filter is removed: captures and checks are often the most critical
+        # and interesting moves (sacrificial attacks, decisive combinations) and
+        # deserve strategic commentary.
+
+        opening_ctx = self._extract_opening_context(move)
+
         # Emit start status
         try:
             from app.models.ws.server_messages import AiGenerationStatusPayload
@@ -112,23 +153,85 @@ class CommentingService:
         except Exception:
             pass
 
-        # Build compact, PV-aware input for two-step pipeline
-        compact = self._advanced_service.build_compact_input(
-            move, previous_move=previous_move, pvs_for_move=pvs_for_move, opening=opening_ctx
+        narrative_context = self._narrative.get_narrative_context()
+        comment_text = ""
+        rag_refs_ws: List[Dict[str, Any]] = []
+        use_event_pipeline = (
+            self._pgn_game is not None
+            and move.depth
+            and pvs_for_move is not None
         )
-        comment_text = await self._advanced_service.analyze_and_compose(
-            compact,
-            model=self._model_params.get("model"),
-            effort=self._model_params.get("effort"),
-            temperature=self._model_params.get("temperature"),
-            max_tokens=self._model_params.get("maxTokens"),
+        if use_event_pipeline:
+            try:
+                move_idx = max(0, int(move.depth) - 1)
+                row = build_analyzed_row_from_interactive(
+                    self._pgn_game, move_idx, move, pvs_for_move
+                )
+                extractor = ChessEventExtractor()
+                events = extractor.extract_events(
+                    self._pgn_game,
+                    [row],
+                    previous_engine_move=previous_move,
+                )
+                if events:
+                    me = events[0]
+                    gctx = GameAnalysisContext(
+                        metadata={},
+                        move_events=events,
+                        episodes=[],
+                        critical_moments=[me] if me.is_critical else [],
+                    )
+                    if me.is_critical:
+                        comment_text, rag_results = await self._advanced_service.analyze_and_compose_event(
+                            me,
+                            None,
+                            gctx,
+                            model=self._model_params.get("model"),
+                            effort=self._model_params.get("effort"),
+                            key_moment_type=key_moment_type,
+                        )
+                        rag_refs_ws = rag_results_to_ws_refs(rag_results)
+            except Exception as e:
+                logger.error(f"Event pipeline comment failed, falling back: {e}")
+                comment_text = ""
+
+        if not comment_text:
+            compact = self._advanced_service.build_compact_input(
+                move,
+                previous_move=previous_move,
+                pvs_for_move=pvs_for_move,
+                opening=opening_ctx,
+                narrative_context=narrative_context,
+                key_moment_type=key_moment_type,
+            )
+            comment_text = await self._advanced_service.analyze_and_compose(
+                compact,
+                model=self._model_params.get("model"),
+                effort=self._model_params.get("effort"),
+                temperature=self._model_params.get("temperature"),
+                max_tokens=self._model_params.get("maxTokens"),
+                key_moment_type=key_moment_type,
+            )
+
+        fen_after = move.position
+        fen_before = (
+            previous_move.position
+            if previous_move
+            else chess.Board().fen()
         )
+        resolved_tokens = resolve_tokens_for_comment(comment_text, fen_before, fen_after)
 
         # Create the payload and send it to the client.
         payload = AiCommentPayload(
             moveId=move.id,
             context=context,
-            data={"summary": comment_text, "bullets": []},
+            data={
+                "summary": comment_text,
+                "commentary": comment_text,
+                "bullets": [],
+                "resolved_tokens": resolved_tokens,
+                "rag_refs": rag_refs_ws,
+            },
         )
         await self._ws_manager.send_comment(payload)
 

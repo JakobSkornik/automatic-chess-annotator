@@ -76,7 +76,7 @@ class AnalysisSession:
         self.engine_connector: EngineConnector = engine_connector
         self.analysis_retriever = AnalysisRetriever(engine_connector, self.pgn_game)
         self.ws_manager = WebSocketManager()
-        self.commenting_service = CommentingService(self.ws_manager)
+        self.commenting_service = CommentingService(self.ws_manager, self.pgn_game)
         # Default AI model parameters for this session
         self.model_params: Dict = {
             "model": "gpt-5-mini",

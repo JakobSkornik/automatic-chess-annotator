@@ -5,6 +5,7 @@ from enum import Enum
 class JobStatus(str, Enum):
     WAITING = "waiting"
     PROCESSING = "processing"
+    ENGINE_COMPLETE = "engine_complete"
     COMPLETED = "completed"
     FAILED = "failed"
 

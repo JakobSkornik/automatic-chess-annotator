@@ -2,7 +2,10 @@ import asyncio
 import time
 import uuid
 import logging
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
+
+from starlette.websockets import WebSocket
+
 from app.models.job import JobStatus, JobResponse
 
 logger = logging.getLogger(__name__)
@@ -11,8 +14,15 @@ class QueueManager:
     def __init__(self):
         self.job_queue: asyncio.Queue = asyncio.Queue()
         self.jobs: Dict[str, Dict] = {} # job_id -> {status, progress, created_at, ...}
+        self.ws_connections: Dict[str, List[WebSocket]] = {}
+        self.commentary_buffer: Dict[str, List[Dict[str, Any]]] = {}
 
-    async def add_job(self, pgn_string: str) -> str:
+    async def add_job(
+        self,
+        pgn_string: str,
+        llm_model: Optional[str] = None,
+        llm_effort: Optional[str] = None,
+    ) -> str:
         job_id = str(uuid.uuid4())
         job_data = {
             "id": job_id,
@@ -21,7 +31,9 @@ class QueueManager:
             "created_at": time.time(),
             "progress": 0.0,
             "queue_position": self.job_queue.qsize(),
-            "message": "Waiting in queue"
+            "message": "Waiting in queue",
+            "llm_model": llm_model,
+            "llm_effort": llm_effort,
         }
         self.jobs[job_id] = job_data
         await self.job_queue.put(job_id)
@@ -60,6 +72,40 @@ class QueueManager:
 
     def mark_failed(self, job_id: str, error: str):
         self.update_job_status(job_id, JobStatus.FAILED, message=error)
+
+    def buffer_commentary(self, job_id: str, msg_type: str, payload: Dict[str, Any]) -> None:
+        """Store commentary messages for late-connecting WebSocket clients."""
+        entry = {"type": msg_type, "payload": payload}
+        self.commentary_buffer.setdefault(job_id, []).append(entry)
+
+    def get_buffered_commentary(self, job_id: str) -> List[Dict[str, Any]]:
+        return list(self.commentary_buffer.get(job_id, []))
+
+    def clear_commentary_buffer(self, job_id: str) -> None:
+        self.commentary_buffer.pop(job_id, None)
+
+    def add_job_ws(self, job_id: str, ws: WebSocket) -> None:
+        self.ws_connections.setdefault(job_id, []).append(ws)
+
+    def remove_job_ws(self, job_id: str, ws: WebSocket) -> None:
+        conns = self.ws_connections.get(job_id)
+        if not conns:
+            return
+        try:
+            conns.remove(ws)
+        except ValueError:
+            pass
+        if not conns:
+            self.ws_connections.pop(job_id, None)
+
+    async def broadcast_to_job_ws(self, job_id: str, msg_type: str, payload: Dict[str, Any]) -> None:
+        message = {"type": msg_type, "payload": payload}
+        for ws in list(self.ws_connections.get(job_id, [])):
+            try:
+                await ws.send_json(message)
+            except Exception as e:
+                logger.debug("Removing dead WS for job %s: %s", job_id, e)
+                self.remove_job_ws(job_id, ws)
 
 queue_manager = QueueManager()
 
