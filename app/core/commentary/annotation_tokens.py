@@ -17,6 +17,7 @@ _SAN_CANDIDATE_RE = re.compile(
     r"\b(?:O-O-O|O-O|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?)\b"
 )
 _EVAL_CANDIDATE_RE = re.compile(r"[+-]\d+\.\d+")
+_FILE_CANDIDATE_RE = re.compile(r"\b(?:the\s+)?([a-hA-H])-file\b")
 
 # Types we recognize; unknown types are left as plain text in resolved_tokens with data=None
 KNOWN_TYPES = frozenset({"pv", "move", "square", "file", "eval", "piece"})
@@ -239,7 +240,8 @@ def _san_legal_on_fen(fen: str, san: str) -> bool:
 
 def auto_tokenize(text: str, fen_before: str, fen_after: str) -> str:
     """
-    Wrap bare SAN and signed eval numbers in [move:...] / [eval:...] outside existing tokens.
+    Wrap bare SAN, signed eval numbers, and file phrases (e.g. "the e-file") in
+    [move:...] / [eval:...] / [file:x] outside existing bracket tokens.
 
     Tries each SAN candidate on ``fen_before`` first, then ``fen_after``.
     """
@@ -268,6 +270,13 @@ def auto_tokenize(text: str, fen_before: str, fen_after: str) -> str:
         cand = m.group(0)
         if _san_legal_on_fen(fb, cand) or _san_legal_on_fen(fa, cand):
             edits.append((s, e, f"[move:{cand}]"))
+
+    for m in _FILE_CANDIDATE_RE.finditer(text):
+        s, e = m.start(), m.end()
+        if _spans_overlap(s, e, spans):
+            continue
+        letter = m.group(1).lower()
+        edits.append((s, e, f"[file:{letter}]"))
 
     edits.sort(key=lambda x: x[0], reverse=True)
     out = text

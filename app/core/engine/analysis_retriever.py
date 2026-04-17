@@ -876,6 +876,20 @@ async def run_llm_commentary(
                 state.retriever.engine_connector, row.fen_after, depth_bm25
             )
         me_for_rag = me.model_copy(update={"pv_san": pv_san_bm25})
+        # Frontend GameStateManager uses move id = mainline index + 1 (see loadGameFromJson).
+        move_id = me.move_index + 1
+        if commentary_callback:
+            await commentary_callback(
+                "AI_GENERATION_STATUS",
+                {
+                    "moveId": move_id,
+                    "context": "mainline",
+                    "status": "start",
+                    "startedAt": time.time(),
+                    "model": mdl,
+                    "effort": eff,
+                },
+            )
         try:
             text, rag_results = await advanced_commenter.analyze_and_compose_event(
                 me_for_rag,
@@ -893,8 +907,6 @@ async def run_llm_commentary(
                             r.analyzed_move.hiddenFeatures.setdefault("_llm", {})
                             r.analyzed_move.hiddenFeatures["_llm"]["comment"] = text
                         break
-            # Frontend GameStateManager uses move id = mainline index + 1 (see loadGameFromJson).
-            move_id = me.move_index + 1
             if commentary_callback and text:
                 resolved_tokens = resolve_tokens_for_comment(text, me.fen_before, me.fen_after)
                 await commentary_callback(
@@ -913,6 +925,19 @@ async def run_llm_commentary(
                 )
         except Exception as e:
             logger.error(f"LLM move commentary failed at ply {me.ply}: {e}")
+        finally:
+            if commentary_callback:
+                await commentary_callback(
+                    "AI_GENERATION_STATUS",
+                    {
+                        "moveId": move_id,
+                        "context": "mainline",
+                        "status": "end",
+                        "endedAt": time.time(),
+                        "model": mdl,
+                        "effort": eff,
+                    },
+                )
 
     if progress_callback:
         await progress_callback(98.5, "LLM: episode narratives...")

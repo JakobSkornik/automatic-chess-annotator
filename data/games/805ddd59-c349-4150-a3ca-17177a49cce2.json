@@ -1,0 +1,450 @@
+{
+  "metadata": {
+    "id": "805ddd59-c349-4150-a3ca-17177a49cce2",
+    "white": "Caruana,F",
+    "black": "Nakamura,Hi",
+    "result": "1/2-1/2",
+    "date": "2024.04.04",
+    "eventId": "FIDE Candidates 2024",
+    "whiteElo": 2803,
+    "blackElo": 2789,
+    "opening": "Sicilian"
+  },
+  "moves": [
+    {
+      "mn": 1,
+      "color": "w",
+      "san": "e4",
+      "uci": "e2e4",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+      "score": {
+        "cp": 12,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "e4",
+          "score": {
+            "cp": 16,
+            "mate": null
+          },
+          "line": [
+            "e4",
+            "e5",
+            "Nf3",
+            "Nc6",
+            "Bc4",
+            "Nf6",
+            "d4",
+            "exd4",
+            "O-O",
+            "Be7",
+            "Nxd4",
+            "O-O",
+            "Nc3",
+            "d6",
+            "Nf5",
+            "Bxf5",
+            "exf5",
+            "Qd7",
+            "Nd5"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nf3",
+          "score": {
+            "cp": 12,
+            "mate": null
+          },
+          "line": [
+            "Nf3",
+            "Nf6",
+            "c4",
+            "e6",
+            "d4",
+            "d5",
+            "e3",
+            "c5",
+            "Nc3",
+            "Nc6",
+            "Bd3",
+            "Be7",
+            "O-O",
+            "dxc4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "d4",
+          "score": {
+            "cp": 11,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "Nf6",
+            "c4",
+            "e6",
+            "e3",
+            "d5",
+            "Nf3",
+            "c5",
+            "Nc3",
+            "Nc6",
+            "Bd3",
+            "Be7",
+            "O-O",
+            "dxc4",
+            "Bxc4",
+            "O-O"
+          ]
+        }
+      ],
+      "comment": "Stakes central space with[move:e4]and frees the[file:e]for rapid development.[eval:+0.12]",
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 1,
+      "color": "b",
+      "san": "c5",
+      "uci": "c7c5",
+      "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+      "score": {
+        "cp": 8,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "e6",
+          "score": {
+            "cp": 11,
+            "mate": null
+          },
+          "line": [
+            "e6",
+            "d4",
+            "d5",
+            "e5",
+            "c5",
+            "c3",
+            "Nc6",
+            "Nf3",
+            "Nge7",
+            "Be2",
+            "Ng6",
+            "O-O",
+            "Be7",
+            "Bd3",
+            "Qc7"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "c5",
+          "score": {
+            "cp": 11,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Nc3",
+            "Nc6",
+            "Bb5",
+            "e6",
+            "Nf3",
+            "Nge7",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "a6",
+            "Be2",
+            "Nxd4",
+            "Qxd4",
+            "Nc6",
+            "Qe3",
+            "Bd6",
+            "O-O",
+            "Be5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "e5",
+          "score": {
+            "cp": 24,
+            "mate": null
+          },
+          "line": [
+            "e5",
+            "Nf3",
+            "Nc6",
+            "Bb5",
+            "Nf6",
+            "O-O",
+            "Nxe4",
+            "d4",
+            "Nd6",
+            "Bxc6",
+            "dxc6",
+            "dxe5",
+            "Nf5",
+            "Qxd8+",
+            "Kxd8",
+            "Bg5+",
+            "Ke8",
+            "Rd1",
+            "Be6",
+            "Nc3"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "quiet",
+      "tactical_motifs": [],
+      "is_critical": false,
+      "episode_index": 0
+    },
+    {
+      "mn": 2,
+      "color": "w",
+      "san": "Nf3",
+      "uci": "g1f3",
+      "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+      "score": {
+        "cp": 12,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nf3",
+          "score": {
+            "cp": 15,
+            "mate": null
+          },
+          "line": [
+            "Nf3",
+            "e6",
+            "Nc3",
+            "Nc6",
+            "Bb5",
+            "Nge7",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Ng6",
+            "Be3",
+            "Be7",
+            "Qd2",
+            "O-O",
+            "Be2",
+            "d6",
+            "O-O",
+            "Nxd4",
+            "Bxd4",
+            "Bd7",
+            "Rad1"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nc3",
+          "score": {
+            "cp": 10,
+            "mate": null
+          },
+          "line": [
+            "Nc3",
+            "e6",
+            "Nf3",
+            "Nc6",
+            "Bb5",
+            "Nge7",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Ng6",
+            "Be3",
+            "Be7",
+            "Be2",
+            "O-O",
+            "O-O",
+            "a6",
+            "a4",
+            "Qc7",
+            "Qd3"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "d4",
+          "score": {
+            "cp": 1,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "cxd4",
+            "Qxd4",
+            "Nc6",
+            "Qd3",
+            "e6",
+            "Nc3",
+            "Nf6",
+            "Nf3",
+            "d5",
+            "exd5",
+            "exd5",
+            "Bg5",
+            "Qe7+",
+            "Be3",
+            "Nb4",
+            "Qd2",
+            "Ne4"
+          ]
+        }
+      ],
+      "comment": "Develops the knight to[move:Nf3]increasing control over[square:d4]and speeding kingside development.[eval:+0.12]",
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 2,
+      "color": "b",
+      "san": "d6",
+      "uci": "d7d6",
+      "fen": "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3",
+      "score": {
+        "cp": 3,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nc6",
+          "score": {
+            "cp": 11,
+            "mate": null
+          },
+          "line": [
+            "Nc6",
+            "Nc3",
+            "e6",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Nf6",
+            "Be2",
+            "Be7",
+            "Be3",
+            "O-O",
+            "O-O",
+            "d6",
+            "a3",
+            "a6",
+            "Qd3",
+            "Bd7",
+            "Rfd1"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "d6",
+          "score": {
+            "cp": 12,
+            "mate": null
+          },
+          "line": [
+            "d6",
+            "Nc3",
+            "Nc6",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "e5",
+            "Nxc6",
+            "bxc6",
+            "Bc4",
+            "Nf6",
+            "Qd3",
+            "Be7",
+            "O-O",
+            "Be6",
+            "Rd1",
+            "O-O",
+            "b3",
+            "Qc7",
+            "Ba3",
+            "Bxc4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "e6",
+          "score": {
+            "cp": 14,
+            "mate": null
+          },
+          "line": [
+            "e6",
+            "Nc3",
+            "Nc6",
+            "Bb5",
+            "Nge7",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Ng6",
+            "Be3",
+            "Be7",
+            "Qd2",
+            "a6",
+            "Be2",
+            "Qc7",
+            "O-O",
+            "b5",
+            "Nxc6"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "quiet",
+      "tactical_motifs": [],
+      "is_critical": false,
+      "episode_index": 0
+    }
+  ],
+  "episodes": [
+    {
+      "episode_index": 0,
+      "title": "Moves 1-4 (positional_play)",
+      "start_move": 1,
+      "end_move": 2,
+      "narrative": "White begins with the classical central claim 1.e4 and 2.Nf3, aiming to control d4 and prepare rapid development from f3. Black answers with the Sicilian tempo 1...c5 to contest the d4-square and 2...d6 to shore up the pawn on d6 and keep flexible development (...Nf6, ...g6 or ...e5 later). The critical turning point is Black's 1...c5 which immediately changes the character from a symmetrical center to a flank contest, and 2...d6 modestly reduces White's slight edge as the game heads into typical, maneuvering opening plans around the e4 and d4 squares.",
+      "dominant_theme": "positional_play"
+    }
+  ],
+  "game_narrative": "The game opened as a classical Sicilian fight: White asserted central control with 1.e4 and 2.Nf3 while Black immediately contested the center on the flank with 1...c5 and solidified with 2...d6, steering into typical Sicilian maneuvering. The critical phase arrived early as Black's c5 thrust transformed a symmetric centre into an asymmetrical, dynamic struggle where plans around d4 and e4, piece activity and pawn breaks would determine the balance. The eventual result flowed from these strategic choices: White retained a modest space and initiative but Black's resilient setup neutralized direct threats and left the outcome hinging on who converted middlegame imbalances first.",
+  "analysis_info": {
+    "engine": "Stockfish",
+    "depth": 16,
+    "multipv": 3,
+    "timestamp": 1776462530.0334494
+  }
+}

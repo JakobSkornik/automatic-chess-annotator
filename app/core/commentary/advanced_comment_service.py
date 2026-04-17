@@ -175,7 +175,9 @@ STRATEGIC_ANALYST_PROMPT = (
     "- Do NOT explain both sides' plans in detail; at most one clause on how the choice changes the game.\n"
     "- Do NOT repeat centipawn values from the data block; use move/eval tokens only.\n"
     "- If the played move is best, say why in one strategic phrase.\n"
-    "- Anchor to tactical motifs and PV lines given; do not invent variations.\n\n"
+    "- Anchor to tactical motifs and PV lines given; do not invent variations.\n"
+    "- The user message states \"Move played by: White|Black\". Treat that as ground truth; do not swap colors.\n"
+    "- File references like \"e-file\" / \"the d-file\" must be emitted as file tokens, never as bare prose.\n\n"
     "OUTPUT: use the segment JSON format in the next instruction block only.\n"
 )
 
@@ -188,7 +190,9 @@ SINGLE_STEP_PROMPT = (
     "- Do not enumerate feature deltas. Do not list plans for both sides.\n"
     "- Do not repeat centipawn numbers as prose; put evaluations in eval segments only.\n"
     "- Every SAN move reference must be a move segment. Every evaluation an eval segment. Squares as square segments.\n"
-    "- No bare SAN like Qxd5 or Nf6 in text segments.\n\n"
+    "- No bare SAN like Qxd5 or Nf6 in text segments.\n"
+    "- The user message states \"Move played by: White|Black\". Treat that as ground truth. Never attribute the played move to the other color.\n"
+    "- File references like \"e-file\" / \"the d-file\" must be emitted as file tokens, never as bare prose.\n\n"
     "Example (meaning, not literal output): prose + [move:Qxd5] + prose + [move:Nf6] + prose + [square:d4].\n\n"
     "OUTPUT: use the segment JSON format in the next instruction block only.\n"
 )
@@ -216,6 +220,8 @@ SEGMENT_OUTPUT_INSTRUCTIONS = (
     "For prose: segment_kind=\"text\", put words in \"prose\", use empty strings for token_type and token_content. "
     "For an interactive UI token: segment_kind=\"token\", token_type one of move|square|file|eval|piece|pv, "
     "token_content the value (e.g. Nf3, e5, d, +0.25, Nd7, or space-separated SAN for pv), prose empty. "
+    "Whenever the commentary refers to a file such as \"the e-file\", \"the d-file\", \"a-file\" etc., emit a "
+    "token segment with token_type=\"file\" and token_content the single letter a-h (never \"e-file\" in prose). "
     "Never put SAN moves or signed eval numbers in text segments — use token segments for those. "
     "The server converts tokens to [type:content] for the UI."
 )
@@ -296,6 +302,16 @@ class AdvancedCommentService:
         fe = move_event
         parts: List[str] = []
         parts.append(f"Move: {fe.san} (ply {fe.ply})")
+        mover = "?"
+        to_move_after = "?"
+        try:
+            b = chess.Board(fe.fen_before)
+            mover = "White" if b.turn == chess.WHITE else "Black"
+            to_move_after = "Black" if b.turn == chess.WHITE else "White"
+        except Exception:
+            pass
+        parts.append(f"Move played by: {mover}")
+        parts.append(f"Side to move after: {to_move_after}")
         parts.append(f"Phase: {fe.phase}")
         pb = fe.eval_before_cp / 100.0 if fe.eval_before_cp is not None else None
         pa = fe.eval_after_cp / 100.0 if fe.eval_after_cp is not None else None
@@ -334,7 +350,7 @@ class AdvancedCommentService:
             parts.append(
                 f"Opening: {fe.opening_name or ''} ({fe.opening_eco or ''})".strip()
             )
-        parts.append(f"FEN after: {fe.fen_after}")
+        parts.append(f"FEN after (side to move = {to_move_after}): {fe.fen_after}")
         return "\n".join(parts)
 
     @staticmethod
@@ -821,7 +837,13 @@ class AdvancedCommentService:
         parts.append(f"GAME CONTEXT:")
         if opening_str:
             parts.append(f"Opening: {opening_str}")
-        parts.append(f"Move {move_num}, {side.capitalize()} to move, Phase: {phase}")
+        mover_label = side.capitalize() if side in ("white", "black") else "?"
+        to_move_after_label = (
+            "Black" if side == "white" else "White" if side == "black" else "?"
+        )
+        parts.append(
+            f"Move {move_num}, played by {mover_label} (FEN below has {to_move_after_label} to move), Phase: {phase}"
+        )
         parts.append(f"Key moment: {km}")
 
         # Narrative
