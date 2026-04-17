@@ -12,6 +12,12 @@ import chess
 
 TOKEN_RE = re.compile(r"\[(\w+):([^\]]+)\]")
 
+# Conservative SAN-like tokens for auto_tokenize (validated with Board.parse_san)
+_SAN_CANDIDATE_RE = re.compile(
+    r"\b(?:O-O-O|O-O|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?)\b"
+)
+_EVAL_CANDIDATE_RE = re.compile(r"[+-]\d+\.\d+")
+
 # Types we recognize; unknown types are left as plain text in resolved_tokens with data=None
 KNOWN_TYPES = frozenset({"pv", "move", "square", "file", "eval", "piece"})
 
@@ -209,3 +215,62 @@ def resolve_tokens_for_comment(
         fen_before or chess.Board().fen(),
         fen_after or chess.Board().fen(),
     )
+
+
+def _existing_token_spans(text: str) -> List[Tuple[int, int]]:
+    return [(p["start"], p["end"]) for p in parse_tokens(text)]
+
+
+def _spans_overlap(start: int, end: int, spans: List[Tuple[int, int]]) -> bool:
+    for s, e in spans:
+        if start < e and end > s:
+            return True
+    return False
+
+
+def _san_legal_on_fen(fen: str, san: str) -> bool:
+    try:
+        board = chess.Board(fen)
+        board.parse_san(san)
+        return True
+    except Exception:
+        return False
+
+
+def auto_tokenize(text: str, fen_before: str, fen_after: str) -> str:
+    """
+    Wrap bare SAN and signed eval numbers in [move:...] / [eval:...] outside existing tokens.
+
+    Tries each SAN candidate on ``fen_before`` first, then ``fen_after``.
+    """
+    if not text or not text.strip():
+        return text or ""
+    fb = fen_before or chess.Board().fen()
+    fa = fen_after or chess.Board().fen()
+    spans = _existing_token_spans(text)
+    edits: List[Tuple[int, int, str]] = []
+
+    for m in _EVAL_CANDIDATE_RE.finditer(text):
+        s, e = m.start(), m.end()
+        if _spans_overlap(s, e, spans):
+            continue
+        prefix = text[:s].rstrip()
+        prev_tokens = prefix.split()
+        last = prev_tokens[-1].lower() if prev_tokens else ""
+        if last in ("move", "ply"):
+            continue
+        edits.append((s, e, f"[eval:{m.group(0)}]"))
+
+    for m in _SAN_CANDIDATE_RE.finditer(text):
+        s, e = m.start(), m.end()
+        if _spans_overlap(s, e, spans):
+            continue
+        cand = m.group(0)
+        if _san_legal_on_fen(fb, cand) or _san_legal_on_fen(fa, cand):
+            edits.append((s, e, f"[move:{cand}]"))
+
+    edits.sort(key=lambda x: x[0], reverse=True)
+    out = text
+    for s, e, repl in edits:
+        out = out[:s] + repl + out[e:]
+    return out

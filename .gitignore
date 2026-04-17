@@ -12,3 +12,7 @@ sf_features.csv
 .env.dev
 
 data/rag_corpus/
+
+# Tantivy writer artifacts (regenerate index if missing)
+data/bm25_positions/.tantivy-*.lock
+data/bm25_positions/.tmp*

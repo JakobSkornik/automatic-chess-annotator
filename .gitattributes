@@ -1,0 +1,9 @@
+# Tantivy segment files: avoid CRLF normalization
+data/bm25_positions/**/*.fast binary
+data/bm25_positions/**/*.idx binary
+data/bm25_positions/**/*.pos binary
+data/bm25_positions/**/*.store binary
+data/bm25_positions/**/*.term binary
+data/bm25_positions/**/*.fieldnorm binary
+data/bm25_positions/meta.json binary
+data/bm25_positions/.managed.json binary

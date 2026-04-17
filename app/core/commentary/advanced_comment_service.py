@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from openai import AsyncOpenAI
 
+from app.core.commentary.annotation_tokens import auto_tokenize
 from app.core.commentary.rag_retriever import (
     NullRetriever,
     RAGRetriever,
@@ -15,7 +16,6 @@ from app.core.commentary.rag_retriever import (
     build_rag_query,
 )
 from app.models.Move import Move
-from app.core.commentary.features.positional_features import compute_hidden_features
 from app.models.chess_events import AnalyzedMoveData, Episode, GameAnalysisContext, MoveEvent
 
 logger = logging.getLogger(__name__)
@@ -117,9 +117,9 @@ def board_to_ascii(fen: str, perspective: chess.Color = chess.WHITE) -> str:
 # ---------------------------------------------------------------------------
 # Tier definitions – map key moment types to pipeline depth & effort
 # ---------------------------------------------------------------------------
-TIER_FULL_HIGH = {"steps": 2, "effort": "medium", "max_tokens": 300}
-TIER_FULL_LOW = {"steps": 2, "effort": "low", "max_tokens": 200}
-TIER_SINGLE = {"steps": 1, "effort": "low", "max_tokens": 150}
+TIER_FULL_HIGH = {"steps": 2, "effort": "medium", "max_tokens": 180}
+TIER_FULL_LOW = {"steps": 2, "effort": "low", "max_tokens": 120}
+TIER_SINGLE = {"steps": 1, "effort": "low", "max_tokens": 80}
 
 KEY_MOMENT_TIERS: Dict[str, Dict[str, Any]] = {
     "brilliant": TIER_FULL_HIGH,
@@ -143,83 +143,54 @@ KEY_MOMENT_TIERS: Dict[str, Dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 POSITION_NARRATOR_PROMPT = (
-    "You are a chess grandmaster describing a position to a student.\n"
-    "Given a board diagram, FEN, positional features, and game context, produce a\n"
-    "structured strategic assessment.\n\n"
+    "You are a chess grandmaster. Given engine data and position features (not a board image),\n"
+    "produce a compact strategic snapshot. Be terse: one idea per field.\n\n"
     "Rules:\n"
-    "- Base your assessment on the BOARD and FEATURES provided, not just scores.\n"
-    "- Identify the character of the position (open/closed/tactical/strategic/transitional).\n"
-    "- Name concrete squares, files, and diagonals when relevant.\n"
-    "- Keep each list to 1-2 items. Be concise but specific.\n"
-    "- Output strictly valid JSON.\n\n"
+    "- Base conclusions on the FEATURES and FEN provided, not inventing tactics.\n"
+    "- Each strengths/weaknesses list: at most 1 short phrase.\n"
+    "- key_squares: at most 2 entries, square + half-line why.\n"
+    "- plans_white / plans_black: one short clause each.\n"
+    "- Output strictly valid JSON, ASCII only.\n\n"
     "Output format:\n"
     "{\n"
-    "  \"character\": \"string describing position type\",\n"
-    "  \"white_strengths\": [\"1-2 key strategic advantages\"],\n"
-    "  \"white_weaknesses\": [\"1-2 key strategic problems\"],\n"
-    "  \"black_strengths\": [\"1-2 key strategic advantages\"],\n"
-    "  \"black_weaknesses\": [\"1-2 key strategic problems\"],\n"
-    "  \"key_squares\": [\"important squares and why, max 3\"],\n"
-    "  \"plans_white\": \"What White should play for\",\n"
-    "  \"plans_black\": \"What Black should play for\",\n"
-    "  \"critical_factor\": \"The single most important strategic element right now\"\n"
+    "  \"character\": \"open | closed | tactical | strategic | transitional (pick one)\",\n"
+    "  \"white_strengths\": [\"one phrase\"],\n"
+    "  \"white_weaknesses\": [\"one phrase\"],\n"
+    "  \"black_strengths\": [\"one phrase\"],\n"
+    "  \"black_weaknesses\": [\"one phrase\"],\n"
+    "  \"key_squares\": [\"e5 — ...\", \"d4 — ...\"],\n"
+    "  \"plans_white\": \"one clause\",\n"
+    "  \"plans_black\": \"one clause\"\n"
     "}"
 )
 
 STRATEGIC_ANALYST_PROMPT = (
-    "You are a grandmaster chess commentator writing for an educated audience.\n"
-    "You receive: a strategic position assessment, the played move, the engine's best\n"
-    "alternative, feature changes, optional reference examples from master games, and narrative.\n\n"
-    "You MUST compare the played move with the best engine continuation and explain the difference.\n"
-    "When a PV POSITION COMPARISON block is provided, explain specifically WHY the PV position is superior —\n"
-    "reference the concrete feature differences (king exposure, mobility, space, pawn structure, files, piece pairs).\n"
-    "You MUST identify the positional or tactical CAUSE of any evaluation shift (weak squares, files,\n"
-    "tactics, king safety, pawn breaks). Use the tactical motifs and engine lines provided — do not invent tactics.\n"
-    "Explain how plans change for BOTH sides after this move.\n\n"
-    "Write commentary that explains the STRATEGIC meaning of the move:\n"
-    "- What does this move do to the position's character?\n"
-    "- How does it affect both sides' plans?\n"
-    "- If not the best: what strategic idea does the better move pursue?\n"
-    "- If best: what makes it the right strategic choice?\n"
-    "- Reference specific squares, pieces, and pawn structures — not just scores.\n"
-    "- Connect to the game narrative and reference examples when relevant.\n\n"
-    "AVOID:\n"
-    "- \"There was a better move available\" without strategic explanation.\n"
-    "- Raw centipawn numbers without positional context.\n"
-    "- Superficial descriptions of what the move literally does (e.g. \"moves the knight\").\n\n"
-)
-
-_COMPOSER_LEGACY_JSON_SUFFIX_STRATEGIC = (
-    "\n\nOutput strictly valid JSON:\n"
-    "{\n"
-    "  \"commentary\": \"2-4 sentences of strategic commentary\",\n"
-    "  \"annotation\": \"??\" | \"?\" | \"?!\" | \"!?\" | \"!\" | \"!!\" | null\n"
-    "}"
+    "You are a grandmaster annotating for a strong club player (master book style).\n"
+    "You receive: a short JSON position assessment, engine data, optional RAG references, and a one-line PV note.\n\n"
+    "Write 2-3 sentences, maximum 80 words total.\n"
+    "Focus on ONE strategic reason the engine prefers its line when the played move differs:\n"
+    "activity, king safety, tempo, pawn structure, or central tension — pick the single clearest.\n\n"
+    "Rules:\n"
+    "- Do NOT enumerate feature deltas, mobility numbers, or space scores.\n"
+    "- Do NOT explain both sides' plans in detail; at most one clause on how the choice changes the game.\n"
+    "- Do NOT repeat centipawn values from the data block; use move/eval tokens only.\n"
+    "- If the played move is best, say why in one strategic phrase.\n"
+    "- Anchor to tactical motifs and PV lines given; do not invent variations.\n\n"
+    "OUTPUT: use the segment JSON format in the next instruction block only.\n"
 )
 
 SINGLE_STEP_PROMPT = (
-    "You are a grandmaster chess commentator. Given a board diagram, position features,\n"
-    "the played move, engine alternatives, optional reference examples, and game narrative,\n"
-    "write concise strategic commentary.\n\n"
+    "You are a grandmaster annotating for a strong club player (master book style).\n"
+    "Write 1-2 sentences, maximum 40 words total, about the played move.\n\n"
     "Rules:\n"
-    "- You MUST compare the played move with the best engine line when they differ.\n"
-    "- When PV POSITION COMPARISON is provided, explain WHY the PV position is superior using those feature deltas.\n"
-    "- Explain WHY the evaluation shifts: tactics, structure, king safety, or plans — anchored to the data given.\n"
-    "- Focus on the STRATEGIC meaning: plans, piece placement, pawn structure, key squares.\n"
-    "- Reference concrete squares and pieces. Avoid vague statements.\n"
-    "- If the move is not best, explain what the better move achieves strategically.\n"
-    "- If the move is best, explain why it is the right choice.\n"
-    "- Do NOT say \"there was a better move\" without explaining WHY it is better.\n"
-    "- Do NOT cite raw centipawn numbers without positional context.\n"
-    "- Keep it to 1-3 sentences.\n\n"
-)
-
-_COMPOSER_LEGACY_JSON_SUFFIX_SINGLE = (
-    "\n\nOutput strictly valid JSON:\n"
-    "{\n"
-    "  \"commentary\": \"1-3 sentences of strategic commentary\",\n"
-    "  \"annotation\": \"??\" | \"?\" | \"?!\" | \"!?\" | \"!\" | \"!!\" | null\n"
-    "}"
+    "- Focus on ONE idea: the main strategic or tactical point.\n"
+    "- If not best, name the single concrete reason the engine move is better (activity, king safety, tempo, structure).\n"
+    "- Do not enumerate feature deltas. Do not list plans for both sides.\n"
+    "- Do not repeat centipawn numbers as prose; put evaluations in eval segments only.\n"
+    "- Every SAN move reference must be a move segment. Every evaluation an eval segment. Squares as square segments.\n"
+    "- No bare SAN like Qxd5 or Nf6 in text segments.\n\n"
+    "Example (meaning, not literal output): prose + [move:Qxd5] + prose + [move:Nf6] + prose + [square:d4].\n\n"
+    "OUTPUT: use the segment JSON format in the next instruction block only.\n"
 )
 
 EPISODE_NARRATIVE_PROMPT = (
@@ -238,18 +209,6 @@ GAME_NARRATIVE_PROMPT = (
     "{\"commentary\": \"3-5 sentences\"}"
 )
 
-# Appended to composer prompts so commentary can be rendered with interactive UI elements.
-ANNOTATION_TOKEN_INSTRUCTIONS = (
-    "\n\nINLINE ANNOTATION TOKENS (embed within your commentary string; use ASCII only):\n"
-    "- [move:SAN] — a specific move being discussed (played or alternative), single SAN.\n"
-    "- [pv:SAN SAN ...] — a short principal variation from the position after the move (space-separated SAN).\n"
-    "- [square:e5] — an important square (lowercase file a-h + rank 1-8).\n"
-    "- [file:d] — a file (single letter a-h).\n"
-    "- [eval:+1.25] — evaluation in pawns from White's point of view (signed number).\n"
-    "- [piece:Nd7] — piece letter (PNBRQK) plus destination square — highlights that square.\n"
-    "Use these tokens naturally inside sentences. The UI will render them as interactive highlights.\n"
-)
-
 SEGMENT_OUTPUT_INSTRUCTIONS = (
     "\n\nOUTPUT FORMAT: Respond with JSON only (no markdown fences). "
     "The object must have a \"segments\" array in reading order. "
@@ -257,14 +216,8 @@ SEGMENT_OUTPUT_INSTRUCTIONS = (
     "For prose: segment_kind=\"text\", put words in \"prose\", use empty strings for token_type and token_content. "
     "For an interactive UI token: segment_kind=\"token\", token_type one of move|square|file|eval|piece|pv, "
     "token_content the value (e.g. Nf3, e5, d, +0.25, Nd7, or space-separated SAN for pv), prose empty. "
-    "The server will convert tokens to [type:content] for the UI."
-)
-
-STRATEGIC_ANALYST_PROMPT_WITH_ANNOTATIONS = (
-    STRATEGIC_ANALYST_PROMPT + ANNOTATION_TOKEN_INSTRUCTIONS + _COMPOSER_LEGACY_JSON_SUFFIX_STRATEGIC
-)
-SINGLE_STEP_PROMPT_WITH_ANNOTATIONS = (
-    SINGLE_STEP_PROMPT + ANNOTATION_TOKEN_INSTRUCTIONS + _COMPOSER_LEGACY_JSON_SUFFIX_SINGLE
+    "Never put SAN moves or signed eval numbers in text segments — use token segments for those. "
+    "The server converts tokens to [type:content] for the UI."
 )
 
 STRATEGIC_ANALYST_COMPOSER_SEGMENT_PROMPT = STRATEGIC_ANALYST_PROMPT + SEGMENT_OUTPUT_INSTRUCTIONS
@@ -315,11 +268,10 @@ def assemble_commentary_from_segments(obj: Dict[str, Any]) -> str:
 
 
 def commentary_from_composer_parsed(obj: Dict[str, Any]) -> str:
-    """Prefer segment assembly; fall back to legacy commentary string."""
-    if "segments" in obj and isinstance(obj.get("segments"), list):
+    """Assemble inline [type:content] text from structured segment JSON only."""
+    if isinstance(obj.get("segments"), list):
         return assemble_commentary_from_segments(obj)
-    raw = obj.get("commentary", obj.get("summary", ""))
-    return sanitize_text(str(raw)) if raw else ""
+    return ""
 
 
 def _strip_json_fence(s: str) -> str:
@@ -340,11 +292,7 @@ class AdvancedCommentService:
         self._rag: RAGRetriever = rag_retriever or NullRetriever()
 
     @staticmethod
-    def _format_move_event_block(
-        move_event: MoveEvent,
-        episode: Optional[Episode],
-        game_context: GameAnalysisContext,
-    ) -> str:
+    def _format_move_event_block(move_event: MoveEvent) -> str:
         fe = move_event
         parts: List[str] = []
         parts.append(f"Move: {fe.san} (ply {fe.ply})")
@@ -380,27 +328,13 @@ class AdvancedCommentService:
                 "Tactical motifs: "
                 + ", ".join(m.value for m in fe.tactical_motifs)
             )
-        if fe.material_balance and isinstance(fe.material_balance, dict):
-            parts.append(f"Material snapshot: {str(fe.material_balance.get('diff', {}))[:200]}")
-        if fe.king_safety:
-            parts.append(f"King exposure (approx): {fe.king_safety}")
         if fe.pawn_structure_type:
             parts.append(f"Pawn structure (center): {fe.pawn_structure_type}")
-        if fe.score_trend:
-            tr = [x / 100.0 for x in fe.score_trend]
-            parts.append(f"Score trend (last plies, White POV pawns): {tr}")
         if fe.opening_name or fe.opening_eco:
             parts.append(
                 f"Opening: {fe.opening_name or ''} ({fe.opening_eco or ''})".strip()
             )
-        if episode:
-            parts.append(
-                f"Episode: {episode.title} | theme={episode.dominant_theme} | plies {episode.start_ply}-{episode.end_ply}"
-            )
-        if game_context.game_narrative:
-            parts.append(f"Game narrative so far: {game_context.game_narrative}")
         parts.append(f"FEN after: {fe.fen_after}")
-        parts.append(board_to_ascii(fe.fen_after))
         return "\n".join(parts)
 
     @staticmethod
@@ -408,96 +342,40 @@ class AdvancedCommentService:
         move_event: MoveEvent,
         analyzed_row: Optional[AnalyzedMoveData],
     ) -> str:
-        """Compare positional features after N plies of the best PV vs the actual position."""
+        """One-line engine line vs played position (no feature tables)."""
         if not analyzed_row or not analyzed_row.pvs or not analyzed_row.pvs[0]:
             return ""
         if move_event.best_move_uci and move_event.uci == move_event.best_move_uci:
             return ""
         pv_seq = analyzed_row.pvs[0]
-        n_moves = min(3, len(pv_seq))
-        board = chess.Board(move_event.fen_before)
-        played = 0
-        for i in range(n_moves):
-            pm = pv_seq[i]
-            uci = getattr(pm, "move", None)
-            if not uci:
-                break
+        first = pv_seq[0]
+        uci = getattr(first, "move", None)
+        first_san = ""
+        if uci:
             try:
-                board.push(chess.Move.from_uci(str(uci)))
-                played += 1
+                b = chess.Board(move_event.fen_before)
+                first_san = b.san(chess.Move.from_uci(str(uci)))
             except Exception:
-                break
-        if played == 0:
+                first_san = ""
+        xp = (
+            move_event.eval_after_cp / 100.0
+            if move_event.eval_after_cp is not None
+            else None
+        )
+        yp = None
+        sc = getattr(first, "score", None)
+        if isinstance(sc, (int, float)):
+            yp = sc / 100.0
+        if xp is None and yp is None and not first_san:
             return ""
-        pv_fen = board.fen()
-        pv_feat = compute_hidden_features(board)
-        cur_board = chess.Board(move_event.fen_after)
-        cur_feat = compute_hidden_features(cur_board)
-
-        def _num(d: Any, *keys: str) -> Optional[float]:
-            cur: Any = d
-            for k in keys:
-                if not isinstance(cur, dict):
-                    return None
-                cur = cur.get(k)
-            return float(cur) if isinstance(cur, (int, float)) else None
-
-        lines: List[str] = [
-            f"PV POSITION COMPARISON (after {played} moves of best line):",
-            f"  FEN: {pv_fen}",
-        ]
-        wk_pv, bk_pv = _num(pv_feat, "white", "kingExposure"), _num(pv_feat, "black", "kingExposure")
-        wk_c, bk_c = _num(cur_feat, "white", "kingExposure"), _num(cur_feat, "black", "kingExposure")
-        if all(x is not None for x in (wk_pv, bk_pv, wk_c, bk_c)):
-            lines.append(
-                f"  King safety (exposure): PV White {wk_pv:.1f} vs Black {bk_pv:.1f} | "
-                f"current: White {wk_c:.1f} vs Black {bk_c:.1f}"
-            )
-        mw_pv, mb_pv = _num(pv_feat, "white", "mobility"), _num(pv_feat, "black", "mobility")
-        mw_c, mb_c = _num(cur_feat, "white", "mobility"), _num(cur_feat, "black", "mobility")
-        if all(x is not None for x in (mw_pv, mb_pv, mw_c, mb_c)):
-            lines.append(
-                f"  Mobility: PV White {mw_pv:.0f}, Black {mb_pv:.0f} | "
-                f"current: White {mw_c:.0f}, Black {mb_c:.0f}"
-            )
-        sw_pv, sb_pv = _num(pv_feat, "white", "space"), _num(pv_feat, "black", "space")
-        sw_c, sb_c = _num(cur_feat, "white", "space"), _num(cur_feat, "black", "space")
-        if all(x is not None for x in (sw_pv, sb_pv, sw_c, sb_c)):
-            lines.append(
-                f"  Space: PV White {sw_pv:.1f}, Black {sb_pv:.1f} | "
-                f"current: White {sw_c:.1f}, Black {sb_c:.1f}"
-            )
-        ps_pv = (
-            (pv_feat.get("pawnStructure") or {}).get("centerType")
-            if isinstance(pv_feat.get("pawnStructure"), dict)
-            else None
-        )
-        ps_cur = (
-            (cur_feat.get("pawnStructure") or {}).get("centerType")
-            if isinstance(cur_feat.get("pawnStructure"), dict)
-            else None
-        )
-        if ps_pv or ps_cur:
-            lines.append(f"  Pawn structure (center): PV {ps_pv} | current {ps_cur}")
-        mat_pv = (
-            (pv_feat.get("material") or {}).get("diff")
-            if isinstance(pv_feat.get("material"), dict)
-            else None
-        )
-        mat_cur = (
-            (cur_feat.get("material") or {}).get("diff")
-            if isinstance(cur_feat.get("material"), dict)
-            else None
-        )
-        if mat_pv is not None or mat_cur is not None:
-            lines.append(f"  Material: PV {mat_pv} | current {mat_cur}")
-        lines.append(
-            "  Key difference: Compare open/semi-open files, piece activity, and king safety between PV and played line."
-        )
-        lines.append(
-            "  Why PV is better: (Explain using the concrete deltas above — bishop pair, file control, etc.)"
-        )
-        return "\n".join(lines)
+        parts = []
+        if first_san:
+            parts.append(f"PV diverges after {first_san}")
+        if xp is not None:
+            parts.append(f"eval after played (White POV): {xp:+.2f} pawns")
+        if yp is not None:
+            parts.append(f"root eval if best first move (White POV): {yp:+.2f} pawns")
+        return "; ".join(parts) + "."
 
     @staticmethod
     def _format_rag_block(results: List[RAGResult]) -> str:
@@ -522,11 +400,13 @@ class AdvancedCommentService:
         query = build_rag_query(move_event, episode)
         rag_results = await self._rag.retrieve(query, top_k=2)
         logger.info(
-            "RAG query: phase=%s pawn_structure=%s motifs=%s theme=%s",
+            "RAG query: phase=%s pawn_structure=%s motifs=%s theme=%s fen=%s pv_san=%s",
             query.phase,
             query.pawn_structure_type,
             query.tactical_motifs,
             query.theme_hint,
+            (query.fen or "")[:80],
+            query.pv_san,
         )
         for i, r in enumerate(rag_results):
             logger.info(
@@ -545,7 +425,7 @@ class AdvancedCommentService:
             blocks.append(rb)
         blocks.append(
             "POSITION AND ENGINE DATA (anchor commentary to this; do not invent lines):\n"
-            + self._format_move_event_block(move_event, episode, game_context)
+            + self._format_move_event_block(move_event)
         )
         pv_block = self._format_pv_position_comparison(move_event, analyzed_row)
         if pv_block:
@@ -572,6 +452,7 @@ class AdvancedCommentService:
             effort=effort,
             key_moment_type=key_moment_type or move_event.key_moment_type,
         )
+        text = auto_tokenize(text, move_event.fen_before, move_event.fen_after)
         return text, rag_results
 
     async def analyze_and_compose_raw_text(
@@ -586,6 +467,10 @@ class AdvancedCommentService:
             return "AI comments are disabled. Please set the OPENAI_API_KEY environment variable."
         tier = KEY_MOMENT_TIERS.get(key_moment_type or "", TIER_SINGLE)
         tier_effort = effort or tier["effort"]
+        # Note: tier["max_tokens"] is kept as a soft documentation budget only.
+        # Responses API `max_output_tokens` is a HARD cap that also counts reasoning tokens,
+        # so passing small values here (e.g. 80) starves the JSON output. Prompt word caps
+        # already enforce brevity.
         use_two_steps = tier["steps"] == 2
         if use_two_steps:
             narrator_raw = await self._llm_call(
@@ -604,16 +489,14 @@ class AdvancedCommentService:
                 f"POSITION ASSESSMENT:\n{json.dumps(narrator_json, indent=2)}\n\n"
                 f"{structured_text}"
             )
-            return await self._run_composer_with_fallback(
+            return await self._run_composer_segments(
                 STRATEGIC_ANALYST_COMPOSER_SEGMENT_PROMPT,
-                STRATEGIC_ANALYST_PROMPT_WITH_ANNOTATIONS,
                 step2_input,
                 model=model,
                 effort=tier_effort,
             )
-        return await self._run_composer_with_fallback(
+        return await self._run_composer_segments(
             SINGLE_STEP_COMPOSER_SEGMENT_PROMPT,
-            SINGLE_STEP_PROMPT_WITH_ANNOTATIONS,
             structured_text,
             model=model,
             effort=tier_effort,
@@ -1035,47 +918,38 @@ class AdvancedCommentService:
     # LLM call helper
     # ------------------------------------------------------------------
 
-    async def _run_composer_with_fallback(
+    async def _run_composer_segments(
         self,
         structured_system: str,
-        legacy_system: str,
         user_text: str,
         *,
         model: Optional[str],
         effort: Optional[str],
     ) -> str:
-        """Try structured segment JSON (OpenAI json_schema); fall back to legacy bracket-in-string JSON."""
-        try:
-            raw = await self._llm_call(
-                structured_system,
-                user_text,
-                model=model,
-                effort=effort,
-                use_structured_composer=True,
-            )
-            if raw:
-                text = _strip_json_fence(raw)
-                obj = json.loads(text)
-                out = commentary_from_composer_parsed(obj)
-                if out.strip():
-                    return out
-        except Exception as e:
-            logger.warning("Structured composer failed, using legacy: %s", e)
-        raw = await self._llm_call(
-            legacy_system,
-            user_text,
-            model=model,
-            effort=effort,
-            use_structured_composer=False,
-        )
-        if raw:
+        """Structured segment JSON only (OpenAI json_schema); one retry on empty/failure."""
+        last_raw: Optional[str] = None
+        for attempt in range(2):
             try:
-                text = _strip_json_fence(raw)
-                obj = json.loads(text)
-                r = obj.get("commentary", obj.get("summary", ""))
-                return sanitize_text(str(r)) if r else ""
-            except Exception:
-                return sanitize_text(raw.strip())
+                raw = await self._llm_call(
+                    structured_system,
+                    user_text,
+                    model=model,
+                    effort=effort,
+                    use_structured_composer=True,
+                )
+                last_raw = raw
+                if raw:
+                    text = _strip_json_fence(raw)
+                    obj = json.loads(text)
+                    out = commentary_from_composer_parsed(obj)
+                    if out.strip():
+                        return out
+            except Exception as e:
+                logger.warning("Structured composer failed (attempt %s): %s", attempt + 1, e)
+        logger.warning(
+            "Structured composer returned empty after retries; last raw=%.200s",
+            (last_raw or ""),
+        )
         return ""
 
     async def _llm_call(
@@ -1089,7 +963,7 @@ class AdvancedCommentService:
     ) -> Optional[str]:
         """Make a single LLM call and return the raw text response."""
         kwargs: Dict[str, Any] = {
-            "model": model or "gpt-5-mini",
+            "model": model or "gpt-5",
             "input": [
                 {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
                 {"role": "user", "content": [{"type": "input_text", "text": user_text}]},

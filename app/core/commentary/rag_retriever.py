@@ -20,6 +20,9 @@ class RAGQuery(BaseModel):
     material_imbalance: Optional[str] = None
     eval_swing_direction: Optional[str] = None
     theme_hint: Optional[str] = None
+    # BM25 / Tantivy: position after the move + PV SAN from that position (matches corpus build)
+    fen: Optional[str] = None
+    pv_san: Optional[List[str]] = None
 
 
 class RAGResult(BaseModel):
@@ -73,6 +76,8 @@ def build_rag_query(
         material_imbalance=_classify_imbalance(move_event.material_balance),
         eval_swing_direction=swing_dir,
         theme_hint=episode.dominant_theme if episode else None,
+        fen=move_event.fen_after,
+        pv_san=move_event.pv_san,
     )
 
 

@@ -79,8 +79,12 @@ async def job_commentary_ws(websocket: WebSocket, job_id: str):
         for msg in queue_manager.get_buffered_commentary(job_id):
             await websocket.send_json(msg)
         while True:
-            await websocket.receive()
+            message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                break
     except WebSocketDisconnect:
+        pass
+    except RuntimeError:
         pass
     finally:
         queue_manager.remove_job_ws(job_id, websocket)

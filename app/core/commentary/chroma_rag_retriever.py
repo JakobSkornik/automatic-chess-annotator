@@ -9,7 +9,9 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
+from app.core.commentary.composite_retriever import CompositeRetriever
 from app.core.commentary.rag_retriever import NullRetriever, RAGQuery, RAGResult, RAGRetriever
+from app.core.commentary.tantivy_positional_retriever import TantivyPositionalRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -137,14 +139,33 @@ class ChromaRAGRetriever(RAGRetriever):
 
 
 def get_default_retriever() -> RAGRetriever:
-    """Use Chroma when RAG_CHROMA_PATH is set and exists; otherwise NullRetriever."""
-    raw = os.environ.get("RAG_CHROMA_PATH")
-    if not raw:
-        logger.info("RAG: RAG_CHROMA_PATH not set, using NullRetriever")
+    """Chroma when RAG_CHROMA_PATH exists; Tantivy BM25 when RAG_BM25_PATH exists; composite if both."""
+    rs: List[RAGRetriever] = []
+
+    bm25_raw = os.environ.get("RAG_BM25_PATH")
+    if bm25_raw:
+        bm25_path = os.path.abspath(os.path.expanduser(bm25_raw.strip()))
+        if os.path.isdir(bm25_path):
+            try:
+                rs.append(TantivyPositionalRetriever(bm25_path))
+                logger.info("RAG: using TantivyPositionalRetriever at %s", bm25_path)
+            except Exception as e:
+                logger.warning("RAG: RAG_BM25_PATH invalid (%s), skipping BM25: %s", bm25_path, e)
+        else:
+            logger.warning("RAG: RAG_BM25_PATH=%s is not a directory, skipping BM25", bm25_raw)
+
+    chroma_raw = os.environ.get("RAG_CHROMA_PATH")
+    if chroma_raw:
+        chroma_path = os.path.abspath(os.path.expanduser(chroma_raw.strip()))
+        if os.path.isdir(chroma_path):
+            rs.append(ChromaRAGRetriever(chroma_path))
+            logger.info("RAG: using ChromaRAGRetriever at %s", chroma_path)
+        else:
+            logger.warning("RAG: RAG_CHROMA_PATH=%s is not a directory, skipping Chroma", chroma_raw)
+
+    if not rs:
+        logger.info("RAG: no Chroma/BM25 paths valid, using NullRetriever")
         return NullRetriever()
-    path = os.path.abspath(os.path.expanduser(raw.strip()))
-    if not os.path.isdir(path):
-        logger.warning("RAG: RAG_CHROMA_PATH=%s is not a directory, using NullRetriever", raw)
-        return NullRetriever()
-    logger.info("RAG: using ChromaRAGRetriever at %s", path)
-    return ChromaRAGRetriever(path)
+    if len(rs) == 1:
+        return rs[0]
+    return CompositeRetriever(rs)

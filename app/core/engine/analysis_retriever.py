@@ -45,6 +45,29 @@ MATE_SCORE = 1000000
 logger = logging.getLogger(__name__)
 
 
+def _bm25_pv_san_from_fen_after(engine: EngineConnector, fen_after: str, depth: int) -> List[str]:
+    """SAN plies of engine PV1 from the position after the move (matches BM25 corpus indexing)."""
+    try:
+        board = chess.Board(fen_after)
+        info = engine.analyse(board, depth=depth, multiPv=1)
+        if isinstance(info, list) and info:
+            info = info[0]
+        if not isinstance(info, dict):
+            return []
+        pv = info.get("pv") or []
+        b2 = board.copy()
+        out: List[str] = []
+        for m in pv[:8]:
+            if m not in b2.legal_moves:
+                break
+            out.append(b2.san(m))
+            b2.push(m)
+        return out[:5]
+    except Exception as e:
+        logger.debug("BM25 PV from fen_after failed: %s", e)
+        return []
+
+
 class AnalysisRetriever:
     def __init__(self, engine_connector: EngineConnector, game: Game):
         self.analysis_stages = ANALYSIS_STAGES
@@ -825,8 +848,8 @@ async def run_llm_commentary(
     llm_effort: Optional[str] = None,
 ) -> None:
     """Pass 4: LLM commentary for critical moves, episodes, and game narrative (streams via callback)."""
-    mdl = llm_model or os.environ.get("LLM_DEFAULT_MODEL", "gpt-5-mini")
-    eff = llm_effort or os.environ.get("LLM_DEFAULT_EFFORT", "low")
+    mdl = llm_model or os.environ.get("LLM_DEFAULT_MODEL", "gpt-5")
+    eff = llm_effort or os.environ.get("LLM_DEFAULT_EFFORT", "medium")
     analyzed_rows = state.analyzed_rows
     move_events = state.move_events
     episodes = state.episodes
@@ -846,9 +869,16 @@ async def run_llm_commentary(
         if progress_callback:
             await progress_callback(pct, f"LLM: critical move {me.san} (ply {me.ply})")
         row = analyzed_rows[me.move_index] if 0 <= me.move_index < len(analyzed_rows) else None
+        depth_bm25 = int(os.environ.get("RAG_BM25_STOCKFISH_DEPTH", "14"))
+        pv_san_bm25: List[str] = []
+        if row:
+            pv_san_bm25 = _bm25_pv_san_from_fen_after(
+                state.retriever.engine_connector, row.fen_after, depth_bm25
+            )
+        me_for_rag = me.model_copy(update={"pv_san": pv_san_bm25})
         try:
             text, rag_results = await advanced_commenter.analyze_and_compose_event(
-                me,
+                me_for_rag,
                 ep,
                 context,
                 model=mdl,

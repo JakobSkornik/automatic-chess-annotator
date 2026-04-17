@@ -71,6 +71,8 @@ class MoveEvent(BaseModel):
     opening_name: Optional[str] = None
     opening_eco: Optional[str] = None
     key_moment_type: Optional[str] = None
+    # PV from fen_after (engine), first plies as SAN — used by Tantivy BM25 RAG
+    pv_san: Optional[List[str]] = None
 
 
 class Episode(BaseModel):

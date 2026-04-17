@@ -1,0 +1,194 @@
+{
+  "index_settings": {
+    "docstore_compression": "lz4",
+    "docstore_blocksize": 16384
+  },
+  "segments": [
+    {
+      "segment_id": "27fb0d70-6a6f-49ea-9297-460a3b1f3e79",
+      "max_doc": 2631,
+      "deletes": null
+    },
+    {
+      "segment_id": "1cdd975a-784e-4579-9e0a-36c9a3741493",
+      "max_doc": 2625,
+      "deletes": null
+    },
+    {
+      "segment_id": "045dd96c-8c24-45eb-8fde-52091abba397",
+      "max_doc": 2173,
+      "deletes": null
+    },
+    {
+      "segment_id": "5ddd1365-25c1-4cf9-85c9-43943a87c04d",
+      "max_doc": 2071,
+      "deletes": null
+    },
+    {
+      "segment_id": "d8e6b5db-5e42-4502-b9e1-cc21f5754610",
+      "max_doc": 1927,
+      "deletes": null
+    },
+    {
+      "segment_id": "cd8b70e4-a4b0-47cc-84be-9f9ef2f0f0d6",
+      "max_doc": 1706,
+      "deletes": null
+    },
+    {
+      "segment_id": "19aa6e5a-97c7-4024-8b6a-f90ca130a767",
+      "max_doc": 1484,
+      "deletes": null
+    },
+    {
+      "segment_id": "03d72c0b-d938-4891-a8bf-93d6eb389a33",
+      "max_doc": 1468,
+      "deletes": null
+    }
+  ],
+  "schema": [
+    {
+      "name": "static_attributes",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "pawn_structure",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "center",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "dynamic_general",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "dynamic_solution",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "player_color",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "game_id",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "eco",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "source",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "fen",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "pv_san",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    }
+  ],
+  "opstamp": 16093
+}
