@@ -834,7 +834,7 @@ async def run_llm_commentary(
     llm_effort: Optional[str] = None,
 ) -> None:
     """Pass 4: LLM commentary for key-moment moves, episodes, and game narrative (streams via callback)."""
-    mdl = llm_model or os.environ.get("LLM_DEFAULT_MODEL", "gpt-5")
+    mdl = llm_model or os.environ.get("LLM_DEFAULT_MODEL", "gpt-5.4")
     eff = llm_effort or os.environ.get("LLM_DEFAULT_EFFORT", "medium")
     analyzed_rows = state.analyzed_rows
     move_events = state.move_events

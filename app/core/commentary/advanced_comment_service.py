@@ -995,7 +995,7 @@ class AdvancedCommentService:
         if _log_llm_prompts_enabled() and prompt_name:
             _debug_log_prompt(prompt_name, system_prompt, user_text)
         kwargs: Dict[str, Any] = {
-            "model": model or "gpt-5",
+            "model": model or "gpt-5.4",
             "input": [
                 {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
                 {"role": "user", "content": [{"type": "input_text", "text": user_text}]},
@@ -1047,7 +1047,7 @@ class AdvancedCommentService:
         if _log_llm_prompts_enabled():
             _debug_log_prompt(f"json_schema:{schema_name}", system_prompt, user_text)
         kwargs: Dict[str, Any] = {
-            "model": model or "gpt-5",
+            "model": model or "gpt-5.4",
             "input": [
                 {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
                 {"role": "user", "content": [{"type": "input_text", "text": user_text}]},

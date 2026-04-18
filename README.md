@@ -23,7 +23,7 @@ pip install -r requirements.txt
 | `OPENAI_API_KEY` | Required for LLM commentary |
 | `RAG_BM25_PATH` | Directory of the committed Tantivy BM25 index (e.g. `data/bm25_positions`). If unset or invalid, commentary runs without reference examples |
 | `RAG_BM25_STOCKFISH_DEPTH` | Depth for runtime PV used in BM25 queries (default `14`) |
-| `LLM_DEFAULT_MODEL` / `LLM_DEFAULT_EFFORT` | Optional overrides used by the analysis worker |
+| `LLM_DEFAULT_MODEL` / `LLM_DEFAULT_EFFORT` | Optional overrides used by the analysis worker. Default model is `gpt-5.4` when unset; use `gpt-5.4-mini` for a cheaper near-frontier option (same as the UI). |
 | `LOG_LLM_PROMPTS` | Set to `1` or `true` to log full user/system prompts for each LLM pass (server `logger.info`; dev only) |
 
 ## Run
