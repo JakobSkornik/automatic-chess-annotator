@@ -5,43 +5,43 @@
   },
   "segments": [
     {
-      "segment_id": "27fb0d70-6a6f-49ea-9297-460a3b1f3e79",
-      "max_doc": 2631,
+      "segment_id": "67e4337f-25a6-48d3-8105-4864c13177e5",
+      "max_doc": 1867,
       "deletes": null
     },
     {
-      "segment_id": "1cdd975a-784e-4579-9e0a-36c9a3741493",
-      "max_doc": 2625,
+      "segment_id": "4eed7feb-e074-40d5-a7ae-b666f8f6cb83",
+      "max_doc": 1633,
       "deletes": null
     },
     {
-      "segment_id": "045dd96c-8c24-45eb-8fde-52091abba397",
-      "max_doc": 2173,
+      "segment_id": "ca61fa38-e9de-4cde-8cef-8f547a3c0c53",
+      "max_doc": 1331,
       "deletes": null
     },
     {
-      "segment_id": "5ddd1365-25c1-4cf9-85c9-43943a87c04d",
-      "max_doc": 2071,
+      "segment_id": "b0a78c5e-8971-4b3b-aa5b-7f007b2457db",
+      "max_doc": 1190,
       "deletes": null
     },
     {
-      "segment_id": "d8e6b5db-5e42-4502-b9e1-cc21f5754610",
-      "max_doc": 1927,
+      "segment_id": "2b09e93d-4ec3-4e29-9d88-ab92a17424b2",
+      "max_doc": 1146,
       "deletes": null
     },
     {
-      "segment_id": "cd8b70e4-a4b0-47cc-84be-9f9ef2f0f0d6",
-      "max_doc": 1706,
+      "segment_id": "39c790bb-653e-4b99-9728-255a0dd81916",
+      "max_doc": 928,
       "deletes": null
     },
     {
-      "segment_id": "19aa6e5a-97c7-4024-8b6a-f90ca130a767",
-      "max_doc": 1484,
+      "segment_id": "f030295e-2b3f-487c-9c67-b67a1f8e363c",
+      "max_doc": 653,
       "deletes": null
     },
     {
-      "segment_id": "03d72c0b-d938-4891-a8bf-93d6eb389a33",
-      "max_doc": 1468,
+      "segment_id": "4ad1f95b-44ea-4522-a874-a927bc9a42d3",
+      "max_doc": 511,
       "deletes": null
     }
   ],
@@ -100,6 +100,32 @@
     },
     {
       "name": "dynamic_solution",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "king_placement",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "imbalance_signature",
       "type": "text",
       "options": {
         "indexing": {
@@ -188,7 +214,46 @@
         "stored": true,
         "fast": false
       }
+    },
+    {
+      "name": "annotation_text",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "annotation_ply",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "plies_to_next_annotation",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
     }
   ],
-  "opstamp": 16093
+  "opstamp": 9267
 }

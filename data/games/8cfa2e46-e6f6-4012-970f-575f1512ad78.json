@@ -1,0 +1,8325 @@
+{
+  "metadata": {
+    "id": "8cfa2e46-e6f6-4012-970f-575f1512ad78",
+    "white": "Ma-Tei",
+    "black": "LeviAOT_160",
+    "result": "1-0",
+    "date": "2025.05.16",
+    "eventId": "Rated blitz game",
+    "whiteElo": 2398,
+    "blackElo": 2231,
+    "opening": "Scandinavian Defense: Valencian Variation"
+  },
+  "moves": [
+    {
+      "mn": 1,
+      "color": "w",
+      "san": "e4",
+      "uci": "e2e4",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+      "score": {
+        "cp": 16,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "e4",
+          "score": {
+            "cp": 16,
+            "mate": null
+          },
+          "line": [
+            "e4",
+            "e5",
+            "Nf3",
+            "Nc6",
+            "Bc4",
+            "Nf6",
+            "d3",
+            "Bc5",
+            "O-O",
+            "d6",
+            "Bg5",
+            "O-O",
+            "Nc3",
+            "Na5",
+            "Bxf6",
+            "gxf6"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "d4",
+          "score": {
+            "cp": 9,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "d5",
+            "Nf3",
+            "e6",
+            "c4",
+            "c5",
+            "cxd5",
+            "exd5",
+            "Nc3",
+            "Nf6",
+            "Bf4",
+            "Be7",
+            "dxc5",
+            "Bxc5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Nf3",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "Nf3",
+            "d5",
+            "d4",
+            "e6",
+            "c4",
+            "Be7",
+            "e3",
+            "Nf6",
+            "Be2",
+            "O-O",
+            "O-O",
+            "c5",
+            "Nc3",
+            "cxd4",
+            "exd4",
+            "dxc4",
+            "a3"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "e4",
+          "e5",
+          "f3",
+          "c6",
+          "c4",
+          "f6",
+          "d3",
+          "c5"
+        ],
+        "best_recurring_destinations": [
+          "e4",
+          "e5",
+          "f3",
+          "c6",
+          "c4",
+          "f6",
+          "d3",
+          "c5"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 1,
+      "color": "b",
+      "san": "d5",
+      "uci": "d7d5",
+      "fen": "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+      "score": {
+        "cp": 40,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "c5",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Nc3",
+            "e6",
+            "Nf3",
+            "Nc6",
+            "d4",
+            "cxd4",
+            "Nxd4",
+            "Nf6",
+            "Be3",
+            "Be7",
+            "Bd3",
+            "d5",
+            "O-O",
+            "O-O",
+            "exd5",
+            "exd5",
+            "h3"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "e6",
+          "score": {
+            "cp": 20,
+            "mate": null
+          },
+          "line": [
+            "e6",
+            "d4",
+            "d5",
+            "exd5",
+            "exd5",
+            "Nf3",
+            "Nf6",
+            "Bd3",
+            "Be7",
+            "O-O",
+            "O-O",
+            "Be3",
+            "Be6",
+            "Nbd2",
+            "Nbd7",
+            "h3",
+            "c5",
+            "dxc5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "e5",
+          "score": {
+            "cp": 24,
+            "mate": null
+          },
+          "line": [
+            "e5",
+            "Nf3",
+            "Nc6",
+            "Bb5",
+            "Nf6",
+            "O-O",
+            "Bc5",
+            "c3",
+            "O-O",
+            "d4",
+            "Bb6",
+            "d5",
+            "Ne7",
+            "Nbd2",
+            "d6",
+            "Bd3",
+            "Bg4"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "good",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d5"
+        ],
+        "best_target_squares": [
+          "d4"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "e6",
+          "d4",
+          "d5",
+          "d5",
+          "d5",
+          "f3",
+          "f6",
+          "d3"
+        ],
+        "best_recurring_destinations": [
+          "c5",
+          "c3",
+          "e6",
+          "f3",
+          "c6",
+          "d4",
+          "d4",
+          "d4"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 2,
+      "color": "w",
+      "san": "exd5",
+      "uci": "e4d5",
+      "fen": "rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2",
+      "score": {
+        "cp": 36,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "exd5",
+          "score": {
+            "cp": 34,
+            "mate": null
+          },
+          "line": [
+            "exd5",
+            "Nf6",
+            "Nf3",
+            "Nxd5",
+            "d4",
+            "e6",
+            "c4",
+            "Bb4+",
+            "Bd2",
+            "Bxd2+",
+            "Qxd2",
+            "Nf6",
+            "Nc3",
+            "O-O",
+            "Be2",
+            "Nbd7",
+            "Rd1"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "e5",
+          "score": {
+            "cp": -8,
+            "mate": null
+          },
+          "line": [
+            "e5",
+            "c5",
+            "c3",
+            "Bf5",
+            "d4",
+            "e6",
+            "Nf3",
+            "Nc6",
+            "Be2",
+            "Nge7",
+            "dxc5",
+            "Ng6",
+            "b4",
+            "Ngxe5",
+            "Nxe5",
+            "Nxe5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Nc3",
+          "score": {
+            "cp": -8,
+            "mate": null
+          },
+          "line": [
+            "Nc3",
+            "d4",
+            "Nb1",
+            "Nf6",
+            "e5",
+            "Nfd7",
+            "e6",
+            "fxe6",
+            "Nf3",
+            "Nc6",
+            "d3",
+            "Nf6",
+            "Nbd2",
+            "Qd5"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d2",
+          "d5",
+          "f6"
+        ],
+        "best_target_squares": [
+          "d2",
+          "d5",
+          "f6"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d5",
+          "f6",
+          "f3",
+          "d5",
+          "d4",
+          "e6",
+          "c4",
+          "b4"
+        ],
+        "best_recurring_destinations": [
+          "d5",
+          "f6",
+          "f3",
+          "d5",
+          "d4",
+          "e6",
+          "c4",
+          "b4"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 2,
+      "color": "b",
+      "san": "Qxd5",
+      "uci": "d8d5",
+      "fen": "rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3",
+      "score": {
+        "cp": 32,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Qxd5",
+          "score": {
+            "cp": 32,
+            "mate": null
+          },
+          "line": [
+            "Qxd5",
+            "Nc3",
+            "Qd6",
+            "d4",
+            "a6",
+            "Nf3",
+            "Nf6",
+            "Be2",
+            "e6",
+            "Bd3",
+            "Nbd7",
+            "O-O",
+            "c5",
+            "Be3",
+            "Be7",
+            "Ne4",
+            "Nxe4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "c6",
+          "score": {
+            "cp": 36,
+            "mate": null
+          },
+          "line": [
+            "c6",
+            "dxc6",
+            "Nxc6",
+            "Nf3",
+            "e5",
+            "Nc3",
+            "Nf6",
+            "Bc4",
+            "Bd6",
+            "d3",
+            "O-O",
+            "O-O",
+            "Na5",
+            "Bb3",
+            "Nxb3",
+            "axb3",
+            "h6",
+            "Re1"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Nf6",
+          "score": {
+            "cp": 36,
+            "mate": null
+          },
+          "line": [
+            "Nf6",
+            "Nf3",
+            "Nxd5",
+            "d4",
+            "e6",
+            "c4",
+            "Nf6",
+            "Nc3",
+            "Bd6",
+            "Bd3",
+            "O-O",
+            "O-O",
+            "c5",
+            "dxc5",
+            "Bxc5",
+            "a3",
+            "Nc6",
+            "Ne4"
+          ]
+        }
+      ],
+      "comment": "Black's [move:Qxd5] recovers the pawn and plants the queen centrally, interfering with White's [square:d4] grab of space. The idea is forcing -- first recapture -- yet it concedes tempi to [square:c3] and [square:d4] as White chases the queen toward [move:Qd6] and [move:Qd8], keeping the balance at [eval:+0.32]. Practically, development rolls while the queen is harassed, mirroring [pv:Nc3 Qd6 d4 a6 Nf3 Nf6 Be2], and Black hopes to consolidate.",
+      "classification": "structural_transformation",
+      "move_quality": "best",
+      "event_type": "structural_change",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "d5",
+          "c3",
+          "d6",
+          "d4",
+          "a6",
+          "f3",
+          "f6",
+          "e2"
+        ],
+        "best_recurring_destinations": [
+          "d5",
+          "c3",
+          "d6",
+          "d4",
+          "a6",
+          "f3",
+          "f6",
+          "e2"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 3,
+      "color": "w",
+      "san": "Nc3",
+      "uci": "b1c3",
+      "fen": "rnb1kbnr/ppp1pppp/8/3q4/8/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 3",
+      "score": {
+        "cp": 32,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nf3",
+          "score": {
+            "cp": 39,
+            "mate": null
+          },
+          "line": [
+            "Nf3",
+            "Nf6",
+            "Nc3",
+            "Qd6",
+            "d4",
+            "Nc6",
+            "Bd3",
+            "Bg4",
+            "h3",
+            "Bxf3",
+            "Qxf3",
+            "Qxd4",
+            "Be3",
+            "Qb4",
+            "Bb5"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nc3",
+          "score": {
+            "cp": 36,
+            "mate": null
+          },
+          "line": [
+            "Nc3",
+            "Qa5",
+            "d4",
+            "Bf5",
+            "Nf3",
+            "Nf6",
+            "Ne5",
+            "e6",
+            "g4",
+            "Bg6",
+            "Bg2",
+            "c6",
+            "O-O",
+            "Nbd7",
+            "f4",
+            "Qb6",
+            "g5",
+            "Nxe5",
+            "fxe5",
+            "Nd7"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "d4",
+          "score": {
+            "cp": 19,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "e5",
+            "Nc3",
+            "Qxd4",
+            "Qxd4",
+            "exd4",
+            "Nb5",
+            "Na6",
+            "Nf3",
+            "Nf6",
+            "Nbxd4",
+            "c5",
+            "Bxa6",
+            "bxa6",
+            "Nc6",
+            "Be6",
+            "O-O"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "excellent",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "deflection",
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race",
+        "piece_rerouting"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [
+          "f3",
+          "d4"
+        ],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "c3",
+          "a5",
+          "d4",
+          "f5",
+          "f3",
+          "f6",
+          "e5",
+          "e6"
+        ],
+        "best_recurring_destinations": [
+          "f3",
+          "f6",
+          "c3",
+          "d6",
+          "d4",
+          "c6",
+          "d3",
+          "g4"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 3,
+      "color": "b",
+      "san": "Qd8",
+      "uci": "d5d8",
+      "fen": "rnbqkbnr/ppp1pppp/8/8/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 4",
+      "score": {
+        "cp": 24,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Qd8",
+          "score": {
+            "cp": 26,
+            "mate": null
+          },
+          "line": [
+            "Qd8",
+            "Nf3",
+            "Nf6",
+            "d4",
+            "g6",
+            "Bb5+",
+            "c6",
+            "Bd3",
+            "Bg7",
+            "O-O",
+            "O-O",
+            "Re1",
+            "Bf5",
+            "Bxf5",
+            "gxf5",
+            "a4",
+            "e6",
+            "Bf4",
+            "a5",
+            "Qe2",
+            "Nbd7",
+            "Rad1"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Qa5",
+          "score": {
+            "cp": 28,
+            "mate": null
+          },
+          "line": [
+            "Qa5",
+            "d4",
+            "Nf6",
+            "Nf3",
+            "Bf5",
+            "Ne5",
+            "c6",
+            "Bd3",
+            "Bxd3",
+            "Qxd3",
+            "Nbd7",
+            "Nc4",
+            "Qh5",
+            "O-O",
+            "e6",
+            "Bf4",
+            "Qg6",
+            "Rad1",
+            "O-O-O"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Qd6",
+          "score": {
+            "cp": 30,
+            "mate": null
+          },
+          "line": [
+            "Qd6",
+            "d4",
+            "Nf6",
+            "Nf3",
+            "a6",
+            "Bd3",
+            "Nc6",
+            "O-O",
+            "g6",
+            "Ne2",
+            "Bg4",
+            "Bf4",
+            "Qd8",
+            "Ne5",
+            "Nxe5",
+            "dxe5",
+            "Nd7",
+            "f3",
+            "Be6"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "book",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "d8",
+          "f3",
+          "f6",
+          "d4",
+          "g6",
+          "b5",
+          "c6",
+          "d3"
+        ],
+        "best_recurring_destinations": [
+          "d8",
+          "f3",
+          "f6",
+          "d4",
+          "g6",
+          "b5",
+          "c6",
+          "d3"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 4,
+      "color": "w",
+      "san": "Bc4",
+      "uci": "f1c4",
+      "fen": "rnbqkbnr/ppp1pppp/8/8/2B5/2N5/PPPP1PPP/R1BQK1NR b KQkq - 3 4",
+      "score": {
+        "cp": 28,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "d4",
+          "score": {
+            "cp": 32,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "Nf6",
+            "Nf3",
+            "g6",
+            "Bb5+",
+            "c6",
+            "Bd3",
+            "Bg7",
+            "O-O",
+            "O-O",
+            "Re1",
+            "Nbd7",
+            "Qe2",
+            "Nb6",
+            "Ne4",
+            "Nxe4",
+            "Bxe4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nf3",
+          "score": {
+            "cp": 24,
+            "mate": null
+          },
+          "line": [
+            "Nf3",
+            "Nf6",
+            "d4",
+            "g6",
+            "Bb5+",
+            "Nbd7",
+            "O-O",
+            "a6",
+            "Bd3",
+            "Bg7",
+            "Re1",
+            "O-O",
+            "Ne4",
+            "Nxe4",
+            "Rxe4",
+            "c5",
+            "Bg5",
+            "Nf6",
+            "Rh4",
+            "cxd4",
+            "Rxd4",
+            "Qb6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Bc4",
+          "score": {
+            "cp": 24,
+            "mate": null
+          },
+          "line": [
+            "Bc4",
+            "e6",
+            "Nf3",
+            "Nf6",
+            "O-O",
+            "Be7",
+            "d4",
+            "O-O",
+            "Re1",
+            "Nbd7",
+            "Bf4",
+            "a6",
+            "a4",
+            "h6",
+            "Bg3",
+            "c5"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "f3",
+          "f6",
+          "d4",
+          "g6",
+          "b5",
+          "d7",
+          "g1",
+          "a6"
+        ],
+        "best_recurring_destinations": [
+          "d4",
+          "f6",
+          "f3",
+          "g6",
+          "b5",
+          "c6",
+          "d3",
+          "g7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 4,
+      "color": "b",
+      "san": "c6",
+      "uci": "c7c6",
+      "fen": "rnbqkbnr/pp2pppp/2p5/8/2B5/2N5/PPPP1PPP/R1BQK1NR w KQkq - 0 5",
+      "score": {
+        "cp": 24,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nf6",
+          "score": {
+            "cp": 16,
+            "mate": null
+          },
+          "line": [
+            "Nf6",
+            "Nf3",
+            "Bf5",
+            "d4",
+            "e6",
+            "d5",
+            "Be7",
+            "dxe6",
+            "Qxd1+",
+            "Nxd1",
+            "Bxe6",
+            "Bxe6",
+            "fxe6"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "a6",
+          "score": {
+            "cp": 24,
+            "mate": null
+          },
+          "line": [
+            "a6",
+            "d4",
+            "Nf6",
+            "Nf3",
+            "b5",
+            "Bd3",
+            "Bb7",
+            "O-O",
+            "e6",
+            "Re1",
+            "Nbd7",
+            "a4",
+            "b4",
+            "Ne4",
+            "Bxe4",
+            "Bxe4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "e6",
+          "score": {
+            "cp": 24,
+            "mate": null
+          },
+          "line": [
+            "e6",
+            "Nf3",
+            "Nf6",
+            "O-O",
+            "Be7",
+            "d4",
+            "O-O",
+            "Re1",
+            "Nbd7",
+            "Qe2",
+            "h6",
+            "Bf4",
+            "c6",
+            "Bd3",
+            "Qb6",
+            "a3"
+          ]
+        }
+      ],
+      "comment": "[move:c6] builds a pawn screen, interfering with the diagonal and restraining the break toward [square:d5], while preparing [move:Bf5] and [move:e6]. The engine slightly preferred [move:Nf6], yet the structure stays sound around [eval:+0.24], cutting lines to [square:f7] and forcing White to prove the space grab.",
+      "classification": "structural_transformation",
+      "move_quality": "excellent",
+      "event_type": "structural_change",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [
+          "e6",
+          "d1"
+        ],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "a6",
+          "d4",
+          "f6",
+          "f3",
+          "b5",
+          "d3",
+          "b7",
+          "g1"
+        ],
+        "best_recurring_destinations": [
+          "f6",
+          "f3",
+          "f5",
+          "d4",
+          "e6",
+          "d5",
+          "e7",
+          "e6"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 5,
+      "color": "w",
+      "san": "Qe2",
+      "uci": "d1e2",
+      "fen": "rnbqkbnr/pp2pppp/2p5/8/2B5/2N5/PPPPQPPP/R1B1K1NR b KQkq - 1 5",
+      "score": {
+        "cp": 11,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nf3",
+          "score": {
+            "cp": 33,
+            "mate": null
+          },
+          "line": [
+            "Nf3",
+            "Nf6",
+            "d4",
+            "Bf5",
+            "Ne5",
+            "e6",
+            "g4",
+            "Bg6",
+            "h4",
+            "Bb4",
+            "h5",
+            "Be4",
+            "f3",
+            "Bd5",
+            "h6",
+            "g6",
+            "Bd3",
+            "Nfd7",
+            "Qe2"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "d4",
+          "score": {
+            "cp": 32,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "Bf5",
+            "g4",
+            "Bg6",
+            "f4",
+            "e6",
+            "Nf3",
+            "Be7",
+            "h4",
+            "h5",
+            "Ne5",
+            "Bxh4+",
+            "Kf1",
+            "Bf6",
+            "Nxg6",
+            "fxg6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Qe2",
+          "score": {
+            "cp": 12,
+            "mate": null
+          },
+          "line": [
+            "Qe2",
+            "Nf6",
+            "Nf3",
+            "Bf5",
+            "Ne5",
+            "e6",
+            "g4",
+            "Bg6",
+            "h4",
+            "Nfd7",
+            "d4",
+            "Nxe5",
+            "dxe5",
+            "h5",
+            "Bg5",
+            "Be7",
+            "Rd1",
+            "Nd7",
+            "Bxe7",
+            "Qxe7"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "good",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "pin"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "h4"
+        ],
+        "best_target_squares": [],
+        "played_plan_seed": "kingside_activity",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "d4",
+          "f5",
+          "g4",
+          "g6",
+          "f4",
+          "e6",
+          "f3",
+          "e7"
+        ],
+        "best_recurring_destinations": [
+          "f3",
+          "f6",
+          "d4",
+          "f5",
+          "e5",
+          "e6",
+          "g4",
+          "g6"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 5,
+      "color": "b",
+      "san": "Nf6",
+      "uci": "g8f6",
+      "fen": "rnbqkb1r/pp2pppp/2p2n2/8/2B5/2N5/PPPPQPPP/R1B1K1NR w KQkq - 2 6",
+      "score": {
+        "cp": 8,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nf6",
+          "score": {
+            "cp": 11,
+            "mate": null
+          },
+          "line": [
+            "Nf6",
+            "Nf3",
+            "Bf5",
+            "d4",
+            "e6",
+            "O-O",
+            "Bd6",
+            "Bd3",
+            "Bxd3",
+            "Qxd3",
+            "Nbd7",
+            "Bd2",
+            "O-O",
+            "Rfe1",
+            "h6",
+            "Ne4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "e6",
+          "score": {
+            "cp": 35,
+            "mate": null
+          },
+          "line": [
+            "e6",
+            "Nf3",
+            "b5",
+            "Bb3",
+            "Nf6",
+            "d4",
+            "Be7",
+            "Ne4",
+            "Nxe4",
+            "Qxe4",
+            "Nd7",
+            "O-O",
+            "Bb7",
+            "c3",
+            "Qb6",
+            "Qg4",
+            "O-O",
+            "Bc2",
+            "Nf6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "h5",
+          "score": {
+            "cp": 40,
+            "mate": null
+          },
+          "line": [
+            "h5",
+            "d4",
+            "Bg4",
+            "f3",
+            "Bf5",
+            "g4",
+            "hxg4",
+            "fxg4",
+            "Bg6",
+            "Bg5",
+            "b5",
+            "Bd3",
+            "Bxd3",
+            "Qxd3",
+            "Nf6",
+            "Nf3"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race",
+        "piece_rerouting"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d3"
+        ],
+        "best_target_squares": [
+          "d3"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "f6",
+          "f3",
+          "f5",
+          "d4",
+          "e6",
+          "g1",
+          "d6",
+          "d3"
+        ],
+        "best_recurring_destinations": [
+          "f6",
+          "f3",
+          "f5",
+          "d4",
+          "e6",
+          "g1",
+          "d6",
+          "d3"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 0
+    },
+    {
+      "mn": 6,
+      "color": "w",
+      "san": "Nf3",
+      "uci": "g1f3",
+      "fen": "rnbqkb1r/pp2pppp/2p2n2/8/2B5/2N2N2/PPPPQPPP/R1B1K2R b KQkq - 3 6",
+      "score": {
+        "cp": 12,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nf3",
+          "score": {
+            "cp": 23,
+            "mate": null
+          },
+          "line": [
+            "Nf3",
+            "Bf5",
+            "d4",
+            "e6",
+            "O-O",
+            "Be7",
+            "Rd1",
+            "Nbd7",
+            "Bd3",
+            "Bxd3",
+            "Rxd3",
+            "O-O",
+            "Ne5",
+            "Nd5",
+            "Rg3"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "h3",
+          "score": {
+            "cp": 16,
+            "mate": null
+          },
+          "line": [
+            "h3",
+            "b5",
+            "Bb3",
+            "e6",
+            "Nf3",
+            "Bd6",
+            "d4",
+            "O-O",
+            "a4",
+            "b4",
+            "Ne4",
+            "Ba6",
+            "Bc4",
+            "Nxe4",
+            "Bxa6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "d4",
+          "score": {
+            "cp": 12,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "Bg4",
+            "f3",
+            "Bc8",
+            "Be3",
+            "g6",
+            "O-O-O",
+            "Bg7",
+            "d5",
+            "Nbd7",
+            "dxc6",
+            "bxc6",
+            "Ne4",
+            "O-O",
+            "Nxf6+",
+            "Bxf6",
+            "Kb1"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "pin",
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race",
+        "piece_rerouting"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d3"
+        ],
+        "best_target_squares": [
+          "d3"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "f3",
+          "f5",
+          "d4",
+          "e6",
+          "g1",
+          "e7",
+          "d1",
+          "d7"
+        ],
+        "best_recurring_destinations": [
+          "f3",
+          "f5",
+          "d4",
+          "e6",
+          "g1",
+          "e7",
+          "d1",
+          "d7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 1
+    },
+    {
+      "mn": 6,
+      "color": "b",
+      "san": "Bf5",
+      "uci": "c8f5",
+      "fen": "rn1qkb1r/pp2pppp/2p2n2/5b2/2B5/2N2N2/PPPPQPPP/R1B1K2R w KQkq - 4 7",
+      "score": {
+        "cp": 12,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bf5",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "Bf5",
+            "O-O",
+            "e6",
+            "d4",
+            "Be7",
+            "h3",
+            "O-O",
+            "g4",
+            "Bg6",
+            "Ne5",
+            "Nd5",
+            "Ne4",
+            "Nd7",
+            "Nxg6",
+            "hxg6",
+            "Bd3",
+            "Qc7",
+            "Bd2"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "b5",
+          "score": {
+            "cp": 20,
+            "mate": null
+          },
+          "line": [
+            "b5",
+            "Bb3",
+            "e6",
+            "d3",
+            "Be7",
+            "Ne5",
+            "O-O",
+            "O-O",
+            "Qd4",
+            "a3",
+            "a5",
+            "Bd2",
+            "Nfd7",
+            "Rfe1"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "g6",
+          "score": {
+            "cp": 40,
+            "mate": null
+          },
+          "line": [
+            "g6",
+            "d4",
+            "Bg7",
+            "O-O",
+            "O-O",
+            "Re1",
+            "e6",
+            "Ne4",
+            "Nxe4",
+            "Qxe4",
+            "Nd7",
+            "c3",
+            "c5",
+            "Bg5",
+            "Qc7",
+            "Bd3",
+            "cxd4"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "positional",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "f5",
+          "g1",
+          "e6",
+          "d4",
+          "e7",
+          "h3",
+          "g8",
+          "g4"
+        ],
+        "best_recurring_destinations": [
+          "f5",
+          "g1",
+          "e6",
+          "d4",
+          "e7",
+          "h3",
+          "g8",
+          "g4"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 1
+    },
+    {
+      "mn": 7,
+      "color": "w",
+      "san": "Ne5",
+      "uci": "f3e5",
+      "fen": "rn1qkb1r/pp2pppp/2p2n2/4Nb2/2B5/2N5/PPPPQPPP/R1B1K2R b KQkq - 5 7",
+      "score": {
+        "cp": 8,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "d4",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "e6",
+            "O-O",
+            "Be7",
+            "Rd1",
+            "Nbd7",
+            "Bd3",
+            "O-O",
+            "Bxf5",
+            "exf5",
+            "Qd3",
+            "g6",
+            "Re1",
+            "Re8",
+            "Bg5",
+            "Qa5"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Ne5",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "Ne5",
+            "e6",
+            "g4",
+            "Bg6",
+            "h4",
+            "Nfd7",
+            "Nxd7",
+            "Nxd7",
+            "h5",
+            "Bxc2",
+            "d3",
+            "b5",
+            "Qxc2",
+            "bxc4",
+            "dxc4",
+            "Qc7",
+            "Be3",
+            "Ne5",
+            "Qe4",
+            "Bb4",
+            "Bf4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "O-O",
+          "score": {
+            "cp": 3,
+            "mate": null
+          },
+          "line": [
+            "O-O",
+            "e6",
+            "d4",
+            "Be7",
+            "Rd1",
+            "Nbd7",
+            "Bd3",
+            "O-O",
+            "a4",
+            "Rc8",
+            "Bxf5",
+            "exf5",
+            "Ne5",
+            "h6",
+            "Bf4",
+            "Re8"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d7"
+        ],
+        "best_target_squares": [
+          "d3",
+          "f5"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "e5",
+          "e6",
+          "g4",
+          "g6",
+          "h4",
+          "d7",
+          "d7",
+          "d7"
+        ],
+        "best_recurring_destinations": [
+          "d4",
+          "e6",
+          "g1",
+          "e7",
+          "d1",
+          "d7",
+          "d3",
+          "g8"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 1
+    },
+    {
+      "mn": 7,
+      "color": "b",
+      "san": "e6",
+      "uci": "e7e6",
+      "fen": "rn1qkb1r/pp3ppp/2p1pn2/4Nb2/2B5/2N5/PPPPQPPP/R1B1K2R w KQkq - 0 8",
+      "score": {
+        "cp": 16,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "e6",
+          "score": {
+            "cp": 12,
+            "mate": null
+          },
+          "line": [
+            "e6",
+            "g4",
+            "Bg6",
+            "h4",
+            "Nfd7",
+            "d4",
+            "Nxe5",
+            "dxe5",
+            "h5",
+            "Bg5",
+            "Be7",
+            "Bxe7",
+            "Qxe7",
+            "g5",
+            "Nd7",
+            "O-O-O",
+            "O-O-O",
+            "Bd3",
+            "Qb4",
+            "Bxg6",
+            "fxg6",
+            "Qe3",
+            "Nb6"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Bg6",
+          "score": {
+            "cp": 98,
+            "mate": null
+          },
+          "line": [
+            "Bg6",
+            "h4",
+            "Nbd7",
+            "d4",
+            "e6",
+            "h5",
+            "Bf5",
+            "f3",
+            "Nb6",
+            "g4",
+            "Nxc4",
+            "Nxc4",
+            "Bxc2",
+            "Qxc2",
+            "Qxd4",
+            "Qe2",
+            "b5",
+            "Ne5",
+            "b4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Be6",
+          "score": {
+            "cp": 140,
+            "mate": null
+          },
+          "line": [
+            "Be6",
+            "Bxe6",
+            "fxe6",
+            "O-O",
+            "Nbd7",
+            "Nf3",
+            "Qc7",
+            "Re1",
+            "e5",
+            "d4",
+            "exd4",
+            "Nxd4",
+            "e5",
+            "Ne6",
+            "Qd6",
+            "Qc4"
+          ]
+        }
+      ],
+      "comment": "[move:e6] neatly interposes on the c4 - [move:e6] line -- the engine's top choice -- shielding [square:f7] and interfering with White's coordination while keeping the center compact. This paves the way for [move:Bg6] and [move:Nfd7] to hit the [square:e5] knight and simplify, damping attacking chances and holding roughly [eval:+0.16].",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "e5",
+          "e7"
+        ],
+        "best_target_squares": [
+          "e5",
+          "e7"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "e6",
+          "g4",
+          "g6",
+          "h4",
+          "d7",
+          "d4",
+          "e5",
+          "e5"
+        ],
+        "best_recurring_destinations": [
+          "e6",
+          "g4",
+          "g6",
+          "h4",
+          "d7",
+          "d4",
+          "e5",
+          "e5"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 1
+    },
+    {
+      "mn": 8,
+      "color": "w",
+      "san": "g4",
+      "uci": "g2g4",
+      "fen": "rn1qkb1r/pp3ppp/2p1pn2/4Nb2/2B3P1/2N5/PPPPQP1P/R1B1K2R b KQkq - 0 8",
+      "score": {
+        "cp": 8,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "O-O",
+          "score": {
+            "cp": 16,
+            "mate": null
+          },
+          "line": [
+            "O-O",
+            "Be7",
+            "g4",
+            "Bg6",
+            "d4",
+            "Qxd4",
+            "Rd1",
+            "Qc5",
+            "Bf4",
+            "Nd5",
+            "Nxg6",
+            "hxg6",
+            "Be5",
+            "Nd7",
+            "Ne4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "g4",
+          "score": {
+            "cp": 10,
+            "mate": null
+          },
+          "line": [
+            "g4",
+            "Bg6",
+            "h4",
+            "Nfd7",
+            "Nxd7",
+            "Nxd7",
+            "h5",
+            "Bxc2",
+            "d3",
+            "b5",
+            "Qxc2",
+            "bxc4",
+            "dxc4",
+            "h6",
+            "Be3",
+            "Nf6",
+            "Rg1",
+            "Be7",
+            "a3"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "a3",
+          "score": {
+            "cp": 0,
+            "mate": null
+          },
+          "line": [
+            "a3",
+            "Nbd7",
+            "d4",
+            "Be7",
+            "O-O",
+            "O-O",
+            "Rd1",
+            "Qc7",
+            "Bf4",
+            "Nxe5",
+            "Bxe5",
+            "Qb6",
+            "Rab1",
+            "Bg6",
+            "Rd2",
+            "Nd7"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "excellent",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d7",
+          "c2"
+        ],
+        "best_target_squares": [
+          "g6",
+          "d4"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "g4",
+          "g6",
+          "h4",
+          "d7",
+          "d7",
+          "d7",
+          "h5",
+          "c2"
+        ],
+        "best_recurring_destinations": [
+          "g1",
+          "e7",
+          "g4",
+          "g6",
+          "d4",
+          "d4",
+          "d1",
+          "c5"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 1
+    },
+    {
+      "mn": 8,
+      "color": "b",
+      "san": "Bg6",
+      "uci": "f5g6",
+      "fen": "rn1qkb1r/pp3ppp/2p1pnb1/4N3/2B3P1/2N5/PPPPQP1P/R1B1K2R w KQkq - 1 9",
+      "score": {
+        "cp": 6,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bg6",
+          "score": {
+            "cp": 8,
+            "mate": null
+          },
+          "line": [
+            "Bg6",
+            "h4",
+            "Nfd7",
+            "Nxd7",
+            "Nxd7",
+            "h5",
+            "Bxc2",
+            "d3",
+            "b5",
+            "Qxc2",
+            "bxc4",
+            "dxc4",
+            "Nc5",
+            "Be3",
+            "Qd3",
+            "Qe2",
+            "Rb8",
+            "Rd1",
+            "Qxe2+",
+            "Nxe2",
+            "Rxb2",
+            "Bd4",
+            "Rb4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nxg4",
+          "score": {
+            "cp": 134,
+            "mate": null
+          },
+          "line": [
+            "Nxg4",
+            "Nxg4",
+            "Nd7",
+            "d3",
+            "b5",
+            "Bb3",
+            "a5",
+            "a4",
+            "Nc5",
+            "Ne5",
+            "Nxb3",
+            "cxb3",
+            "Rc8",
+            "axb5",
+            "cxb5",
+            "d4",
+            "Qb6",
+            "Qxb5+",
+            "Qxb5",
+            "Nxb5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Bxc2",
+          "score": {
+            "cp": 182,
+            "mate": null
+          },
+          "line": [
+            "Bxc2",
+            "Nxf7",
+            "Bd3",
+            "Qxe6+",
+            "Qe7",
+            "Nd6+",
+            "Kd8",
+            "Nf7+",
+            "Ke8",
+            "Bb3",
+            "Qxe6+",
+            "Bxe6",
+            "Na6",
+            "Nxh8",
+            "Nc5",
+            "Bf5",
+            "g6",
+            "g5",
+            "Bxf5",
+            "gxf6",
+            "Bd6"
+          ]
+        }
+      ],
+      "comment": "With [move:Bg6] Black tucks the bishop to a safer post, preserving it for the long haul, reinforcing control over dark central squares, and keeping the structure compact in line with a patient central buildup while keeping an eye on [square:c2]. After [move:h4] Black can calmly reroute with [move:Nfd7] to challenge White's advanced knight and re-balance the center; while a timely [move:h5] clamp could later cramp this piece, for now it stays coordinated with the rest. Compared with the more committal pawn grab [move:Bxc2], which invites classic tactics like [move:Nxf7], or the loosening [move:Nxg4] that hands White tempi for [move:d3] and [move:Bb3], this keeps options flexible -- including the choice of castling side -- and holds the balance at [eval:+0.06].",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "bad_bishop",
+        "weak_square_creation",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "positional",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d7",
+          "c2",
+          "c4"
+        ],
+        "best_target_squares": [
+          "d7",
+          "c2",
+          "c4"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "g6",
+          "h4",
+          "d7",
+          "d7",
+          "d7",
+          "h5",
+          "c2",
+          "d3"
+        ],
+        "best_recurring_destinations": [
+          "g6",
+          "h4",
+          "d7",
+          "d7",
+          "d7",
+          "h5",
+          "c2",
+          "d3"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 1
+    },
+    {
+      "mn": 9,
+      "color": "w",
+      "san": "h4",
+      "uci": "h2h4",
+      "fen": "rn1qkb1r/pp3ppp/2p1pnb1/4N3/2B3PP/2N5/PPPPQP2/R1B1K2R b KQkq - 0 9",
+      "score": {
+        "cp": 16,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "f4",
+          "score": {
+            "cp": 18,
+            "mate": null
+          },
+          "line": [
+            "f4",
+            "Nbd7",
+            "d4",
+            "Nd5",
+            "Bxd5",
+            "Nxe5",
+            "dxe5",
+            "Qh4+",
+            "Kf1",
+            "exd5",
+            "f5",
+            "Bc5",
+            "Qf3",
+            "h5",
+            "Qg3",
+            "Qxg3",
+            "hxg3",
+            "Bh7"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "h4",
+          "score": {
+            "cp": 12,
+            "mate": null
+          },
+          "line": [
+            "h4",
+            "Nfd7",
+            "d4",
+            "Nxe5",
+            "dxe5",
+            "h6",
+            "h5",
+            "Bh7",
+            "Rh3",
+            "Nd7",
+            "Bd3",
+            "Qa5",
+            "f4",
+            "Bxd3",
+            "Rxd3",
+            "Nc5",
+            "Rd4",
+            "Rd8"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "a3",
+          "score": {
+            "cp": -5,
+            "mate": null
+          },
+          "line": [
+            "a3",
+            "Nbd7",
+            "Nxg6",
+            "hxg6",
+            "g5",
+            "Nd5",
+            "Nxd5",
+            "cxd5",
+            "Bxd5",
+            "Qxg5",
+            "Bxb7",
+            "Rb8",
+            "Be4",
+            "Rxh2",
+            "d4",
+            "Rxh1+",
+            "Bxh1",
+            "Qh4",
+            "Be4"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "bad_bishop",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d7",
+          "e5"
+        ],
+        "best_target_squares": [
+          "d5",
+          "e5"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "h4",
+          "d7",
+          "d4",
+          "e5",
+          "e5",
+          "h6",
+          "h5",
+          "h7"
+        ],
+        "best_recurring_destinations": [
+          "f4",
+          "d7",
+          "d4",
+          "d5",
+          "d5",
+          "e5",
+          "e5",
+          "h4"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 1
+    },
+    {
+      "mn": 9,
+      "color": "b",
+      "san": "Bxc2",
+      "uci": "g6c2",
+      "fen": "rn1qkb1r/pp3ppp/2p1pn2/4N3/2B3PP/2N5/PPbPQP2/R1B1K2R w KQkq - 0 10",
+      "score": {
+        "cp": 221,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nfd7",
+          "score": {
+            "cp": 12,
+            "mate": null
+          },
+          "line": [
+            "Nfd7",
+            "Nxd7",
+            "Nxd7",
+            "h5",
+            "Bxc2",
+            "d3",
+            "b5",
+            "Qxc2",
+            "bxc4",
+            "dxc4",
+            "h6",
+            "Bf4",
+            "Nf6",
+            "Rd1",
+            "Qb6",
+            "O-O",
+            "Be7",
+            "Ne4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Qd4",
+          "score": {
+            "cp": 36,
+            "mate": null
+          },
+          "line": [
+            "Qd4",
+            "h5",
+            "Be4",
+            "Nxe4",
+            "Qxe5",
+            "Nxf6+",
+            "Qxf6",
+            "c3",
+            "Nd7",
+            "d4",
+            "g5",
+            "Bd2",
+            "O-O-O",
+            "O-O-O",
+            "Nb6",
+            "Bb3",
+            "Bd6",
+            "Be3",
+            "Nd5",
+            "c4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Nbd7",
+          "score": {
+            "cp": 40,
+            "mate": null
+          },
+          "line": [
+            "Nbd7",
+            "d4",
+            "Bb4",
+            "h5",
+            "Be4",
+            "O-O",
+            "Bxc3",
+            "bxc3",
+            "b5",
+            "Bb3",
+            "Bd5",
+            "Bxd5",
+            "cxd5",
+            "Qxb5",
+            "O-O",
+            "Ba3",
+            "Re8",
+            "f3",
+            "Nxe5"
+          ]
+        }
+      ],
+      "comment": "Greedy [move:Bxc2] rips a pawn but loosens control of [square:f7] and [square:e6], leaving [square:h8] hanging; from White's outpost on [square:e5], the classic [move:Nxf7] - [move:Nxh8] tactic crashes through for material.This matters because that anchored knight clamps the dark squares while Black's bishop stranded on [square:c2] can't help the king, converting the position to roughly [eval:+2.21] and shifting the race entirely to White's favor.The engine instead wants [move:Nfd7] to challenge the [square:e5] post and cover [square:f7], after which White loses the fork and Black can consolidate rather than go exchange down.",
+      "classification": "blunder",
+      "move_quality": "blunder",
+      "event_type": "positional_concession",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "critical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d4",
+          "e4",
+          "f6"
+        ],
+        "best_target_squares": [
+          "d7",
+          "c2",
+          "c4"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d4",
+          "h5",
+          "e4",
+          "e4",
+          "e5",
+          "f6",
+          "f6",
+          "c3"
+        ],
+        "best_recurring_destinations": [
+          "d7",
+          "d7",
+          "d7",
+          "h5",
+          "c2",
+          "d3",
+          "b5",
+          "c2"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 2
+    },
+    {
+      "mn": 10,
+      "color": "w",
+      "san": "Nxf7",
+      "uci": "e5f7",
+      "fen": "rn1qkb1r/pp3Npp/2p1pn2/8/2B3PP/2N5/PPbPQP2/R1B1K2R b KQkq - 0 10",
+      "score": {
+        "cp": 204,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nxf7",
+          "score": {
+            "cp": 215,
+            "mate": null
+          },
+          "line": [
+            "Nxf7",
+            "Bd3",
+            "Qxe6+",
+            "Qe7",
+            "Nd6+",
+            "Kd8",
+            "Nf7+",
+            "Ke8",
+            "Bb3",
+            "Qxe6+",
+            "Bxe6",
+            "Rg8",
+            "Ne5",
+            "Ba6",
+            "d4",
+            "Bd6",
+            "g5",
+            "Ke7",
+            "Bxg8",
+            "Nxg8",
+            "Bf4",
+            "Nd7"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "d4",
+          "score": {
+            "cp": 152,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "Qxd4",
+            "Nxf7",
+            "Qxg4",
+            "Nxh8",
+            "Bf5",
+            "Bg5",
+            "Nbd7",
+            "O-O-O",
+            "Qxe2",
+            "Bxe2",
+            "Bc5",
+            "Bd3",
+            "Bxd3",
+            "Rxd3",
+            "Ne5",
+            "Rdd1",
+            "Nf3",
+            "Kb1",
+            "Bb6",
+            "Be3"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "d3",
+          "score": {
+            "cp": 110,
+            "mate": null
+          },
+          "line": [
+            "d3",
+            "Nbd7",
+            "Nxd7",
+            "Qxd7",
+            "Qxc2",
+            "Nxg4",
+            "Qe2",
+            "h5",
+            "Be3",
+            "b5",
+            "Bb3",
+            "Be7",
+            "O-O-O",
+            "Qb7",
+            "Ne4"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "fork",
+        "pin",
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race",
+        "domination"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "e6",
+          "f7"
+        ],
+        "best_target_squares": [
+          "e6",
+          "f7"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "f7",
+          "d3",
+          "e6",
+          "e7",
+          "d6",
+          "d8",
+          "f7",
+          "e8"
+        ],
+        "best_recurring_destinations": [
+          "f7",
+          "d3",
+          "e6",
+          "e7",
+          "d6",
+          "d8",
+          "f7",
+          "e8"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 2
+    },
+    {
+      "mn": 10,
+      "color": "b",
+      "san": "Qe7",
+      "uci": "d8e7",
+      "fen": "rn2kb1r/pp2qNpp/2p1pn2/8/2B3PP/2N5/PPbPQP2/R1B1K2R w KQkq - 1 11",
+      "score": {
+        "cp": 364,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bd3",
+          "score": {
+            "cp": 198,
+            "mate": null
+          },
+          "line": [
+            "Bd3",
+            "Qxe6+",
+            "Qe7",
+            "Bb3",
+            "Qxe6+",
+            "Bxe6",
+            "Bc5",
+            "Nxh8",
+            "Ke7",
+            "Bf5",
+            "Bxf5",
+            "gxf5",
+            "Nbd7",
+            "Rg1",
+            "Re8",
+            "d3",
+            "Kf8+",
+            "Be3",
+            "Kg8",
+            "Kd2",
+            "Kxh8",
+            "Bxc5",
+            "Nxc5",
+            "Rae1",
+            "Rd8",
+            "Re7",
+            "Nxd3",
+            "Rgxg7",
+            "Nf4+",
+            "Ke3"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Qe7",
+          "score": {
+            "cp": 388,
+            "mate": null
+          },
+          "line": [
+            "Qe7",
+            "Nxh8",
+            "b5",
+            "Bxe6",
+            "Bd3",
+            "Bf7+",
+            "Kd7",
+            "Qxe7+",
+            "Bxe7",
+            "Rh3",
+            "Bc2",
+            "Bb3",
+            "Bxb3",
+            "axb3",
+            "Nxg4",
+            "d4",
+            "Nf6",
+            "Nf7",
+            "Ke8",
+            "Ne5",
+            "a5",
+            "Bd2",
+            "b4",
+            "Na4",
+            "Nd5",
+            "Rg3",
+            "g6",
+            "Bg5",
+            "Nd7",
+            "Nxc6",
+            "Bxg5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Qd7",
+          "score": {
+            "cp": 420,
+            "mate": null
+          },
+          "line": [
+            "Qd7",
+            "Nxh8",
+            "Na6",
+            "d4",
+            "Bb4",
+            "Qxc2",
+            "O-O-O",
+            "a3",
+            "Bxc3+",
+            "bxc3",
+            "b5",
+            "g5",
+            "Nd5",
+            "Be2",
+            "Rxh8",
+            "c4",
+            "bxc4",
+            "Qxc4",
+            "Nac7",
+            "Rb1",
+            "Nb6",
+            "Qc3",
+            "Ncd5",
+            "Ba6+",
+            "Kb8"
+          ]
+        }
+      ],
+      "comment": "[move:Qe7] looked tidy, eyeing [square:e6], but it deflects the queen and leaves [square:h8] unprotected; the forcing [move:Nxh8] wins the exchange. The evaluation climbs to [eval:+3.64] as lines like [pv:Nxh8 b5 Bxe6] unravel Black's coordination. Instead, [move:Bd3] was tougher, keeping more counterplay.",
+      "classification": "mistake",
+      "move_quality": "mistake",
+      "event_type": "positional_concession",
+      "tactical_motifs": [
+        "deflection",
+        "interference"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race",
+        "prophylaxis"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "e7"
+        ],
+        "best_target_squares": [
+          "e6",
+          "f5",
+          "e7"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "e7",
+          "h8",
+          "b5",
+          "e6",
+          "d3",
+          "f7",
+          "d7",
+          "e7"
+        ],
+        "best_recurring_destinations": [
+          "d3",
+          "e6",
+          "e7",
+          "b3",
+          "e6",
+          "e6",
+          "c5",
+          "h8"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 11,
+      "color": "w",
+      "san": "Nxh8",
+      "uci": "f7h8",
+      "fen": "rn2kb1N/pp2q1pp/2p1pn2/8/2B3PP/2N5/PPbPQP2/R1B1K2R b KQq - 0 11",
+      "score": {
+        "cp": 401,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nxh8",
+          "score": {
+            "cp": 405,
+            "mate": null
+          },
+          "line": [
+            "Nxh8",
+            "b5",
+            "Bxe6",
+            "Bd3",
+            "Bf7+",
+            "Kd7",
+            "Qxe7+",
+            "Bxe7",
+            "Rh3",
+            "Bc2",
+            "Bb3",
+            "Bxb3",
+            "axb3",
+            "b4",
+            "Ne2",
+            "c5",
+            "Rd3+",
+            "Ke8",
+            "g5",
+            "Ng4",
+            "Rd5",
+            "Nd7",
+            "Nf7",
+            "g6",
+            "Nd6+",
+            "Bxd6",
+            "Rxd6",
+            "Ke7",
+            "Raa6",
+            "Rf8"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Qxe6",
+          "score": {
+            "cp": 170,
+            "mate": null
+          },
+          "line": [
+            "Qxe6",
+            "Qxe6+",
+            "Bxe6",
+            "Rg8",
+            "Ng5",
+            "h6",
+            "Bxg8",
+            "Nxg8",
+            "Ne6",
+            "Na6",
+            "d4",
+            "Kd7",
+            "Nxf8+",
+            "Rxf8",
+            "Be3",
+            "Nc7",
+            "Rc1",
+            "Bh7",
+            "g5",
+            "Nd5",
+            "Nxd5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Ne5",
+          "score": {
+            "cp": 133,
+            "mate": null
+          },
+          "line": [
+            "Ne5",
+            "Nbd7",
+            "d4",
+            "Bg6",
+            "h5",
+            "Bf7",
+            "g5",
+            "Nd5",
+            "Nxf7",
+            "Kxf7",
+            "Bd3",
+            "Kg8",
+            "Qe4",
+            "Re8",
+            "a3",
+            "N7b6",
+            "Bd2",
+            "e5",
+            "dxe5",
+            "Nxc3",
+            "Bxc3"
+          ]
+        }
+      ],
+      "comment": "With [move:Nxh8], White finally snatches the trapped rook, a clean tactical shot that removes a key defender and cements the material edge. The forcing capture leaves Black's kingside in tatters and coordination broken, and the engine confirms a stable [eval:+4.01] advantage. Choosing [move:Qxe6+] instead would have let counterplay breathe.",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "removal_of_guard"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "e7",
+          "b3"
+        ],
+        "best_target_squares": [
+          "e7",
+          "b3"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "h8",
+          "b5",
+          "e6",
+          "d3",
+          "f7",
+          "d7",
+          "e7",
+          "e7"
+        ],
+        "best_recurring_destinations": [
+          "h8",
+          "b5",
+          "e6",
+          "d3",
+          "f7",
+          "d7",
+          "e7",
+          "e7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 11,
+      "color": "b",
+      "san": "Nd5",
+      "uci": "f6d5",
+      "fen": "rn2kb1N/pp2q1pp/2p1p3/3n4/2B3PP/2N5/PPbPQP2/R1B1K2R w KQq - 1 12",
+      "score": {
+        "cp": 536,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nbd7",
+          "score": {
+            "cp": 401,
+            "mate": null
+          },
+          "line": [
+            "Nbd7",
+            "d4",
+            "Nb6",
+            "b3",
+            "O-O-O",
+            "Qxc2",
+            "g6",
+            "Bg5",
+            "Nxc4",
+            "Nxg6",
+            "hxg6",
+            "bxc4",
+            "Rxd4",
+            "Rd1",
+            "Rxd1+",
+            "Qxd1",
+            "e5",
+            "Qf3",
+            "Bg7",
+            "Qe2"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "b5",
+          "score": {
+            "cp": 401,
+            "mate": null
+          },
+          "line": [
+            "b5",
+            "Bxe6",
+            "Bd3",
+            "Bf7+",
+            "Kd7",
+            "Qxe7+",
+            "Bxe7",
+            "Rh3",
+            "Bc2",
+            "Bb3",
+            "Bxb3",
+            "axb3",
+            "Nxg4",
+            "d4",
+            "Nf6",
+            "Nf7",
+            "a5",
+            "Bd2",
+            "b4",
+            "Ne2",
+            "Nd5",
+            "Ne5+",
+            "Kc7",
+            "Nf4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "g6",
+          "score": {
+            "cp": 442,
+            "mate": null
+          },
+          "line": [
+            "g6",
+            "d4",
+            "b5",
+            "Bxe6",
+            "Bd3",
+            "Bf7+",
+            "Kd7",
+            "Qxe7+",
+            "Bxe7",
+            "Rh3",
+            "Be4",
+            "Bb3",
+            "Bg2",
+            "Rg3",
+            "Bd5",
+            "g5",
+            "Nh5",
+            "Nxd5",
+            "cxd5",
+            "Rc3",
+            "Bb4",
+            "Bxd5"
+          ]
+        }
+      ],
+      "comment": "With [move:Nd5], Black interferes with coordination but actually steps into a deflection: White strikes with [move:d4], prying at [square:e6] and exposing the king on [square:d8]. The engine preferred [move:Nbd7] to keep the center sealed; after the text, the edge rises to [eval:+5.36]. Practically, [move:Bg5] and [move:Bxe6] follow forcingly, opening lines on the [file:d]-file and leaving Black's pieces overloaded.",
+      "classification": "mistake",
+      "move_quality": "mistake",
+      "event_type": "positional_concession",
+      "tactical_motifs": [
+        "deflection",
+        "interference"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "b3",
+          "e7"
+        ],
+        "best_target_squares": [
+          "g6",
+          "c4"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "b5",
+          "e6",
+          "d3",
+          "f7",
+          "d7",
+          "e7",
+          "e7",
+          "h3"
+        ],
+        "best_recurring_destinations": [
+          "d7",
+          "d4",
+          "b6",
+          "b3",
+          "c8",
+          "c2",
+          "g6",
+          "g5"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 12,
+      "color": "w",
+      "san": "d3",
+      "uci": "d2d3",
+      "fen": "rn2kb1N/pp2q1pp/2p1p3/3n4/2B3PP/2NP4/PPb1QP2/R1B1K2R b KQq - 0 12",
+      "score": {
+        "cp": 499,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "d4",
+          "score": {
+            "cp": 565,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "Nd7",
+            "Qxc2",
+            "O-O-O",
+            "Qxh7",
+            "Qf6",
+            "Qd3",
+            "Bb4",
+            "Bg5",
+            "Ne5",
+            "dxe5",
+            "Qxe5+",
+            "Kd2",
+            "Rxh8",
+            "Rae1"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "d3",
+          "score": {
+            "cp": 496,
+            "mate": null
+          },
+          "line": [
+            "d3",
+            "Nd7",
+            "Qxc2",
+            "O-O-O",
+            "Qe2",
+            "Re8",
+            "Bg5",
+            "N7f6",
+            "O-O",
+            "Qd7",
+            "Ne4",
+            "Bb4",
+            "Bxf6",
+            "Nxf6",
+            "a3",
+            "Ba5",
+            "g5",
+            "Nxe4",
+            "Qxe4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "O-O",
+          "score": {
+            "cp": 437,
+            "mate": null
+          },
+          "line": [
+            "O-O",
+            "Nf4",
+            "Qf3",
+            "Qf6",
+            "d4",
+            "Bd6",
+            "Re1",
+            "Nd7",
+            "Bxf4",
+            "Qxf4",
+            "Qxf4",
+            "Bxf4",
+            "Bxe6",
+            "O-O-O",
+            "Nf7",
+            "Re8",
+            "d5",
+            "Bg6",
+            "Ng5",
+            "h6",
+            "dxc6"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "inaccuracy",
+      "event_type": "quiet",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "inaccuracy",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d7"
+        ],
+        "best_target_squares": [
+          "e5"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d3",
+          "d7",
+          "c2",
+          "c8",
+          "e2",
+          "e8",
+          "g5",
+          "f6"
+        ],
+        "best_recurring_destinations": [
+          "d4",
+          "d7",
+          "c2",
+          "c8",
+          "h7",
+          "f6",
+          "d3",
+          "b4"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 12,
+      "color": "b",
+      "san": "Nxc3",
+      "uci": "d5c3",
+      "fen": "rn2kb1N/pp2q1pp/2p1p3/8/2B3PP/2nP4/PPb1QP2/R1B1K2R w KQq - 0 13",
+      "score": {
+        "cp": 591,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nd7",
+          "score": {
+            "cp": 505,
+            "mate": null
+          },
+          "line": [
+            "Nd7",
+            "Qxc2",
+            "O-O-O",
+            "Qe2",
+            "Re8",
+            "Bg5",
+            "N7f6",
+            "Bxd5",
+            "exd5",
+            "Qxe7",
+            "Bxe7",
+            "Nf7",
+            "Bb4+",
+            "Kf1",
+            "Nxg4",
+            "Rg1",
+            "h5",
+            "Kg2",
+            "Rf8",
+            "f3",
+            "Bc5",
+            "Nd6+",
+            "Kd7",
+            "Nxb7",
+            "Bxg1",
+            "Rxg1",
+            "Nf6",
+            "Nc5+",
+            "Kc8",
+            "Ne2"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Qd7",
+          "score": {
+            "cp": 546,
+            "mate": null
+          },
+          "line": [
+            "Qd7",
+            "Qxc2",
+            "Bb4",
+            "Kf1",
+            "Bxc3",
+            "bxc3",
+            "Na6",
+            "Bxa6",
+            "bxa6",
+            "Rb1",
+            "Kf8",
+            "c4",
+            "Nb6",
+            "h5",
+            "Kg8",
+            "h6",
+            "Kxh8",
+            "hxg7+",
+            "Qxg7",
+            "Bb2"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Na6",
+          "score": {
+            "cp": 559,
+            "mate": null
+          },
+          "line": [
+            "Na6",
+            "Bxa6",
+            "bxa6",
+            "Qxc2",
+            "Qd7",
+            "Ne4",
+            "Nb4",
+            "Qb3",
+            "Be7",
+            "O-O",
+            "Nd5",
+            "d4",
+            "Kf8",
+            "Qf3+",
+            "Kg8"
+          ]
+        }
+      ],
+      "comment": "Black plays[move:Nxc3]snatching a defender and forking[square:e2]and[square:a2], a removal of guard idea that briefly stirs counterplay.Yet the knight's interference strands the bishop on[square:c2]; after[move:bxc3]and calm consolidation, White hunts it down with[move:Qxc2], keeping the initiative.Engines preferred[move:Nd7], but despite the capture White stays clearly winning at[eval:+5.91].",
+      "classification": "inaccuracy",
+      "move_quality": "inaccuracy",
+      "event_type": "eval_swing",
+      "tactical_motifs": [
+        "removal_of_guard",
+        "deflection",
+        "interference"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "a6",
+          "c3"
+        ],
+        "best_target_squares": [
+          "d5",
+          "e7"
+        ],
+        "played_plan_seed": "kingside_activity",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d7",
+          "c2",
+          "b4",
+          "f1",
+          "c3",
+          "c3",
+          "a6",
+          "a6"
+        ],
+        "best_recurring_destinations": [
+          "d7",
+          "c2",
+          "c8",
+          "e2",
+          "e8",
+          "g5",
+          "f6",
+          "d5"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 13,
+      "color": "w",
+      "san": "bxc3",
+      "uci": "b2c3",
+      "fen": "rn2kb1N/pp2q1pp/2p1p3/8/2B3PP/2PP4/P1b1QP2/R1B1K2R b KQq - 0 13",
+      "score": {
+        "cp": 608,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "bxc3",
+          "score": {
+            "cp": 613,
+            "mate": null
+          },
+          "line": [
+            "bxc3",
+            "Nd7",
+            "Qxc2",
+            "Nb6",
+            "Bg5",
+            "Qd6",
+            "O-O",
+            "Be7",
+            "Rae1",
+            "Nxc4",
+            "dxc4",
+            "Bxg5",
+            "hxg5",
+            "O-O-O",
+            "Nf7",
+            "Qf4",
+            "Ne5",
+            "Qxg5",
+            "Qxh7",
+            "Kc7",
+            "Qe4",
+            "Rd2",
+            "Rd1"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Qxc2",
+          "score": {
+            "cp": 378,
+            "mate": null
+          },
+          "line": [
+            "Qxc2",
+            "Nb5",
+            "Bxb5",
+            "Qb4+",
+            "Bd2",
+            "Qxb5",
+            "O-O-O",
+            "Nd7",
+            "d4",
+            "Nb6",
+            "Bg5",
+            "Qc4",
+            "Qxc4",
+            "Nxc4",
+            "Rhe1",
+            "Bb4",
+            "Re4",
+            "Kd7",
+            "Nf7"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Qd2",
+          "score": {
+            "cp": 272,
+            "mate": null
+          },
+          "line": [
+            "Qd2",
+            "Nb5",
+            "Qxc2",
+            "Nd4",
+            "Qc3",
+            "Qf6",
+            "Kf1",
+            "Nd7",
+            "g5",
+            "Qf3",
+            "Qxd4",
+            "Qxh1+",
+            "Ke2",
+            "Nc5",
+            "Qf4",
+            "Be7"
+          ]
+        }
+      ],
+      "comment": "[move:bxc3] is precise: it captures while cutting Black's lines and strangling counterplay, especially [move:Qb4+] and [move:Nb5], leaving the bishop on [square:c2] loose. White now targets [move:Qxc2], consolidating a huge edge [eval:+6.08] and freeing the [file:b]-file for rook pressure.",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "g5",
+          "c4"
+        ],
+        "best_target_squares": [
+          "g5",
+          "c4"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "c3",
+          "d7",
+          "c2",
+          "b6",
+          "g5",
+          "d6",
+          "g1",
+          "e7"
+        ],
+        "best_recurring_destinations": [
+          "c3",
+          "d7",
+          "c2",
+          "b6",
+          "g5",
+          "d6",
+          "g1",
+          "e7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 13,
+      "color": "b",
+      "san": "Ba4",
+      "uci": "c2a4",
+      "fen": "rn2kb1N/pp2q1pp/2p1p3/8/b1B3PP/2PP4/P3QP2/R1B1K2R w KQq - 1 14",
+      "score": {
+        "cp": 843,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nd7",
+          "score": {
+            "cp": 606,
+            "mate": null
+          },
+          "line": [
+            "Nd7",
+            "Qxc2",
+            "b5",
+            "Bb3",
+            "O-O-O",
+            "d4",
+            "Kb7",
+            "Qxh7",
+            "e5",
+            "Ng6",
+            "Qe8",
+            "Nxf8",
+            "Qxf8",
+            "Bg5",
+            "Nf6",
+            "Bxf6",
+            "Qxf6",
+            "g5",
+            "Qe7"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Kd7",
+          "score": {
+            "cp": 668,
+            "mate": null
+          },
+          "line": [
+            "Kd7",
+            "Qxc2",
+            "b5",
+            "Bb3",
+            "a5",
+            "a4",
+            "b4",
+            "d4",
+            "Kc7",
+            "Bf4+",
+            "Kb7",
+            "Qxh7",
+            "Nd7",
+            "Ng6",
+            "Qf7",
+            "h5",
+            "Qf6",
+            "h6",
+            "bxc3"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "h6",
+          "score": {
+            "cp": 671,
+            "mate": null
+          },
+          "line": [
+            "h6",
+            "Qxc2",
+            "Nd7",
+            "d4",
+            "O-O-O",
+            "Qe4",
+            "Kb8",
+            "Ng6",
+            "Qe8",
+            "Bxe6",
+            "Bd6",
+            "O-O",
+            "Ka8",
+            "Rb1",
+            "Nf8",
+            "Bf5",
+            "Nxg6",
+            "Bxg6",
+            "Qe7"
+          ]
+        }
+      ],
+      "comment": "With [move:Ba4], Black miscoordinates, letting [move:Bg5] interfere with the queen's guard of [square:e6], and the advantage swells to [eval:+8.43]. The forcing idea is [move:Bg5], then [move:Bxe7] [move:Bxe7] [move:Qxe6], decoying the [square:e7] bishop and crashing through while the bishop on [square:a4] stays offside; had [move:Nd7] come, Black could regroup toward [move:O-O-O] and contest [square:d4].",
+      "classification": "blunder",
+      "move_quality": "blunder",
+      "event_type": "positional_concession",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race",
+        "prophylaxis"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "d7",
+          "c2",
+          "b5",
+          "b3",
+          "a5",
+          "a4",
+          "b4",
+          "d4"
+        ],
+        "best_recurring_destinations": [
+          "d7",
+          "c2",
+          "b5",
+          "b3",
+          "c8",
+          "d4",
+          "b7",
+          "h7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 14,
+      "color": "w",
+      "san": "Bg5",
+      "uci": "c1g5",
+      "fen": "rn2kb1N/pp2q1pp/2p1p3/6B1/b1B3PP/2PP4/P3QP2/R3K2R b KQq - 2 14",
+      "score": {
+        "cp": 847,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bg5",
+          "score": {
+            "cp": 847,
+            "mate": null
+          },
+          "line": [
+            "Bg5",
+            "Nd7",
+            "Bxe7",
+            "Bxe7",
+            "Qxe6",
+            "Bb5",
+            "Qg8+",
+            "Bf8",
+            "Qf7+",
+            "Kd8",
+            "Be6",
+            "Be7",
+            "Qxg7",
+            "Nc5",
+            "Bf5",
+            "Bxd3",
+            "O-O-O",
+            "Kc7",
+            "Qxe7+",
+            "Kb6",
+            "Nf7",
+            "Bc4",
+            "Ne5",
+            "Bd5",
+            "Rhe1",
+            "Bxa2"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Rb1",
+          "score": {
+            "cp": 753,
+            "mate": null
+          },
+          "line": [
+            "Rb1",
+            "Nd7",
+            "Rxb7",
+            "Bb5",
+            "Bg5",
+            "Bxc4",
+            "Bxe7",
+            "Bxe7",
+            "dxc4",
+            "Nc5",
+            "Rc7",
+            "Rd8",
+            "Qf3",
+            "Nd3+",
+            "Kf1",
+            "Ne5",
+            "Qe2",
+            "Bf6",
+            "g5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Bxe6",
+          "score": {
+            "cp": 716,
+            "mate": null
+          },
+          "line": [
+            "Bxe6",
+            "Nd7",
+            "Bg5",
+            "Nf6",
+            "O-O",
+            "Rd8",
+            "Rfe1",
+            "Rd6",
+            "Bf5",
+            "Qxe2",
+            "Rxe2+",
+            "Kd8",
+            "Nf7+",
+            "Kc7",
+            "Nxd6",
+            "Bxd6",
+            "Bxf6",
+            "gxf6",
+            "Re6",
+            "Bb5",
+            "c4",
+            "Bxc4",
+            "dxc4",
+            "Bf4",
+            "Rxf6",
+            "Bd2",
+            "Rf7+",
+            "Kb6",
+            "Rxh7"
+          ]
+        }
+      ],
+      "comment": "[move:Bg5] targets the queen on [square:e7] and provokes a clean deflection. After [move:Bxe7] [move:Bxe7] [move:Qxe6], the f8-bishop is dragged off defense and White crashes through, keeping a near-winning grip [eval:+8.47] and forcing Black into damage-limiting choices.",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "e7",
+          "e6"
+        ],
+        "best_target_squares": [
+          "e7",
+          "e6"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "g5",
+          "d7",
+          "e7",
+          "e7",
+          "e6",
+          "b5",
+          "g8",
+          "f8"
+        ],
+        "best_recurring_destinations": [
+          "g5",
+          "d7",
+          "e7",
+          "e7",
+          "e6",
+          "b5",
+          "g8",
+          "f8"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 14,
+      "color": "b",
+      "san": "Qd6",
+      "uci": "e7d6",
+      "fen": "rn2kb1N/pp4pp/2pqp3/6B1/b1B3PP/2PP4/P3QP2/R3K2R w KQq - 3 15",
+      "score": {
+        "cp": 854,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Qd6",
+          "score": {
+            "cp": 875,
+            "mate": null
+          },
+          "line": [
+            "Qd6",
+            "Bxe6",
+            "h6",
+            "Nf7",
+            "Nd7",
+            "Bb3+",
+            "Qe5",
+            "Nxe5",
+            "Bxb3",
+            "Ng6+",
+            "Kf7",
+            "Qf3+",
+            "Nf6",
+            "Qf5",
+            "Kg8",
+            "axb3"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nd7",
+          "score": {
+            "cp": 911,
+            "mate": null
+          },
+          "line": [
+            "Nd7",
+            "Bxe7",
+            "Kxe7",
+            "Rb1",
+            "b6",
+            "Qxe6+",
+            "Kd8",
+            "Nf7+",
+            "Kc7",
+            "Ba6",
+            "Rb8",
+            "O-O",
+            "b5",
+            "Qe3",
+            "Rb6",
+            "Qf4+",
+            "Ne5",
+            "Nxe5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Bb5",
+          "score": {
+            "cp": 932,
+            "mate": null
+          },
+          "line": [
+            "Bb5",
+            "Bxe7",
+            "Bxe7",
+            "Qxe6",
+            "Nd7",
+            "Bb3",
+            "Nc5",
+            "Qg8+",
+            "Kd7",
+            "Qxa8",
+            "Bxd3",
+            "Qxa7",
+            "Kc8",
+            "Bg8",
+            "Kc7",
+            "Nf7",
+            "Be4",
+            "O-O",
+            "Nd3",
+            "Qd4"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race",
+        "prophylaxis"
+      ],
+      "move_category": "prophylactic",
+      "plan_comparison": {
+        "played_target_squares": [
+          "f7",
+          "b3",
+          "e5"
+        ],
+        "best_target_squares": [
+          "f7",
+          "b3",
+          "e5"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d6",
+          "e6",
+          "h6",
+          "f7",
+          "d7",
+          "b3",
+          "e5",
+          "e5"
+        ],
+        "best_recurring_destinations": [
+          "d6",
+          "e6",
+          "h6",
+          "f7",
+          "d7",
+          "b3",
+          "e5",
+          "e5"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 15,
+      "color": "w",
+      "san": "Qxe6+",
+      "uci": "e2e6",
+      "fen": "rn2kb1N/pp4pp/2pqQ3/6B1/b1B3PP/2PP4/P4P2/R3K2R b KQq - 0 15",
+      "score": {
+        "cp": 580,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bxe6",
+          "score": {
+            "cp": 864,
+            "mate": null
+          },
+          "line": [
+            "Bxe6",
+            "Be7",
+            "Nf7",
+            "Qc5",
+            "O-O",
+            "Bxg5",
+            "Nxg5",
+            "Nd7",
+            "Bf7+",
+            "Kf8",
+            "Rae1",
+            "Ne5",
+            "Ne6+",
+            "Kxf7",
+            "Nxc5",
+            "h5",
+            "Qxe5",
+            "hxg4",
+            "Nxa4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Qf3",
+          "score": {
+            "cp": 798,
+            "mate": null
+          },
+          "line": [
+            "Qf3",
+            "Qd7",
+            "Kd2",
+            "Bb5",
+            "Bxe6",
+            "Qxd3+",
+            "Qxd3",
+            "Bxd3",
+            "Rae1",
+            "Bd6",
+            "Bf5+",
+            "Kf8",
+            "Kxd3",
+            "Na6",
+            "Bxh7",
+            "Re8",
+            "Rxe8+",
+            "Kxe8",
+            "Bf5",
+            "Kf8",
+            "Re1",
+            "Nc5+",
+            "Kc4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Rb1",
+          "score": {
+            "cp": 741,
+            "mate": null
+          },
+          "line": [
+            "Rb1",
+            "Nd7",
+            "Bxe6",
+            "Ne5",
+            "Bc4",
+            "Be7",
+            "Rxb7",
+            "O-O-O",
+            "Bxe7",
+            "Nxd3+",
+            "Kf1",
+            "Qf4",
+            "Nf7",
+            "Qc1+",
+            "Kg2",
+            "Nf4+",
+            "Kh2",
+            "Qxc3",
+            "Qf1",
+            "Kxb7",
+            "Ba6+",
+            "Ka8",
+            "Nxd8"
+          ]
+        }
+      ],
+      "comment": "[move:Qxe6+] captures with check but forces an early queen trade, defusing the fork/deflection squeeze and letting Black coordinate. The result is only [eval:+5.80] despite material, as counterplay appears along the [file:e] file. Better was [move:Bxe6], keeping kingside pressure and preserving fork threats with ideas like [move:Nf7] and [move:Bb3+].",
+      "classification": "blunder",
+      "move_quality": "blunder",
+      "event_type": "positional_concession",
+      "tactical_motifs": [
+        "fork",
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "open_file_occupation",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d3"
+        ],
+        "best_target_squares": [
+          "f7",
+          "g5"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "kingside_activity",
+        "played_recurring_destinations": [
+          "f3",
+          "d7",
+          "d2",
+          "b5",
+          "e6",
+          "d3",
+          "d3",
+          "d3"
+        ],
+        "best_recurring_destinations": [
+          "e6",
+          "e7",
+          "f7",
+          "c5",
+          "g1",
+          "g5",
+          "g5",
+          "d7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 3
+    },
+    {
+      "mn": 15,
+      "color": "b",
+      "san": "Qxe6+",
+      "uci": "d6e6",
+      "fen": "rn2kb1N/pp4pp/2p1q3/6B1/b1B3PP/2PP4/P4P2/R3K2R w KQq - 0 16",
+      "score": {
+        "cp": 568,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Qxe6+",
+          "score": {
+            "cp": 597,
+            "mate": null
+          },
+          "line": [
+            "Qxe6+",
+            "Bxe6",
+            "Bd6",
+            "Kd2",
+            "Nd7",
+            "Nf7",
+            "Be7",
+            "Rae1",
+            "Nf6",
+            "Bxf6",
+            "gxf6",
+            "Nh6",
+            "Bb5",
+            "Nf5",
+            "Bf8",
+            "g5",
+            "Kd8",
+            "gxf6",
+            "Kc7",
+            "Rhg1",
+            "Rd8",
+            "d4",
+            "c5",
+            "d5",
+            "Be8",
+            "Rg7+",
+            "Bxg7",
+            "fxg7",
+            "Bg6",
+            "d6+",
+            "Kc6"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Be7",
+          "score": {
+            "cp": 950,
+            "mate": null
+          },
+          "line": [
+            "Be7",
+            "Qg8+",
+            "Kd7",
+            "Nf7",
+            "Qa3",
+            "O-O",
+            "Kc7",
+            "Bf4+",
+            "Kb6",
+            "Qc8",
+            "Bb5",
+            "Rab1",
+            "a6",
+            "Nd8",
+            "Bxd8",
+            "Qxd8+",
+            "Ka7",
+            "Qc7",
+            "Qc5",
+            "Be3"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Qe7",
+          "score": {
+            "cp": null,
+            "mate": 5
+          },
+          "line": [
+            "Qe7",
+            "Bxe7",
+            "Bxe7",
+            "Qc8+",
+            "Bd8",
+            "Bf7+",
+            "Ke7",
+            "Qe6+",
+            "Kf8",
+            "Qe8#"
+          ]
+        }
+      ],
+      "comment": "[move:Qxe6+]recaptures with check, forcing queens off and stripping a key defender.It deflects the bishop to[square:e6], so[move:Bd6]lands with tempo, choking White's threats.Engine approves, holding about[eval:+5.68], and steers play to the[file:e]-file where simplification helps Black survive.",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "fork",
+        "removal_of_guard",
+        "deflection",
+        "overloaded_piece"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "open_file_occupation",
+        "opposite_side_castling_race",
+        "domination"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "f6",
+          "e6"
+        ],
+        "best_target_squares": [
+          "f6",
+          "e6"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "e6",
+          "e6",
+          "d6",
+          "d2",
+          "d7",
+          "f7",
+          "e7",
+          "e1"
+        ],
+        "best_recurring_destinations": [
+          "e6",
+          "e6",
+          "d6",
+          "d2",
+          "d7",
+          "f7",
+          "e7",
+          "e1"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 16,
+      "color": "w",
+      "san": "Bxe6",
+      "uci": "c4e6",
+      "fen": "rn2kb1N/pp4pp/2p1B3/6B1/b5PP/2PP4/P4P2/R3K2R b KQq - 0 16",
+      "score": {
+        "cp": 581,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bxe6",
+          "score": {
+            "cp": 570,
+            "mate": null
+          },
+          "line": [
+            "Bxe6",
+            "Bd6",
+            "Kd2",
+            "Nd7",
+            "Nf7",
+            "Be7",
+            "Rae1",
+            "Nf6",
+            "h5",
+            "b5",
+            "h6",
+            "g6",
+            "Ne5",
+            "Nd5",
+            "Bxe7",
+            "Kxe7",
+            "Nxc6+",
+            "Kd6",
+            "Bxd5",
+            "Kxd5",
+            "Nd4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Kd2",
+          "score": {
+            "cp": 3,
+            "mate": null
+          },
+          "line": [
+            "Kd2",
+            "Qxg4",
+            "Rhe1+",
+            "Kd7",
+            "Nf7",
+            "Qf5",
+            "Re5",
+            "Qxf2+",
+            "Re2",
+            "Qxe2+",
+            "Kxe2",
+            "b5",
+            "Bb3",
+            "Bxb3",
+            "axb3",
+            "a5",
+            "Bf4",
+            "Ke7"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Kf1",
+          "score": {
+            "cp": 0,
+            "mate": null
+          },
+          "line": [
+            "Kf1",
+            "Qxg4",
+            "Re1+",
+            "Kd7",
+            "Nf7",
+            "Qf5",
+            "Re5",
+            "Qg4",
+            "Re4",
+            "Qxe4",
+            "dxe4",
+            "Na6",
+            "Ne5+",
+            "Kc7",
+            "Nd3",
+            "Nc5",
+            "Bf4+",
+            "Kd7"
+          ]
+        }
+      ],
+      "comment": "[move:Bxe6] calmly recaptures, eliminating Black's queen and removing the key guard of [square:d7] and [square:f7], stifling counterplay and fixing weaknesses. It consolidates the bind and heads for a won ending, engine-backed at [eval:+5.7]. Likely continuation: [pv:Bxe6 Bd6 Kd2 Nd7 Nf7 Be7 Rae1 Nf6].",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "removal_of_guard"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "e6",
+          "d6",
+          "d2",
+          "d7",
+          "f7",
+          "e7",
+          "e1",
+          "f6"
+        ],
+        "best_recurring_destinations": [
+          "e6",
+          "d6",
+          "d2",
+          "d7",
+          "f7",
+          "e7",
+          "e1",
+          "f6"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 16,
+      "color": "b",
+      "san": "h6",
+      "uci": "h7h6",
+      "fen": "rn2kb1N/pp4p1/2p1B2p/6B1/b5PP/2PP4/P4P2/R3K2R w KQq - 0 17",
+      "score": {
+        "cp": 626,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bc5",
+          "score": {
+            "cp": 593,
+            "mate": null
+          },
+          "line": [
+            "Bc5",
+            "Kd2",
+            "Nd7",
+            "Rae1",
+            "Nf6",
+            "h5",
+            "h6",
+            "Bf4",
+            "Bb5",
+            "d4",
+            "Ba3",
+            "g5",
+            "hxg5",
+            "Bxg5",
+            "Be7",
+            "Bf5",
+            "Kd8",
+            "Nf7+",
+            "Ke8",
+            "Bxf6",
+            "gxf6",
+            "Nd6+",
+            "Kf8",
+            "Nxb7"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Bd6",
+          "score": {
+            "cp": 597,
+            "mate": null
+          },
+          "line": [
+            "Bd6",
+            "Kd2",
+            "h6",
+            "Rae1",
+            "hxg5",
+            "Bc8+",
+            "Kd8",
+            "Bxb7",
+            "Bf4+",
+            "Ke2",
+            "Nd7",
+            "Bxa8",
+            "Ne5",
+            "h5",
+            "Bc2",
+            "Rh3",
+            "Nxg4",
+            "Bxc6",
+            "Ne5",
+            "Be4",
+            "g4",
+            "Rh4",
+            "Kc7",
+            "Ng6",
+            "Bxd3+",
+            "Bxd3",
+            "Nxg6",
+            "hxg6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "c5",
+          "score": {
+            "cp": 622,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Kd2",
+            "Bd6",
+            "Nf7",
+            "Bc7",
+            "Rhe1",
+            "Kf8",
+            "Ne5",
+            "Bc6",
+            "h5",
+            "a5",
+            "h6",
+            "g6",
+            "Nxc6",
+            "Nxc6",
+            "Rab1",
+            "Rb8",
+            "Bd5",
+            "a4",
+            "f4"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "good",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [],
+        "best_target_squares": [],
+        "played_plan_seed": "unclear",
+        "best_plan_seed": "unclear",
+        "played_recurring_destinations": [
+          "d6",
+          "d2",
+          "h6",
+          "e1",
+          "g5",
+          "c8",
+          "d8",
+          "b7"
+        ],
+        "best_recurring_destinations": [
+          "c5",
+          "d2",
+          "d7",
+          "e1",
+          "f6",
+          "h5",
+          "h6",
+          "f4"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 17,
+      "color": "w",
+      "san": "Bf7+",
+      "uci": "e6f7",
+      "fen": "rn2kb1N/pp3Bp1/2p4p/6B1/b5PP/2PP4/P4P2/R3K2R b KQq - 1 17",
+      "score": {
+        "cp": 494,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bf4",
+          "score": {
+            "cp": 630,
+            "mate": null
+          },
+          "line": [
+            "Bf4",
+            "c5",
+            "Kd2",
+            "Nc6",
+            "Rab1",
+            "b6",
+            "Rhe1",
+            "Ne7",
+            "Nf7",
+            "Bc6",
+            "Bg3",
+            "Bd7",
+            "Bd5",
+            "Rc8",
+            "f3",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Bd6",
+            "Rc6",
+            "Bxc6",
+            "Bxc6",
+            "Nxg5",
+            "Kd7",
+            "Be5",
+            "Ng6",
+            "c4",
+            "Nxe5",
+            "Rxe5"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Be3",
+          "score": {
+            "cp": 533,
+            "mate": null
+          },
+          "line": [
+            "Be3",
+            "Bd6",
+            "Kd2",
+            "Nd7",
+            "Bf5",
+            "c5",
+            "Rhe1",
+            "Kf8",
+            "Ng6+",
+            "Kf7",
+            "Bf4",
+            "Bxf4+",
+            "Nxf4",
+            "Nf8",
+            "Be4",
+            "Bc6",
+            "Bxc6",
+            "bxc6",
+            "Rab1"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Bf7+",
+          "score": {
+            "cp": 505,
+            "mate": null
+          },
+          "line": [
+            "Bf7+",
+            "Kd7",
+            "Bf4",
+            "Bd6",
+            "Ng6",
+            "Bxf4",
+            "Nxf4",
+            "Na6",
+            "Ng6",
+            "Rd8",
+            "Kd2",
+            "Nc5",
+            "Rhe1",
+            "Kc8",
+            "d4",
+            "Na6",
+            "Be6+",
+            "Kb8",
+            "Bb3",
+            "Bxb3",
+            "axb3",
+            "Ka8"
+          ]
+        }
+      ],
+      "comment": "White fires a flashy zwischenzug with [move:Bf7+] to gain a tempo, but it lets Black centralize with [move:Kd7] and reanimate pressure on [square:c5]. The engine prefers [move:Bf4], clamping [square:f4] and heading for [move:Kd2] and [move:Rhe1]; this check loosens control, dropping to [eval:+4.94].",
+      "classification": "mistake",
+      "move_quality": "mistake",
+      "event_type": "positional_concession",
+      "tactical_motifs": [
+        "zwischenzug"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "f4"
+        ],
+        "best_target_squares": [
+          "c6"
+        ],
+        "played_plan_seed": "kingside_activity",
+        "best_plan_seed": "queenside_activity",
+        "played_recurring_destinations": [
+          "e3",
+          "d6",
+          "d2",
+          "d7",
+          "f5",
+          "c5",
+          "e1",
+          "f8"
+        ],
+        "best_recurring_destinations": [
+          "f4",
+          "c5",
+          "d2",
+          "c6",
+          "b1",
+          "b6",
+          "e1",
+          "e7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 17,
+      "color": "b",
+      "san": "Kd7",
+      "uci": "e8d7",
+      "fen": "rn3b1N/pp1k1Bp1/2p4p/6B1/b5PP/2PP4/P4P2/R3K2R w KQ - 2 18",
+      "score": {
+        "cp": 521,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Kd7",
+          "score": {
+            "cp": 518,
+            "mate": null
+          },
+          "line": [
+            "Kd7",
+            "Bf4",
+            "Bd6",
+            "Ng6",
+            "Bxf4",
+            "Nxf4",
+            "Na6",
+            "Ng6",
+            "c5",
+            "Kd2",
+            "Kd6",
+            "Rae1",
+            "Bd7",
+            "Re7",
+            "Nc7",
+            "Rhe1",
+            "Bxg4",
+            "Bb3",
+            "Bf5",
+            "Rxg7",
+            "Re8",
+            "Nf4",
+            "Rxe1",
+            "Kxe1",
+            "b6",
+            "Kd2"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "positional",
+      "plan_comparison": {
+        "played_target_squares": [
+          "f4",
+          "d6",
+          "g6"
+        ],
+        "best_target_squares": [
+          "f4",
+          "d6",
+          "g6"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d7",
+          "f4",
+          "d6",
+          "g6",
+          "f4",
+          "f4",
+          "a6",
+          "g6"
+        ],
+        "best_recurring_destinations": [
+          "d7",
+          "f4",
+          "d6",
+          "g6",
+          "f4",
+          "f4",
+          "a6",
+          "g6"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 18,
+      "color": "w",
+      "san": "Bf4",
+      "uci": "g5f4",
+      "fen": "rn3b1N/pp1k1Bp1/2p4p/8/b4BPP/2PP4/P4P2/R3K2R b KQ - 3 18",
+      "score": {
+        "cp": 522,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bf4",
+          "score": {
+            "cp": 526,
+            "mate": null
+          },
+          "line": [
+            "Bf4",
+            "Bd6",
+            "Ng6",
+            "c5",
+            "Kd2",
+            "Kc7",
+            "Bxd6+",
+            "Kxd6",
+            "Rae1",
+            "Bd7",
+            "Re5",
+            "Nc6",
+            "Rd5+",
+            "Kc7",
+            "Rxc5",
+            "Bxg4",
+            "Rg1",
+            "h5",
+            "Rg5",
+            "Nd8",
+            "Bd5",
+            "Kd6",
+            "Nf4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Ng6",
+          "score": {
+            "cp": 521,
+            "mate": null
+          },
+          "line": [
+            "Ng6",
+            "hxg5",
+            "Nxf8+",
+            "Ke7",
+            "Ne6",
+            "Nd7",
+            "Nxg5",
+            "Ne5",
+            "Bb3",
+            "Bb5",
+            "Kd2",
+            "Rf8",
+            "Rae1",
+            "Kd6",
+            "Re2",
+            "Nf3+",
+            "Nxf3",
+            "Rxf3",
+            "Re8"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Be3",
+          "score": {
+            "cp": 487,
+            "mate": null
+          },
+          "line": [
+            "Be3",
+            "c5",
+            "Ng6",
+            "Bd6",
+            "Kd2",
+            "Nc6",
+            "Bd5",
+            "Kc7",
+            "g5",
+            "Re8",
+            "gxh6",
+            "gxh6",
+            "Bxh6",
+            "Ne5",
+            "Nxe5",
+            "Rxe5",
+            "Be4",
+            "b6",
+            "Rhe1",
+            "Bc6"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race",
+        "prophylaxis",
+        "domination"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d6"
+        ],
+        "best_target_squares": [
+          "d6"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "f4",
+          "d6",
+          "g6",
+          "c5",
+          "d2",
+          "c7",
+          "d6",
+          "d6"
+        ],
+        "best_recurring_destinations": [
+          "f4",
+          "d6",
+          "g6",
+          "c5",
+          "d2",
+          "c7",
+          "d6",
+          "d6"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 18,
+      "color": "b",
+      "san": "Na6",
+      "uci": "b8a6",
+      "fen": "r4b1N/pp1k1Bp1/n1p4p/8/b4BPP/2PP4/P4P2/R3K2R w KQ - 4 19",
+      "score": {
+        "cp": 533,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "c5",
+          "score": {
+            "cp": 529,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Ng6",
+            "Bd6",
+            "Kd2",
+            "Kc7",
+            "Bxd6+",
+            "Kxd6",
+            "Rae1",
+            "Bd7",
+            "Re5",
+            "b6",
+            "Rd5+",
+            "Kc7",
+            "Re1",
+            "Nc6",
+            "Nf4",
+            "Rf8",
+            "Be6",
+            "Nb8",
+            "Rf5",
+            "Rxf5",
+            "gxf5",
+            "Nc6",
+            "Bxd7",
+            "Kxd7",
+            "Ne6",
+            "Nd8",
+            "Nxg7"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Bd6",
+          "score": {
+            "cp": 529,
+            "mate": null
+          },
+          "line": [
+            "Bd6",
+            "Ng6",
+            "Na6",
+            "Bxd6",
+            "Kxd6",
+            "Kd2",
+            "Nc7",
+            "Rae1",
+            "c5",
+            "Re7",
+            "Bc6",
+            "Rhe1",
+            "Rd8",
+            "f4",
+            "Rd7",
+            "Bb3",
+            "a5",
+            "R7e5",
+            "a4",
+            "Ne7",
+            "Rxe7",
+            "Rxe7",
+            "axb3"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Na6",
+          "score": {
+            "cp": 532,
+            "mate": null
+          },
+          "line": [
+            "Na6",
+            "Ng6",
+            "Bd6",
+            "Bxd6",
+            "Kxd6",
+            "Kd2",
+            "Nc7",
+            "Rhe1",
+            "c5",
+            "Re7",
+            "Bd7",
+            "Rae1",
+            "b6",
+            "Bb3",
+            "Re8",
+            "Rxg7",
+            "Rxe1",
+            "Kxe1",
+            "Bxg4",
+            "Nf4",
+            "Bf5",
+            "Rf7",
+            "Ke5",
+            "Rxc7",
+            "Kxf4"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "interference"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d6",
+          "e1"
+        ],
+        "best_target_squares": [
+          "d6"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d6",
+          "g6",
+          "a6",
+          "d6",
+          "d6",
+          "d2",
+          "c7",
+          "e1"
+        ],
+        "best_recurring_destinations": [
+          "c5",
+          "g6",
+          "d6",
+          "d2",
+          "c7",
+          "d6",
+          "d6",
+          "e1"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 19,
+      "color": "w",
+      "san": "Ng6",
+      "uci": "h8g6",
+      "fen": "r4b2/pp1k1Bp1/n1p3Np/8/b4BPP/2PP4/P4P2/R3K2R b KQ - 5 19",
+      "score": {
+        "cp": 532,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Kd2",
+          "score": {
+            "cp": 548,
+            "mate": null
+          },
+          "line": [
+            "Kd2",
+            "Bd6",
+            "Bxd6",
+            "Kxd6",
+            "Ng6",
+            "c5",
+            "Rae1",
+            "Bd7",
+            "Re7",
+            "Nc7",
+            "Rhe1",
+            "b5",
+            "Bb3",
+            "Re8",
+            "Rxg7",
+            "Rxe1",
+            "Kxe1",
+            "Bxg4",
+            "Nf4",
+            "Bf5",
+            "Rf7",
+            "Bxd3",
+            "Nxd3"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Bg6",
+          "score": {
+            "cp": 548,
+            "mate": null
+          },
+          "line": [
+            "Bg6",
+            "Bd6",
+            "Bxd6",
+            "Kxd6",
+            "Nf7+",
+            "Kc5",
+            "d4+",
+            "Kb6",
+            "Rb1+",
+            "Kc7",
+            "Kd2",
+            "Rf8",
+            "Rhe1",
+            "Kb8",
+            "Re7",
+            "b6",
+            "c4",
+            "c5",
+            "d5",
+            "Re8",
+            "d6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Ng6",
+          "score": {
+            "cp": 547,
+            "mate": null
+          },
+          "line": [
+            "Ng6",
+            "Nc7",
+            "Kd2",
+            "Bd6",
+            "Bxd6",
+            "Kxd6",
+            "Rae1",
+            "c5",
+            "Re7",
+            "Bd7",
+            "Rhe1",
+            "a5",
+            "Bb3",
+            "Re8",
+            "Rxg7",
+            "Rxe1",
+            "Kxe1",
+            "Bxg4",
+            "Nf4",
+            "Bf5",
+            "Rf7",
+            "Bg4",
+            "Kd2"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "excellent",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d6"
+        ],
+        "best_target_squares": [
+          "d6",
+          "e1"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "g6",
+          "d6",
+          "d6",
+          "d6",
+          "f7",
+          "c5",
+          "d4",
+          "b6"
+        ],
+        "best_recurring_destinations": [
+          "d2",
+          "d6",
+          "d6",
+          "d6",
+          "g6",
+          "c5",
+          "e1",
+          "d7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 19,
+      "color": "b",
+      "san": "Bd6",
+      "uci": "f8d6",
+      "fen": "r7/pp1k1Bp1/n1pb2Np/8/b4BPP/2PP4/P4P2/R3K2R w KQ - 6 20",
+      "score": {
+        "cp": 556,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bd6",
+          "score": {
+            "cp": 553,
+            "mate": null
+          },
+          "line": [
+            "Bd6",
+            "Bxd6",
+            "Kxd6",
+            "Kd2",
+            "c5",
+            "Rae1",
+            "Bd7",
+            "Re7",
+            "Nc7",
+            "Rhe1",
+            "Rd8",
+            "Bb3",
+            "Re8",
+            "Rxg7",
+            "Rxe1",
+            "Kxe1",
+            "Bxg4",
+            "f4",
+            "Be6",
+            "Bxe6",
+            "Nxe6",
+            "Rxb7"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nc7",
+          "score": {
+            "cp": 558,
+            "mate": null
+          },
+          "line": [
+            "Nc7",
+            "Kd2",
+            "Bc5",
+            "Rhe1",
+            "Rd8",
+            "Re4",
+            "Bb5",
+            "a4",
+            "Ba6",
+            "d4",
+            "Bd6",
+            "Bxd6",
+            "Kxd6",
+            "Re7",
+            "Rd7",
+            "Rxd7+",
+            "Kxd7",
+            "Re1",
+            "b5",
+            "Bb3",
+            "bxa4",
+            "Re7+",
+            "Kc8",
+            "Bxa4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "c5",
+          "score": {
+            "cp": 559,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Kd2",
+            "Bd6",
+            "Bxd6",
+            "Kxd6",
+            "Rhe1",
+            "Nc7",
+            "Re7",
+            "Rd8",
+            "Rae1",
+            "Rd7",
+            "Bb3",
+            "Bc6",
+            "R7e5",
+            "Rd8",
+            "f4",
+            "a5",
+            "Ne7",
+            "Bd7"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d6",
+          "e1"
+        ],
+        "best_target_squares": [
+          "d6",
+          "e1"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d6",
+          "d6",
+          "d6",
+          "d2",
+          "c5",
+          "e1",
+          "d7",
+          "e7"
+        ],
+        "best_recurring_destinations": [
+          "d6",
+          "d6",
+          "d6",
+          "d2",
+          "c5",
+          "e1",
+          "d7",
+          "e7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 20,
+      "color": "w",
+      "san": "Bxd6",
+      "uci": "f4d6",
+      "fen": "r7/pp1k1Bp1/n1pB2Np/8/b5PP/2PP4/P4P2/R3K2R b KQ - 0 20",
+      "score": {
+        "cp": 536,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Bxd6",
+          "score": {
+            "cp": 546,
+            "mate": null
+          },
+          "line": [
+            "Bxd6",
+            "Kxd6",
+            "Kd2",
+            "c5",
+            "Rae1",
+            "Nc7",
+            "Re7",
+            "Bd7",
+            "Rhe1",
+            "b5",
+            "Bb3",
+            "Re8",
+            "Rxg7",
+            "Rxe1",
+            "Kxe1",
+            "Bxg4",
+            "Nf4",
+            "Bf5",
+            "Rf7",
+            "Bxd3",
+            "Nxd3",
+            "c4",
+            "Rf6+",
+            "Ke7",
+            "Rxh6",
+            "cxd3",
+            "Kd2"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Kd2",
+          "score": {
+            "cp": 544,
+            "mate": null
+          },
+          "line": [
+            "Kd2",
+            "Bxf4+",
+            "Nxf4",
+            "Rf8",
+            "Be6+",
+            "Kd6",
+            "Bf5",
+            "c5",
+            "Rhe1",
+            "Bd7",
+            "Ng6",
+            "Rf6",
+            "Bxd7",
+            "Rxg6",
+            "h5",
+            "Rf6",
+            "Bf5",
+            "Nc7",
+            "Re4",
+            "Rf7",
+            "Rae1",
+            "b5",
+            "Re5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Rb1",
+          "score": {
+            "cp": 495,
+            "mate": null
+          },
+          "line": [
+            "Rb1",
+            "Bxf4",
+            "Nxf4",
+            "b6",
+            "Kd2",
+            "Rf8",
+            "Be6+",
+            "Kd6",
+            "Bf5",
+            "c5",
+            "Rhe1",
+            "Nc7",
+            "Ng6",
+            "Re8",
+            "h5",
+            "Bc6",
+            "Rxe8",
+            "Bxe8",
+            "Re1"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "forcing",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d6",
+          "e1"
+        ],
+        "best_target_squares": [
+          "d6",
+          "e1"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d6",
+          "d6",
+          "d2",
+          "c5",
+          "e1",
+          "c7",
+          "e7",
+          "d7"
+        ],
+        "best_recurring_destinations": [
+          "d6",
+          "d6",
+          "d2",
+          "c5",
+          "e1",
+          "c7",
+          "e7",
+          "d7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 4
+    },
+    {
+      "mn": 20,
+      "color": "b",
+      "san": "Kxd6",
+      "uci": "d7d6",
+      "fen": "r7/pp3Bp1/n1pk2Np/8/b5PP/2PP4/P4P2/R3K2R w KQ - 0 21",
+      "score": {
+        "cp": 545,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Kxd6",
+          "score": {
+            "cp": 554,
+            "mate": null
+          },
+          "line": [
+            "Kxd6",
+            "Kd2",
+            "Nc7",
+            "Rae1",
+            "c5",
+            "Re7",
+            "Bc6",
+            "Rhe1",
+            "Rd8",
+            "Bb3",
+            "Rd7",
+            "f4",
+            "b5",
+            "R7e5",
+            "Bf3",
+            "g5",
+            "Bd5",
+            "Bxd5",
+            "Nxd5",
+            "Re6+",
+            "Kc7",
+            "Ne5",
+            "Re7",
+            "Rc6+",
+            "Kb7",
+            "Rxc5",
+            "Nxf4",
+            "Rxb5+",
+            "Ka8"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Bb3",
+          "score": {
+            "cp": 847,
+            "mate": null
+          },
+          "line": [
+            "Bb3",
+            "axb3",
+            "Kxd6",
+            "Kd2",
+            "Rd8",
+            "Rhe1",
+            "Rd7",
+            "Ne5",
+            "Rd8",
+            "Bc4",
+            "Rf8",
+            "Nf7+",
+            "Kd7",
+            "h5",
+            "Nc5",
+            "b4",
+            "Na6",
+            "d4",
+            "Re8",
+            "Rxe8",
+            "Kxe8",
+            "Ne5",
+            "Ke7",
+            "Bxa6",
+            "bxa6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "c5",
+          "score": {
+            "cp": 860,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Bf4",
+            "Nc7",
+            "Kd2",
+            "Ne6",
+            "Bg3",
+            "Nf8",
+            "Rhe1",
+            "Nxg6",
+            "Bxg6",
+            "Rf8",
+            "Re5",
+            "Bc6",
+            "Rae1",
+            "Kc8",
+            "Rxc5",
+            "Kd8",
+            "Re6",
+            "Rf6"
+          ]
+        }
+      ],
+      "comment": "With [move:Kxd6], Black snatches on [square:d6] and parks the king on a rare central outpost, clamping the [file:d] and giving the pieces a moment to regroup; it's the only move that doesn't make things much worse, since softer tries like [move:Bb3] [move:axb3] or [move:c5] would have bled material and tempi. After [move:Kd2], Black tries to regroup with [move:Nc7] while White calmly brings pressure with [move:Rae1]; even after [move:c5], [move:Re7] [move:Bc6] [move:Rhe1] leaves White doubled on the [file:e]. Even so, the position remains heavily in White's favor around [eval:+5.45].",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn"
+      ],
+      "move_category": "forcing",
+      "plan_comparison": {
+        "played_target_squares": [
+          "e1"
+        ],
+        "best_target_squares": [
+          "e1"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d6",
+          "d2",
+          "c7",
+          "e1",
+          "c5",
+          "e7",
+          "c6",
+          "e1"
+        ],
+        "best_recurring_destinations": [
+          "d6",
+          "d2",
+          "c7",
+          "e1",
+          "c5",
+          "e7",
+          "c6",
+          "e1"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 5
+    },
+    {
+      "mn": 21,
+      "color": "w",
+      "san": "O-O",
+      "uci": "e1g1",
+      "fen": "r7/pp3Bp1/n1pk2Np/8/b5PP/2PP4/P4P2/R4RK1 b - - 1 21",
+      "score": {
+        "cp": 514,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Kd2",
+          "score": {
+            "cp": 541,
+            "mate": null
+          },
+          "line": [
+            "Kd2",
+            "c5",
+            "Rae1",
+            "Bd7",
+            "Re7",
+            "Nc7",
+            "Rhe1",
+            "b5",
+            "Bb3",
+            "Re8",
+            "Rxg7",
+            "Rxe1",
+            "Kxe1",
+            "Bxg4",
+            "Nf4",
+            "Bf5",
+            "Kd2",
+            "a5",
+            "Rf7",
+            "Bg4",
+            "Rh7",
+            "a4",
+            "Bf7",
+            "Ke5",
+            "Ke3",
+            "b4",
+            "Rxh6",
+            "bxc3"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "O-O",
+          "score": {
+            "cp": 513,
+            "mate": null
+          },
+          "line": [
+            "O-O",
+            "Nc5",
+            "d4",
+            "Ne4",
+            "Rfe1",
+            "Nxc3",
+            "Rac1",
+            "Nd5",
+            "Bxd5",
+            "cxd5",
+            "Re7",
+            "Re8",
+            "Rxg7",
+            "Re4",
+            "Ne5",
+            "Rxd4",
+            "Nf7+",
+            "Ke6",
+            "Nxh6",
+            "Rd1+",
+            "Rxd1",
+            "Bxd1",
+            "Rxb7",
+            "Bc2"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "f4",
+          "score": {
+            "cp": 509,
+            "mate": null
+          },
+          "line": [
+            "f4",
+            "c5",
+            "Kd2",
+            "Bd7",
+            "f5",
+            "Nb8",
+            "Rab1",
+            "b6",
+            "Rhe1",
+            "Nc6",
+            "Be6",
+            "Rd8",
+            "Bxd7",
+            "Rxd7",
+            "Re6+",
+            "Kc7",
+            "Rbe1",
+            "Kb7",
+            "Ne7"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "good",
+      "event_type": "quiet",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn"
+      ],
+      "move_category": "positional",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d5"
+        ],
+        "best_target_squares": [
+          "e1"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "g1",
+          "c5",
+          "d4",
+          "e4",
+          "e1",
+          "c3",
+          "c1",
+          "d5"
+        ],
+        "best_recurring_destinations": [
+          "d2",
+          "c5",
+          "e1",
+          "d7",
+          "e7",
+          "c7",
+          "e1",
+          "b5"
+        ]
+      },
+      "is_critical": false,
+      "episode_index": 5
+    },
+    {
+      "mn": 21,
+      "color": "b",
+      "san": "Nc5",
+      "uci": "a6c5",
+      "fen": "r7/pp3Bp1/2pk2Np/2n5/b5PP/2PP4/P4P2/R4RK1 w - - 2 22",
+      "score": {
+        "cp": 560,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "c5",
+          "score": {
+            "cp": 516,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Rfe1",
+            "Bd7",
+            "Re7",
+            "Nc7",
+            "Rae1",
+            "b5",
+            "d4",
+            "c4",
+            "a4",
+            "bxa4",
+            "R1e5",
+            "Bxg4",
+            "Bxc4",
+            "Rb8",
+            "Rxg7",
+            "Be6"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nc7",
+          "score": {
+            "cp": 528,
+            "mate": null
+          },
+          "line": [
+            "Nc7",
+            "Rfe1",
+            "c5",
+            "d4",
+            "Bc2",
+            "dxc5+",
+            "Kxc5",
+            "Re7",
+            "Rc8",
+            "Rc1",
+            "Ba4",
+            "Rb1",
+            "b6",
+            "Rbe1",
+            "Bc2",
+            "Ne5",
+            "Nb5",
+            "c4",
+            "Nd6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "b5",
+          "score": {
+            "cp": 549,
+            "mate": null
+          },
+          "line": [
+            "b5",
+            "Rfe1",
+            "Nc7",
+            "Re5",
+            "c5",
+            "d4",
+            "c4",
+            "Rae1",
+            "Bc2",
+            "Ne7",
+            "g5",
+            "Bd5",
+            "Re8",
+            "hxg5",
+            "hxg5",
+            "Bf3"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "good",
+      "event_type": "quiet",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "piece_rerouting"
+      ],
+      "move_category": "positional",
+      "plan_comparison": {
+        "played_target_squares": [
+          "c5"
+        ],
+        "best_target_squares": [
+          "e1",
+          "a4"
+        ],
+        "played_plan_seed": "kingside_activity",
+        "best_plan_seed": "kingside_activity",
+        "played_recurring_destinations": [
+          "c7",
+          "e1",
+          "c5",
+          "d4",
+          "c2",
+          "c5",
+          "c5",
+          "e7"
+        ],
+        "best_recurring_destinations": [
+          "c5",
+          "e1",
+          "d7",
+          "e7",
+          "c7",
+          "e1",
+          "b5",
+          "d4"
+        ]
+      },
+      "is_critical": false,
+      "episode_index": 5
+    },
+    {
+      "mn": 22,
+      "color": "w",
+      "san": "d4",
+      "uci": "d3d4",
+      "fen": "r7/pp3Bp1/2pk2Np/2n5/b2P2PP/2P5/P4P2/R4RK1 b - - 0 22",
+      "score": {
+        "cp": 560,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "d4",
+          "score": {
+            "cp": 571,
+            "mate": null
+          },
+          "line": [
+            "d4",
+            "Nd7",
+            "Rfe1",
+            "Nf8",
+            "Re7",
+            "c5",
+            "dxc5+",
+            "Kxc5",
+            "Rxb7",
+            "Bc6",
+            "Re7",
+            "Nxg6",
+            "Bxg6",
+            "Rf8",
+            "Rxg7",
+            "Rf3",
+            "Rc7",
+            "Rxc3",
+            "Rb1",
+            "Kd6",
+            "Rxa7",
+            "Rh3",
+            "Rd1+",
+            "Kc5"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Rfe1",
+          "score": {
+            "cp": 536,
+            "mate": null
+          },
+          "line": [
+            "Rfe1",
+            "Nxd3",
+            "Red1",
+            "Bxd1",
+            "Rxd1",
+            "Kc7",
+            "Rxd3",
+            "Rd8",
+            "Rxd8",
+            "Kxd8",
+            "Kg2",
+            "b5",
+            "Kf3",
+            "Kd7",
+            "Ke4",
+            "Kd6",
+            "Kf5",
+            "c5",
+            "Ne5",
+            "a5",
+            "c4",
+            "b4"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Rae1",
+          "score": {
+            "cp": 531,
+            "mate": null
+          },
+          "line": [
+            "Rae1",
+            "Nxd3",
+            "Rd1",
+            "Bxd1",
+            "Rxd1",
+            "Kc7",
+            "Rxd3",
+            "Rd8",
+            "Rxd8",
+            "Kxd8",
+            "Kg2",
+            "b5",
+            "Kf3",
+            "Kd7",
+            "Ke4",
+            "Kd6",
+            "Ne5",
+            "c5",
+            "c4",
+            "b4",
+            "Kf5",
+            "a5",
+            "Be8",
+            "Ke7"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "c5",
+          "e7"
+        ],
+        "best_target_squares": [
+          "c5",
+          "e7"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d4",
+          "d7",
+          "e1",
+          "f8",
+          "e7",
+          "c5",
+          "c5",
+          "c5"
+        ],
+        "best_recurring_destinations": [
+          "d4",
+          "d7",
+          "e1",
+          "f8",
+          "e7",
+          "c5",
+          "c5",
+          "c5"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 5
+    },
+    {
+      "mn": 22,
+      "color": "b",
+      "san": "Ne4",
+      "uci": "c5e4",
+      "fen": "r7/pp3Bp1/2pk2Np/8/b2Pn1PP/2P5/P4P2/R4RK1 w - - 1 23",
+      "score": {
+        "cp": 577,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Ne4",
+          "score": {
+            "cp": 563,
+            "mate": null
+          },
+          "line": [
+            "Ne4",
+            "Rfe1",
+            "Nxc3",
+            "Rac1",
+            "Nd5",
+            "Bxd5",
+            "cxd5",
+            "Re7",
+            "Re8",
+            "Rxg7",
+            "Bc6",
+            "Rh7",
+            "h5",
+            "gxh5",
+            "Re4",
+            "Ne5",
+            "Rxh4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nd7",
+          "score": {
+            "cp": 582,
+            "mate": null
+          },
+          "line": [
+            "Nd7",
+            "Rfe1",
+            "Nf8",
+            "Re7",
+            "Nxg6",
+            "Re6+",
+            "Kd7",
+            "Rxg6",
+            "Ke7",
+            "Rxg7",
+            "Kf6",
+            "Rg8",
+            "Rxg8",
+            "Bxg8",
+            "Bb5",
+            "Re1",
+            "a5",
+            "Be6",
+            "a4",
+            "Kg2",
+            "Ba6",
+            "Bf5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Ne6",
+          "score": {
+            "cp": 583,
+            "mate": null
+          },
+          "line": [
+            "Ne6",
+            "Rae1",
+            "Nd8",
+            "Re7",
+            "c5",
+            "Bb3",
+            "Bxb3",
+            "dxc5+",
+            "Kxc5",
+            "axb3",
+            "a5",
+            "Ra1",
+            "a4",
+            "bxa4",
+            "b5",
+            "a5",
+            "Nc6",
+            "Rc7",
+            "h5",
+            "Ne5"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn"
+      ],
+      "move_category": "positional",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d5"
+        ],
+        "best_target_squares": [
+          "d5"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "e4",
+          "e1",
+          "c3",
+          "c1",
+          "d5",
+          "d5",
+          "d5",
+          "e7"
+        ],
+        "best_recurring_destinations": [
+          "e4",
+          "e1",
+          "c3",
+          "c1",
+          "d5",
+          "d5",
+          "d5",
+          "e7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 5
+    },
+    {
+      "mn": 23,
+      "color": "w",
+      "san": "c4",
+      "uci": "c3c4",
+      "fen": "r7/pp3Bp1/2pk2Np/8/b1PPn1PP/8/P4P2/R4RK1 b - - 0 23",
+      "score": {
+        "cp": 511,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Rfe1",
+          "score": {
+            "cp": 577,
+            "mate": null
+          },
+          "line": [
+            "Rfe1",
+            "Nxc3",
+            "Rac1",
+            "Nd5",
+            "Bxd5",
+            "Kxd5",
+            "Re7",
+            "Rd8",
+            "Rxb7",
+            "a6",
+            "Ne7+",
+            "Ke6",
+            "Nf5",
+            "Kf6",
+            "Re1",
+            "g5",
+            "h5"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "c4",
+          "score": {
+            "cp": 528,
+            "mate": null
+          },
+          "line": [
+            "c4",
+            "Nd2",
+            "Rfd1",
+            "Nxc4",
+            "Bxc4",
+            "Bxd1",
+            "Rxd1",
+            "b5",
+            "Bd3",
+            "b4",
+            "Ne5",
+            "c5",
+            "Re1",
+            "Rc8",
+            "Ba6",
+            "Rc7",
+            "dxc5+",
+            "Rxc5",
+            "Nd3",
+            "Rc2",
+            "Nxb4",
+            "Rd2",
+            "Re8"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Rfc1",
+          "score": {
+            "cp": 509,
+            "mate": null
+          },
+          "line": [
+            "Rfc1",
+            "Rd8",
+            "f3",
+            "Nf6",
+            "Bb3",
+            "Bxb3",
+            "axb3",
+            "h5",
+            "Ne5",
+            "Kc7",
+            "Rxa7",
+            "hxg4",
+            "fxg4"
+          ]
+        }
+      ],
+      "comment": "[move:c4] slightly loosens White's grip by fixing the pawn on [square:d4] and letting the [square:e4] knight hop toward [square:d2], increasing Black's piece activity and counterplay.The engine prefers [move:Rfe1], lining up on the [file:e]-file to pressure the [square:e4] knight, and after [move:Nxc3] [move:Rac1] [move:Nd5] [move:Bxd5] you defuse the outpost idea and keep full control.",
+      "classification": "inaccuracy",
+      "move_quality": "inaccuracy",
+      "event_type": "eval_swing",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn"
+      ],
+      "move_category": "inaccuracy",
+      "plan_comparison": {
+        "played_target_squares": [
+          "c4",
+          "d1"
+        ],
+        "best_target_squares": [
+          "d5",
+          "e7"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "c4",
+          "d2",
+          "d1",
+          "c4",
+          "c4",
+          "d1",
+          "d1",
+          "b5"
+        ],
+        "best_recurring_destinations": [
+          "e1",
+          "c3",
+          "c1",
+          "d5",
+          "d5",
+          "d5",
+          "e7",
+          "d8"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 5
+    },
+    {
+      "mn": 23,
+      "color": "b",
+      "san": "Nf6",
+      "uci": "e4f6",
+      "fen": "r7/pp3Bp1/2pk1nNp/8/b1PP2PP/8/P4P2/R4RK1 w - - 1 24",
+      "score": {
+        "cp": 589,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Nd2",
+          "score": {
+            "cp": 524,
+            "mate": null
+          },
+          "line": [
+            "Nd2",
+            "Rfd1",
+            "Nxc4",
+            "Bxc4",
+            "Bxd1",
+            "Rxd1",
+            "a5",
+            "Re1",
+            "Rd8",
+            "Bd3",
+            "c5",
+            "Ne5",
+            "Kc7",
+            "dxc5",
+            "Rd5",
+            "h5",
+            "a4",
+            "Kg2",
+            "Rxc5",
+            "Bf5",
+            "b5",
+            "Ng6",
+            "b4",
+            "Re7+",
+            "Kb6"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "c5",
+          "score": {
+            "cp": 556,
+            "mate": null
+          },
+          "line": [
+            "c5",
+            "Rfe1",
+            "Nf6",
+            "Re6+",
+            "Kc7",
+            "dxc5",
+            "Rd8",
+            "Ne5",
+            "Kb8",
+            "Re7",
+            "Rc8",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Nh7",
+            "Rb1",
+            "Rc7",
+            "Rxc7",
+            "Kxc7",
+            "Bd5",
+            "b6",
+            "cxb6+",
+            "axb6"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Rd8",
+          "score": {
+            "cp": 593,
+            "mate": null
+          },
+          "line": [
+            "Rd8",
+            "Rfe1",
+            "Nd2",
+            "Kg2",
+            "Bc2",
+            "c5+",
+            "Kc7",
+            "Re7+",
+            "Rd7",
+            "Rxd7+",
+            "Kxd7",
+            "Re1",
+            "Be4+",
+            "Kg3",
+            "Kd8",
+            "Nf4",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Ne6+",
+            "Kd7",
+            "Nxg5"
+          ]
+        }
+      ],
+      "comment": "[move:Nf6] is a soft regroup that leaves the [square:d6] king a target and hands White tempi with [move:c5+] and [move:Rfe1] to tighten the bind.The engine prefers [move:Rd8], contesting the [file:d]-file and coordinating the rooks so that after [move:c5+] there are no free tempi and Black preserves what little counterplay remains.",
+      "classification": "inaccuracy",
+      "move_quality": "inaccuracy",
+      "event_type": "eval_swing",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "bad_bishop",
+        "weak_square_creation",
+        "isolated_queen_pawn"
+      ],
+      "move_category": "inaccuracy",
+      "plan_comparison": {
+        "played_target_squares": [
+          "c5"
+        ],
+        "best_target_squares": [
+          "d1",
+          "c4"
+        ],
+        "played_plan_seed": "kingside_activity",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "c5",
+          "e1",
+          "f6",
+          "e6",
+          "c7",
+          "c5",
+          "d8",
+          "e5"
+        ],
+        "best_recurring_destinations": [
+          "d2",
+          "d1",
+          "c4",
+          "c4",
+          "d1",
+          "d1",
+          "a5",
+          "e1"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 5
+    },
+    {
+      "mn": 24,
+      "color": "w",
+      "san": "c5+",
+      "uci": "c4c5",
+      "fen": "r7/pp3Bp1/2pk1nNp/2P5/b2P2PP/8/P4P2/R4RK1 b - - 0 24",
+      "score": {
+        "cp": 610,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "c5+",
+          "score": {
+            "cp": 622,
+            "mate": null
+          },
+          "line": [
+            "c5+",
+            "Kc7",
+            "Rfe1",
+            "Rd8",
+            "Re7+",
+            "Rd7",
+            "Rxd7+",
+            "Nxd7",
+            "Re1",
+            "b6",
+            "Re7",
+            "Kd8",
+            "Re8+",
+            "Kc7",
+            "Be6",
+            "bxc5",
+            "Re7",
+            "Kd6",
+            "Bxd7",
+            "cxd4",
+            "Bf5",
+            "c5",
+            "Re6+",
+            "Kc7",
+            "Ne5",
+            "Bb5",
+            "Rg6",
+            "c4",
+            "a4",
+            "Bxa4",
+            "Rxg7+",
+            "Kd6",
+            "Nxc4+",
+            "Kd5",
+            "Nd2",
+            "Kc5",
+            "Ne4+",
+            "Kd5",
+            "Rxa7"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Rfe1",
+          "score": {
+            "cp": 593,
+            "mate": null
+          },
+          "line": [
+            "Rfe1",
+            "c5",
+            "Re6+",
+            "Kc7",
+            "Re7+",
+            "Kd6",
+            "Rxb7",
+            "cxd4",
+            "c5+",
+            "Kc6",
+            "Rab1",
+            "Nd5",
+            "Bxd5+",
+            "Kxd5",
+            "Nf4+",
+            "Kc6",
+            "Rxg7",
+            "Kxc5",
+            "Rh7",
+            "Rg8",
+            "f3",
+            "Bc6",
+            "Kf2"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Rae1",
+          "score": {
+            "cp": 590,
+            "mate": null
+          },
+          "line": [
+            "Rae1",
+            "Ng8",
+            "Re2",
+            "a5",
+            "Rb1",
+            "b5",
+            "Re6+",
+            "Kc7",
+            "c5",
+            "Rd8",
+            "Ne5",
+            "Nf6"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [
+        "zwischenzug"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d7",
+          "e1",
+          "d8",
+          "e7"
+        ],
+        "best_target_squares": [
+          "d7",
+          "e1",
+          "d8",
+          "e7"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "c5",
+          "c7",
+          "e1",
+          "d8",
+          "e7",
+          "d7",
+          "d7",
+          "d7"
+        ],
+        "best_recurring_destinations": [
+          "c5",
+          "c7",
+          "e1",
+          "d8",
+          "e7",
+          "d7",
+          "d7",
+          "d7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 5
+    },
+    {
+      "mn": 24,
+      "color": "b",
+      "san": "Kc7",
+      "uci": "d6c7",
+      "fen": "r7/ppk2Bp1/2p2nNp/2P5/b2P2PP/8/P4P2/R4RK1 w - - 1 25",
+      "score": {
+        "cp": 622,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Kc7",
+          "score": {
+            "cp": 635,
+            "mate": null
+          },
+          "line": [
+            "Kc7",
+            "Rfe1",
+            "Rd8",
+            "Re7+",
+            "Kb8",
+            "Rb1",
+            "Rd7",
+            "Rxd7",
+            "Nxd7",
+            "Re1",
+            "Nf6",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "b6",
+            "gxf6",
+            "gxf6",
+            "Nf8",
+            "Bb5",
+            "Re7",
+            "f5",
+            "Ne6",
+            "f4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Kd7",
+          "score": {
+            "cp": 729,
+            "mate": null
+          },
+          "line": [
+            "Kd7",
+            "Rfe1",
+            "Bc2",
+            "Re7+",
+            "Kd8",
+            "Rxb7",
+            "Kc8",
+            "Re7",
+            "Kd8",
+            "Rae1",
+            "Rc8",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Ne4",
+            "R1xe4",
+            "Bxe4",
+            "Rxe4",
+            "a6",
+            "Nf4",
+            "Kc7",
+            "Ne6+",
+            "Kb8",
+            "Nxg7"
+          ]
+        }
+      ],
+      "comment": "[move:Kc7] consolidates the king behind the pawns on [square:c6] and [square:b7] and aligns it with the rook on [square:a8], aiming to meet White's central buildup by preparing [move:Rd8] and having a safe retreat to [move:Kb8] after [move:Re7+]. In this materially worse endgame ([eval:+6.22]), it's mainly damage control -- this is less loose than [move:Kd7], which would step further into White's rook activity and tactics around the [square:c6] pawn. The long-term structure still favors White, as the knight on [square:g6] and bishop on [square:f7] clamp key dark squares and restrain [move:g5] or [move:Nd5], so this king walk is about stalling and coordinating rather than changing the verdict.",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "positional",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d7",
+          "e1"
+        ],
+        "best_target_squares": [
+          "d7",
+          "e1"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "c7",
+          "e1",
+          "d8",
+          "e7",
+          "b8",
+          "b1",
+          "d7",
+          "d7"
+        ],
+        "best_recurring_destinations": [
+          "c7",
+          "e1",
+          "d8",
+          "e7",
+          "b8",
+          "b1",
+          "d7",
+          "d7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 5
+    },
+    {
+      "mn": 25,
+      "color": "w",
+      "san": "Ne5",
+      "uci": "g6e5",
+      "fen": "r7/ppk2Bp1/2p2n1p/2P1N3/b2P2PP/8/P4P2/R4RK1 b - - 2 25",
+      "score": {
+        "cp": 452,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Rfe1",
+          "score": {
+            "cp": 655,
+            "mate": null
+          },
+          "line": [
+            "Rfe1",
+            "Rc8",
+            "Re7+",
+            "Kb8",
+            "Rb1",
+            "Rc7",
+            "Rxc7",
+            "Kxc7",
+            "Re1",
+            "b6",
+            "Re7+",
+            "Kb8",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "bxc5",
+            "gxf6",
+            "gxf6",
+            "dxc5",
+            "Bc2",
+            "Nf8",
+            "Bf5",
+            "Kg2",
+            "Bb1",
+            "Nd7+",
+            "Kc8",
+            "Nxf6"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Rae1",
+          "score": {
+            "cp": 634,
+            "mate": null
+          },
+          "line": [
+            "Rae1",
+            "Rc8",
+            "Re7+",
+            "Kb8",
+            "Rb1",
+            "Rc7",
+            "Rxc7",
+            "Kxc7",
+            "Re1",
+            "b6",
+            "Re7+",
+            "Kb8",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "bxc5",
+            "gxf6",
+            "gxf6",
+            "dxc5",
+            "Bc2",
+            "Nf4",
+            "Bb1",
+            "Bc4",
+            "f5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "g5",
+          "score": {
+            "cp": 577,
+            "mate": null
+          },
+          "line": [
+            "g5",
+            "Ng8",
+            "Nf4",
+            "Kd7",
+            "Be6+",
+            "Kc7",
+            "Bg4",
+            "Bb5",
+            "Ne6+",
+            "Kb8",
+            "Rfe1",
+            "g6",
+            "Nf4"
+          ]
+        }
+      ],
+      "comment": "The quiet [move:Ne5] is a rare misstep: it looks harmonious, but it loosens your grip on the [file:d]-file and gives Black time to coordinate around the exposed king on [square:c7], trimming the edge to [eval:+4.52]. The engine's [move:Rfe1] instead seizes the [file:e]-file and crashes through on [square:d7] with [move:Re7+], forcing trades that freeze Black's pieces and keep his king cut off from the center. By comparison, the knight's jump aims toward the slower [square:b3] pivot and eases Black's defensive task, whereas contesting the open files after the rook lift would have clamped down their counterplay and simplified into a virtually won ending.",
+      "classification": "mistake",
+      "move_quality": "blunder",
+      "event_type": "positional_concession",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "critical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "c7",
+          "e1",
+          "e7",
+          "b8"
+        ],
+        "best_target_squares": [
+          "c7",
+          "e1",
+          "e7",
+          "b8"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "e1",
+          "c8",
+          "e7",
+          "b8",
+          "b1",
+          "c7",
+          "c7",
+          "c7"
+        ],
+        "best_recurring_destinations": [
+          "e1",
+          "c8",
+          "e7",
+          "b8",
+          "b1",
+          "c7",
+          "c7",
+          "c7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 5
+    },
+    {
+      "mn": 25,
+      "color": "b",
+      "san": "Bb5",
+      "uci": "a4b5",
+      "fen": "r7/ppk2Bp1/2p2n1p/1bP1N3/3P2PP/8/P4P2/R4RK1 w - - 3 26",
+      "score": {
+        "cp": 491,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Rf8",
+          "score": {
+            "cp": 464,
+            "mate": null
+          },
+          "line": [
+            "Rf8",
+            "Bb3",
+            "Bxb3",
+            "axb3",
+            "Rd8",
+            "Rfd1",
+            "Kb8",
+            "Kg2",
+            "Nd5",
+            "h5",
+            "Nf4+",
+            "Kf3",
+            "Nd5",
+            "Kg3",
+            "Nc7",
+            "b4",
+            "Nb5"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Rd8",
+          "score": {
+            "cp": 475,
+            "mate": null
+          },
+          "line": [
+            "Rd8",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Rxd4",
+            "gxf6",
+            "gxf6",
+            "Nf3",
+            "Rd7",
+            "Be6",
+            "Rd8",
+            "Rfe1",
+            "b6",
+            "Bf5",
+            "bxc5",
+            "Re7+",
+            "Kb6",
+            "Rb1+",
+            "Bb5",
+            "a4",
+            "a6",
+            "axb5",
+            "axb5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Bb5",
+          "score": {
+            "cp": 491,
+            "mate": null
+          },
+          "line": [
+            "Bb5",
+            "Rfe1",
+            "Rd8",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Rxd4",
+            "gxf6",
+            "gxf6",
+            "Nf3",
+            "Rd7",
+            "Be6",
+            "Rg7+",
+            "Kh2",
+            "b6",
+            "Rac1",
+            "bxc5",
+            "Rxc5",
+            "Kd6",
+            "Rcc1",
+            "Kc7",
+            "Nd4",
+            "Kb6",
+            "Rc3"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "good",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "deflection"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "g5",
+          "d8",
+          "f6"
+        ],
+        "best_target_squares": [
+          "b3"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "kingside_activity",
+        "played_recurring_destinations": [
+          "d8",
+          "g5",
+          "g5",
+          "g5",
+          "d4",
+          "f6",
+          "f6",
+          "f3"
+        ],
+        "best_recurring_destinations": [
+          "f8",
+          "b3",
+          "b3",
+          "b3",
+          "d8",
+          "d1",
+          "b8",
+          "g2"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 6
+    },
+    {
+      "mn": 26,
+      "color": "w",
+      "san": "Rfe1",
+      "uci": "f1e1",
+      "fen": "r7/ppk2Bp1/2p2n1p/1bP1N3/3P2PP/8/P4P2/R3R1K1 b - - 4 26",
+      "score": {
+        "cp": 516,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Rfe1",
+          "score": {
+            "cp": 526,
+            "mate": null
+          },
+          "line": [
+            "Rfe1",
+            "Rd8",
+            "a4",
+            "Ba6",
+            "g5",
+            "Ng8",
+            "Nf3",
+            "Kb8",
+            "Bxg8",
+            "Rxg8",
+            "Re7",
+            "hxg5",
+            "hxg5",
+            "Bd3",
+            "Ne5",
+            "Be4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Rfd1",
+          "score": {
+            "cp": 470,
+            "mate": null
+          },
+          "line": [
+            "Rfd1",
+            "Rf8",
+            "Bg6",
+            "Ba6",
+            "a4",
+            "Nd5",
+            "Rd2",
+            "Ne7",
+            "Re1",
+            "b6",
+            "h5",
+            "Nxg6",
+            "Nxg6",
+            "Rf7",
+            "Ne5",
+            "Rf8",
+            "d5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Rfb1",
+          "score": {
+            "cp": 470,
+            "mate": null
+          },
+          "line": [
+            "Rfb1",
+            "Ba6",
+            "Re1",
+            "Rd8",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Nd5",
+            "Bxd5",
+            "Rxd5",
+            "Re4",
+            "b6",
+            "Rc1",
+            "Bb5",
+            "Kg2",
+            "bxc5",
+            "Rxc5",
+            "Kd6",
+            "Nf7+",
+            "Kc7"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "open_file_occupation",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "positional",
+      "plan_comparison": {
+        "played_target_squares": [
+          "g8",
+          "g5"
+        ],
+        "best_target_squares": [
+          "g8",
+          "g5"
+        ],
+        "played_plan_seed": "kingside_activity",
+        "best_plan_seed": "kingside_activity",
+        "played_recurring_destinations": [
+          "e1",
+          "d8",
+          "a4",
+          "a6",
+          "g5",
+          "g8",
+          "f3",
+          "b8"
+        ],
+        "best_recurring_destinations": [
+          "e1",
+          "d8",
+          "a4",
+          "a6",
+          "g5",
+          "g8",
+          "f3",
+          "b8"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 6
+    },
+    {
+      "mn": 26,
+      "color": "b",
+      "san": "Nd5",
+      "uci": "f6d5",
+      "fen": "r7/ppk2Bp1/2p4p/1bPnN3/3P2PP/8/P4P2/R3R1K1 w - - 5 27",
+      "score": {
+        "cp": 713,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "g5",
+          "score": {
+            "cp": 511,
+            "mate": null
+          },
+          "line": [
+            "g5",
+            "hxg5",
+            "hxg5",
+            "a4",
+            "Ba6",
+            "Nf3",
+            "Rh8",
+            "Be6",
+            "Rf8",
+            "Nxg5",
+            "Bd3",
+            "Kg2",
+            "b6",
+            "cxb6+",
+            "axb6",
+            "Nf3",
+            "Be4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Rf8",
+          "score": {
+            "cp": 513,
+            "mate": null
+          },
+          "line": [
+            "Rf8",
+            "a4",
+            "Bd3",
+            "Nxd3",
+            "Rxf7",
+            "Ne5",
+            "Rf8",
+            "a5",
+            "a6",
+            "Rab1",
+            "Rd8",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Nh7",
+            "Nf3",
+            "Rd7",
+            "Re8"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Rd8",
+          "score": {
+            "cp": 519,
+            "mate": null
+          },
+          "line": [
+            "Rd8",
+            "a4",
+            "Ba6",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Rxd4",
+            "gxf6",
+            "gxf6",
+            "Nf3",
+            "Rd7",
+            "Be6",
+            "Rg7+",
+            "Kh2",
+            "b6",
+            "Rac1",
+            "Bb7",
+            "Nd4",
+            "Re7",
+            "Kg3",
+            "Ba8",
+            "f3",
+            "bxc5",
+            "Rxc5"
+          ]
+        }
+      ],
+      "comment": "Black's [move:Nd5] looked natural to cement the outpost, but it hands White the chance to hit [square:a4] and target the bishop on [square:b5] while prying at the exposed king on [square:c7].By fixing the knight there, White can simply trade on [square:d5] and steer into simplifications that kill Black's last counterplay, and the advantage swells to around [eval:+7.13] with the queenside opening on the [file:a].The engine instead prefers [move:g5], forcing exchanges like [pv:hxg5 hxg5 a4 Ba6 f4] to open lines against White's loosened king and keep Black's pieces active, whereas [move:Nd5] shuts the door on that counterplay and accelerates White's winning queenside plan.",
+      "classification": "mistake",
+      "move_quality": "blunder",
+      "event_type": "positional_concession",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "critical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "f8",
+          "d3"
+        ],
+        "best_target_squares": [
+          "g5"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "queenside_activity",
+        "played_recurring_destinations": [
+          "f8",
+          "a4",
+          "d3",
+          "d3",
+          "f7",
+          "e5",
+          "f8",
+          "a5"
+        ],
+        "best_recurring_destinations": [
+          "g5",
+          "g5",
+          "g5",
+          "a4",
+          "a6",
+          "f3",
+          "h8",
+          "e6"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 6
+    },
+    {
+      "mn": 27,
+      "color": "w",
+      "san": "Bxd5",
+      "uci": "f7d5",
+      "fen": "r7/ppk3p1/2p4p/1bPBN3/3P2PP/8/P4P2/R3R1K1 b - - 0 27",
+      "score": {
+        "cp": 645,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "a4",
+          "score": {
+            "cp": 713,
+            "mate": null
+          },
+          "line": [
+            "a4",
+            "Ba6",
+            "Bxd5",
+            "cxd5",
+            "Ng6",
+            "Rd8",
+            "Re7+",
+            "Rd7",
+            "Rxd7+",
+            "Kxd7",
+            "Re1",
+            "Kd8",
+            "Re7",
+            "Bd3",
+            "Rxg7",
+            "b6",
+            "Ne5",
+            "bxc5",
+            "Nxd3",
+            "c4",
+            "Nb4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Bxd5",
+          "score": {
+            "cp": 651,
+            "mate": null
+          },
+          "line": [
+            "Bxd5",
+            "cxd5",
+            "Rab1",
+            "a6",
+            "Nf7",
+            "Re8",
+            "Nd6",
+            "Rxe1+",
+            "Rxe1",
+            "Kd8",
+            "Re6",
+            "Bd3",
+            "Nf7+",
+            "Kd7",
+            "Rb6",
+            "Kc7",
+            "Nd6",
+            "g6",
+            "Rxb7+",
+            "Kc6",
+            "Rb6+",
+            "Kc7",
+            "Nf7",
+            "a5",
+            "Kg2",
+            "Bc2",
+            "Ne5",
+            "Be4+",
+            "f3"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Ng6",
+          "score": {
+            "cp": 610,
+            "mate": null
+          },
+          "line": [
+            "Ng6",
+            "Rd8",
+            "Bxd5",
+            "Rxd5",
+            "Re7+",
+            "Kd8",
+            "Rxg7",
+            "Rxd4",
+            "Ne5",
+            "Kc8",
+            "Re1",
+            "b6",
+            "Nf7",
+            "Rd7",
+            "Nd6+",
+            "Kc7",
+            "Ree7",
+            "Rxe7",
+            "Rxe7+",
+            "Kd8",
+            "Rh7",
+            "bxc5",
+            "Ne4"
+          ]
+        }
+      ],
+      "comment": "White chops with [move:Bxd5], a removal-of-guard shot that interferes with Black's coordination and forces [move:cxd5], fixing a target on [square:d5]. The engine preferred [move:a4] to keep maximum squeeze; this capture eases the bind slightly to [eval:+6.45], leaving a centralized IQP and a hint of counterplay while the extra exchange still decides.",
+      "classification": "inaccuracy",
+      "move_quality": "inaccuracy",
+      "event_type": "eval_swing",
+      "tactical_motifs": [
+        "removal_of_guard",
+        "interference"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "open_file_occupation",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "d5",
+          "e1"
+        ],
+        "best_target_squares": [
+          "d7",
+          "d5",
+          "d8"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "d5",
+          "d5",
+          "b1",
+          "a6",
+          "f7",
+          "e8",
+          "d6",
+          "e1"
+        ],
+        "best_recurring_destinations": [
+          "a4",
+          "a6",
+          "d5",
+          "d5",
+          "g6",
+          "d8",
+          "e7",
+          "d7"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 7
+    },
+    {
+      "mn": 27,
+      "color": "b",
+      "san": "cxd5",
+      "uci": "c6d5",
+      "fen": "r7/ppk3p1/7p/1bPpN3/3P2PP/8/P4P2/R3R1K1 w - - 0 28",
+      "score": {
+        "cp": 655,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "cxd5",
+          "score": {
+            "cp": 643,
+            "mate": null
+          },
+          "line": [
+            "cxd5",
+            "Rab1",
+            "a6",
+            "Ng6",
+            "Re8",
+            "Rxe8",
+            "Bxe8",
+            "Rb6",
+            "h5",
+            "gxh5",
+            "Bc6",
+            "Ne7",
+            "Be8",
+            "Nxd5+",
+            "Kc8",
+            "Ne3",
+            "Bf7",
+            "a4"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "g5",
+          "score": {
+            "cp": 862,
+            "mate": null
+          },
+          "line": [
+            "g5",
+            "Be4",
+            "Re8",
+            "hxg5",
+            "hxg5",
+            "a4",
+            "Ba6",
+            "Bf5",
+            "b6",
+            "Nf7",
+            "Be2",
+            "Nd6",
+            "Re7",
+            "Rab1",
+            "Kd8",
+            "Kg2",
+            "Ba6",
+            "Rh1",
+            "Kc7",
+            "Rh8",
+            "b5",
+            "axb5"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "Ba4",
+          "score": {
+            "cp": 872,
+            "mate": null
+          },
+          "line": [
+            "Ba4",
+            "Be4",
+            "Rf8",
+            "Bf5",
+            "b6",
+            "Nc4",
+            "Kd8",
+            "cxb6",
+            "axb6",
+            "Nxb6",
+            "Rxf5",
+            "gxf5",
+            "Bc2",
+            "Rac1",
+            "Bxf5",
+            "Rxc6"
+          ]
+        }
+      ],
+      "comment": "By [move:cxd5], Black forces a central capture that clarifies the structure but leaves an isolated pawn on d5 and, critically, grants White easy access to the [file:b]-file; it's about as resilient as he can be, but White's advantage remains [eval:+6.55]. White can immediately swing a rook to the [file:b]-file with [move:Rab1], and after [move:a6] [move:Ng6] [move:Re8] [move:Rxe8] [move:Bxe8] [move:Rb6] the invasion hits [square:b7] and ties Black's pieces to pure defense. The capture also entrenches the [square:e5] knight as a dominant outpost pointing at [square:g6], so even with the center tidied, Black has static targets and no real counterplay.",
+      "classification": "great_move",
+      "move_quality": "best",
+      "event_type": "best_move_played",
+      "tactical_motifs": [],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "forcing",
+      "plan_comparison": {
+        "played_target_squares": [
+          "e8",
+          "h5"
+        ],
+        "best_target_squares": [
+          "e8",
+          "h5"
+        ],
+        "played_plan_seed": "queenside_activity",
+        "best_plan_seed": "queenside_activity",
+        "played_recurring_destinations": [
+          "d5",
+          "b1",
+          "a6",
+          "g6",
+          "e8",
+          "e8",
+          "e8",
+          "b6"
+        ],
+        "best_recurring_destinations": [
+          "d5",
+          "b1",
+          "a6",
+          "g6",
+          "e8",
+          "e8",
+          "e8",
+          "b6"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 7
+    },
+    {
+      "mn": 28,
+      "color": "w",
+      "san": "a4",
+      "uci": "a2a4",
+      "fen": "r7/ppk3p1/7p/1bPpN3/P2P2PP/8/5P2/R3R1K1 b - - 0 28",
+      "score": {
+        "cp": 614,
+        "mate": null
+      },
+      "variations": [
+        {
+          "rank": 1,
+          "move_san": "Rab1",
+          "score": {
+            "cp": 630,
+            "mate": null
+          },
+          "line": [
+            "Rab1",
+            "a6",
+            "Nf7",
+            "Re8",
+            "Rxe8",
+            "Bxe8",
+            "Nd6",
+            "Bc6",
+            "Re1",
+            "g5",
+            "Re6",
+            "b6",
+            "cxb6+",
+            "Kxb6",
+            "Rxh6",
+            "gxh4",
+            "Nf5",
+            "Kc7",
+            "g5",
+            "a5",
+            "g6"
+          ]
+        },
+        {
+          "rank": 2,
+          "move_san": "Nf7",
+          "score": {
+            "cp": 624,
+            "mate": null
+          },
+          "line": [
+            "Nf7",
+            "Kd7",
+            "Ne5+",
+            "Kc7",
+            "a4",
+            "Be8",
+            "Nd3",
+            "Bd7",
+            "Re7",
+            "g5",
+            "hxg5",
+            "hxg5",
+            "Ne5",
+            "Rd8",
+            "Rb1",
+            "Kc8",
+            "Rg7",
+            "Kc7",
+            "a5",
+            "Kc8",
+            "Nxd7",
+            "Rxd7",
+            "Rxd7",
+            "Kxd7"
+          ]
+        },
+        {
+          "rank": 3,
+          "move_san": "a4",
+          "score": {
+            "cp": 621,
+            "mate": null
+          },
+          "line": [
+            "a4",
+            "Bd7",
+            "Nxd7",
+            "Kxd7",
+            "Re5",
+            "Rf8",
+            "Rae1",
+            "Rf7",
+            "Rxd5+",
+            "Kc7",
+            "Re6",
+            "h5",
+            "gxh5",
+            "b6",
+            "c6",
+            "Kc8",
+            "Rdd6",
+            "Kc7",
+            "d5"
+          ]
+        }
+      ],
+      "comment": null,
+      "classification": null,
+      "move_quality": "excellent",
+      "event_type": "quiet",
+      "tactical_motifs": [
+        "deflection",
+        "interference"
+      ],
+      "strategic_motifs": [
+        "outpost",
+        "weak_square_creation",
+        "isolated_queen_pawn",
+        "open_file_occupation",
+        "opposite_side_castling_race"
+      ],
+      "move_category": "tactical",
+      "plan_comparison": {
+        "played_target_squares": [
+          "g5",
+          "d7"
+        ],
+        "best_target_squares": [
+          "e8"
+        ],
+        "played_plan_seed": "central_play",
+        "best_plan_seed": "central_play",
+        "played_recurring_destinations": [
+          "f7",
+          "d7",
+          "e5",
+          "c7",
+          "a4",
+          "e8",
+          "d3",
+          "d7"
+        ],
+        "best_recurring_destinations": [
+          "b1",
+          "a6",
+          "f7",
+          "e8",
+          "e8",
+          "e8",
+          "d6",
+          "c6"
+        ]
+      },
+      "is_critical": true,
+      "episode_index": 7
+    }
+  ],
+  "episodes": [
+    {
+      "episode_index": 0,
+      "title": "Moves 1-10 (positional_play)",
+      "start_move": 1,
+      "end_move": 5,
+      "narrative": "We get a Scandinavian where after 1.e4 d5 2.exd5 Qxd5 3.Nc3 Qd8, Black chooses the solid ...Qd8 retreat, conceding time to build a compact setup. White's plan with Bc4 and Qe2 eyes f7 and the e-file, but Black coolly meets it with ...c6 and ...Nf6, reinforcing d5/b5 squares and catching up in development. As the eval slides from +0.40 to +0.08, the key moment is White's slightly slow Qe2, which allowed Black to consolidate with ...c6 and ...Nf6, preparing ...e6/...Bf5 while reducing the c4-bishop's bite.",
+      "dominant_theme": "positional_play"
+    },
+    {
+      "episode_index": 1,
+      "title": "Moves 11-17 (positional_play)",
+      "start_move": 6,
+      "end_move": 9,
+      "narrative": "White steers the opening into positional channels: Nf3 - Ne5 plants a knight on e5, probing c6 and f7, while Black meets it with Bf5 and the consolidating e6 to shore up the center. The pawn thrust g4 chases the f5-bishop back to g6, and after h4 White grabs kingside space and hints at h5, fixing that bishop and the g6 - h5 complex. The critical idea here is White's g4 - h4 clamp, yielding a small pull, while Black's plan is to complete development and later challenge the e5 outpost with ...Nd7 and central breaks.",
+      "dominant_theme": "positional_play"
+    },
+    {
+      "episode_index": 2,
+      "title": "Moves 18-19 (positional_play)",
+      "start_move": 9,
+      "end_move": 10,
+      "narrative": "Black's ...Bxc2 in the opening grabbed a pawn and tried to deflect White's queenside, but it sent the bishop offside and ceded time and central control. White immediately hit back with Nxf7, converting the positional pull into concrete pressure on f7 and the back rank by leveraging better development. The eval only dipped from +2.21 to +2.04, indicating the shot was more forcing than improving, but the critical turning point was Black's pawn snatch on c2 -- after which White kept the initiative and the safer king.",
+      "dominant_theme": "positional_play"
+    },
+    {
+      "episode_index": 3,
+      "title": "Moves 20-29 (tactical_complications)",
+      "start_move": 10,
+      "end_move": 15,
+      "narrative": "After 20...Qe7, Black tried to regroup, but White plunged into tactics with 21.Nxh8, grabbing the exchange as Black sought counterplay with ...Nd5 and ...Nxc3 to rip at c3. White met this coolly with d3 and bxc3, stabilizing the center while 23...Ba4 aimed at c2 and stirred up further complications. The key turn came with 24.Bg5 hitting the queen and forcing 24...Qd6; although 25.Qxe6+ simplified and trimmed White's advantage, the narrative remained one of White converting a large edge through superior material and coordination on squares like h8, c3, and e6.",
+      "dominant_theme": "tactical_complications"
+    },
+    {
+      "episode_index": 4,
+      "title": "Moves 30-39 (positional_play)",
+      "start_move": 15,
+      "end_move": 20,
+      "narrative": "White cashed in with Qxe6+ Bxe6 to remove a key defender and then planted the wedge h6, fixing g7/f7 and tightening the dark-square grip. The check Bf7+ allowed Black's king to flee to d7, shaving the edge, but Bf4 reasserted control while ...Na6 was too slow to help. After Ng6 and the trade Bd6 Bxd6, White stripped Black's main defender of the dark squares and cemented a lasting bind -- classic positional play converting space and weaknesses into a stable, large advantage.",
+      "dominant_theme": "positional_play"
+    },
+    {
+      "episode_index": 5,
+      "title": "Moves 40-49 (tactical_complications)",
+      "start_move": 20,
+      "end_move": 25,
+      "narrative": "White brazenly cashed in with Kxd6, then rerouted the knight via Nc5 - Ne4 - Nf6 to harass e8/g8 and h7, while Black tucked the king with O-O and struck back with d4 and c4 to prise open lines against the advanced white king. The zwischenzug c5+ forced Kc7, keeping the initiative amid dark-square tactics and pressure along the c-file. But Black's resource ...Ne5 cut coordination and hit key squares (c4/f3), stemming the attack and trimming the edge from +6.22 to +4.52.",
+      "dominant_theme": "tactical_complications"
+    },
+    {
+      "episode_index": 6,
+      "title": "Moves 50-52 (positional_play)",
+      "start_move": 25,
+      "end_move": 26,
+      "narrative": "White tightened the screws with Bb5, freezing Black's queenside and discouraging ...c6 while eyeing entry points like e8 and c7. Rfe1 brought the last rook to the central file, overprotecting e4 and making any ...e6 break tactically vulnerable along the e-file. The thematic leap Nd5 then planted a knight on a dominant outpost hitting e7 and c7, and with Black unable to challenge it without concessions, the evaluation surged as White's positional bind crystallized.",
+      "dominant_theme": "positional_play"
+    },
+    {
+      "episode_index": 7,
+      "title": "Moves 53-55 (tactical_complications)",
+      "start_move": 27,
+      "end_move": 28,
+      "narrative": "White chops on d5 with Bxd5, a tactical deflection that forces cxd5 and vacates the c-file while planting a long-term target on d5. Black's recapture keeps a central pawn but one that is readily blockadable and vulnerable to piece pressure, which is why the evaluation even ticks up. Instead of immediately piling on the new weakness by seizing the c-file or fixing a blockade on d5, White chooses a4, a useful queenside clamp that slightly slows the conversion and gives Black a tempo to stabilize.",
+      "dominant_theme": "tactical_complications"
+    }
+  ],
+  "game_narrative": "A solid Scandinavian with the early ...Qd8 saw White gain a small pull, then expand with Ne5 and the g4 - h4 clamp, fixing Black's kingside and dark squares. The game's critical break came when Black's greedy ...Bxc2 backfired, allowing Nxf7 and later Nxh8 to net material amid complications; 24.Bg5 and the simplifying Qxe6+ anchored White's advantage while the h6 wedge locked key weaknesses. Though Black's ...d4 and ...c4 counterplay and the resource ...Ne5 briefly cut coordination, White reasserted control with Bb5, Rfe1, and a dominant Nd5 outpost. After Bxd5 induced cxd5, the fixed d5 weakness and enduring material edge left Black in a bind, and White duly converted to a clinical win.",
+  "game_summary": {
+    "overall_story": "Scandinavian structure with ...Qd8 kept things roughly equal until Black’s greedy 18...Bxc2?? walked into a classic Nxf7–Nxh8 tactic. White emerged an exchange and pawns up, traded queens (31 Bxe6) to defuse counterplay, and nursed the edge. Though White briefly reduced the margin with 29 Qxe6+? and 33 Bf7+?, Black never fully coordinated and finally collapsed with 52...Nd5??, after which White simplified and Black resigned after 55 a4.",
+    "opening_character": "1 e4 d5 2 exd5 Qxd5 3 Nc3 Qd8 — Scandinavian Defense, ...Qd8 retreat. White pushed fast development (Bc4, Qe2, Nf3/Ne5) eyeing f7/e6; Black chose solidity with ...c6 and ...Bf5–g6 but conceded tempi and space.",
+    "phase_story": [
+      {
+        "phase": "Opening",
+        "summary": "Scandinavian with an early queen retreat. White gained a small lead in development and aimed at f7/e6 (Bc4, Qe2, Ne5). Black re-routed the f5-bishop to g6 and set up ...c6, but lagged slightly."
+      },
+      {
+        "phase": "Tactical middlegame strike",
+        "summary": "After Ne5 and h4, 18...Bxc2?? allowed 19 Nxf7 and 21 Nxh8, winning the rook and seizing a large material edge. Black’s 20...Qe7? failed to address the tactic."
+      },
+      {
+        "phase": "Consolidation/transition",
+        "summary": "White fixed the structure and traded queens via 29 Qxe6+? Qxe6+ 31 Bxe6, keeping a big advantage despite suboptimal 29 Qxe6+? and 33 Bf7+? which let the black king centralize."
+      },
+      {
+        "phase": "Technical phase",
+        "summary": "With material in hand, White improved pieces (c5+, Rfe1) and contained counterplay. Despite 49 Ne5? reducing the margin, 52...Nd5?? handed back control and simplified to a trivially won position; resignation followed after 55 a4."
+      }
+    ],
+    "turning_points": [
+      {
+        "ply": 18,
+        "san": "Bxc2",
+        "why": "Greedy pawn grab walked into Ne5–f7 tactics, leaving h8 unprotected; eval swing +2.05 (to +2.21)."
+      },
+      {
+        "ply": 20,
+        "san": "Qe7",
+        "why": "Failed to address Nxh8 and coordination problems; White wins the rook outright; +1.60 swing (to +3.64)."
+      },
+      {
+        "ply": 26,
+        "san": "Ba4",
+        "why": "Misplaced overextended bishop, losing tempi and enabling Bg5/Qxe6 ideas; +2.35 swing (to +8.43)."
+      },
+      {
+        "ply": 29,
+        "san": "Qxe6+",
+        "why": "White rushed a queen-trade line, reducing the winning margin and giving Black a bit of coordination; -2.74 swing (to +5.80)."
+      },
+      {
+        "ply": 33,
+        "san": "Bf7+",
+        "why": "Unnecessary zwischenzug check that helped Black centralize with ...Kd7; -1.32 swing (to +4.94)."
+      },
+      {
+        "ply": 49,
+        "san": "Ne5",
+        "why": "Loosened control/coordination, offering counterplay; -1.70 swing (to +4.52)."
+      },
+      {
+        "ply": 52,
+        "san": "Nd5",
+        "why": "Critical misstep walking into simplifying tactics; handed White an easy conversion; +1.97 swing (to +7.13)."
+      }
+    ],
+    "winning_side_plan": "Exploit development lead in the Scandinavian (...Qd8) by targeting f7/e6 with Bc4–Ne5 ideas; punish 18...Bxc2?? with Nxf7–Nxh8 to win material; exchange queens via Bxe6 to kill counterplay; improve pieces and structure (c5+, Rfe1, d4) and steer into simplified positions where the extra exchange/pawns decide.",
+    "losing_side_mistakes": "Accepted structural/passive opening with ...Qd8 then overreached with 18...Bxc2??, overlooking Nxf7–Nxh8; 20...Qe7? ignored the immediate tactical threat; 26...Ba4?? further misplaced the bishop and lost time; allowed unfavorable queen trade sequence; later inaccuracies culminated in 52...Nd5??, which simplified into a hopeless endgame instead of maximizing complications."
+  },
+  "analysis_info": {
+    "engine": "Stockfish",
+    "depth": 16,
+    "multipv": 3,
+    "timestamp": 1776529306.5729995
+  }
+}

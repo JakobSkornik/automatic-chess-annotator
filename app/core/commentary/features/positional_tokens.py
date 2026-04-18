@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple
 
 import chess
 
-ENCODER_VERSION = "1"
+ENCODER_VERSION = "2"
 
 PIECE_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 
@@ -153,6 +153,32 @@ def _center_type_token(board: chess.Board) -> str:
     return "tense"
 
 
+def king_placement_signature(board: chess.Board) -> str:
+    """Lexical tag for king files / castling side (BM25 field)."""
+    wk = board.king(chess.WHITE)
+    bk = board.king(chess.BLACK)
+    if wk is None or bk is None:
+        return ""
+    wf, wr = chess.square_file(wk), chess.square_rank(wk)
+    bf, br = chess.square_file(bk), chess.square_rank(bk)
+    w_castle = "qs" if wf <= 3 else ("ks" if wf >= 6 else "mid")
+    b_castle = "qs" if bf <= 3 else ("ks" if bf >= 6 else "mid")
+    race = "opposite_side" if abs(wr - br) >= 4 else "same_side"
+    return f"wK{chess.square_name(wk)} bK{chess.square_name(bk)} w_{w_castle} b_{b_castle} {race}"
+
+
+def imbalance_signature(board: chess.Board) -> str:
+    """Material / structure imbalance tags for retrieval."""
+    parts: List[str] = []
+    for c, tag in ((chess.WHITE, "w"), (chess.BLACK, "b")):
+        if len(board.pieces(chess.BISHOP, c)) >= 2:
+            parts.append(f"bishop_pair_{tag}")
+    wq = len(board.pieces(chess.QUEEN, chess.WHITE)) + len(board.pieces(chess.QUEEN, chess.BLACK))
+    if wq == 0 and len(board.pieces(chess.PAWN, chess.WHITE)) + len(board.pieces(chess.PAWN, chess.BLACK)) <= 6:
+        parts.append("queenless_endgame")
+    return " ".join(parts)
+
+
 def _material_value(board: chess.Board, color: chess.Color) -> int:
     s = 0
     for pt in chess.PIECE_TYPES:
@@ -235,6 +261,8 @@ def encode_position(board: chess.Board, pv_san: List[str]) -> Dict[str, Any]:
         "center": center,
         "dynamic_general": dynamic_general,
         "dynamic_solution": dynamic_solution,
+        "king_placement": king_placement_signature(board),
+        "imbalance_signature": imbalance_signature(board),
         "player_color": "w" if board.turn == chess.WHITE else "b",
         "fen": board.fen(),
         "pv_san": " ".join(pv_san[:8]),
@@ -251,4 +279,6 @@ def encode_position_strings_only(board: chess.Board, pv_san: List[str]) -> Dict[
         "center": d["center"],
         "dynamic_general": d["dynamic_general"],
         "dynamic_solution": d["dynamic_solution"],
+        "king_placement": d.get("king_placement", ""),
+        "imbalance_signature": d.get("imbalance_signature", ""),
     }

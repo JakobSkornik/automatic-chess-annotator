@@ -20,6 +20,7 @@ KEY_MOMENT_PRIORITY: Dict[str, int] = {
     "great_move": 3,
     "mistake": 3,
     "king_safety_crisis": 3,
+    "hidden_inflection": 4,
     "initiative_shift": 4,
     "piece_activation": 4,
     "good_defense": 4,

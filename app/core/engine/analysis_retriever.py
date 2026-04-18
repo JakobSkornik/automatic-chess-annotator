@@ -26,11 +26,15 @@ from app.models.GameJson import (
 from app.core.io.pgn_reader import PGNReader
 from app.core.commentary.key_moment_detector import KeyMomentDetector
 from app.core.commentary.advanced_comment_service import AdvancedCommentService
-from app.core.commentary.chroma_rag_retriever import get_default_retriever
+from app.core.commentary.tantivy_positional_retriever import get_default_retriever
 from app.core.commentary.rag_retriever import rag_results_to_ws_refs
 from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
 from app.core.commentary.event_extractor import ChessEventExtractor
 from app.core.commentary.episode_segmenter import EpisodeSegmenter
+from app.core.commentary.features.future_line_compare import (
+    compare_played_vs_best_future_lines,
+)
+from app.core.commentary.features.move_category import classify_move_event
 from app.models.chess_events import (
     AnalyzedMoveData,
     Episode,
@@ -138,79 +142,11 @@ class AnalysisRetriever:
 
         return moves
 
-    def get_move_by_depth(self, depth: int) -> Optional[Move]:
-        """
-        Returns a move from the analyzed game by its depth.
-        """
-        for move in self.analyzed_game:
-            if move.depth == depth:
-                return move
-        return None
-
     def get_analysis_stages(self) -> List[float]:  # Corrected type hint
         """
         Returns the analysis stages for the engine.
         """
         return self.analysis_stages
-
-    async def get_full_game_analysis_with_progress(
-        self, 
-        progress_callback: Optional[Callable[[int, int, str, str], None]] = None
-    ) -> Tuple[List[Move], Dict[int, List[List[Move]]]]:
-        """
-        Returns a full analysis of the game with progress updates.
-        
-        Args:
-            progress_callback: Function called with (current_move, total_moves, phase, move_san)
-                             where phase is either 'analyzing_move' or 'analyzing_pvs'
-        
-        Returns:
-            Tuple of (analyzed_moves, all_pvs_dict)
-        """
-        moves = self.get_move_list()
-        total_moves = len(moves)
-        analysis_time = 16
-        
-        analyzed_moves = []
-        all_pvs_dict = {}
-        
-        for move_idx, chess_move in enumerate(moves):
-            try:
-                # Update progress for move analysis
-                if progress_callback:
-                    await progress_callback(
-                        move_idx, 
-                        total_moves, 
-                        "analyzing_move", 
-                        chess_move.move
-                    )
-                
-                # Analyze the main move
-                analyzed_move, all_pvs = self.analyze_move(chess_move, analysis_time)
-                analyzed_moves.append(analyzed_move)
-                
-                # Update progress for PV analysis
-                if progress_callback:
-                    await progress_callback(
-                        move_idx, 
-                        total_moves, 
-                        "analyzing_pvs", 
-                        chess_move.move
-                    )
-                
-                # Store PVs for this move
-                if all_pvs:
-                    all_pvs_dict[move_idx] = all_pvs
-                
-                # Brief pause to allow WebSocket to send progress
-                # (Optional: depends on your threading model)
-                
-            except Exception as e:
-                logger.error(f"Error analyzing move {chess_move.move}: {e}")
-                # Continue with next move instead of stopping
-                continue
-        
-        return analyzed_moves, all_pvs_dict
 
     def analyze_move(
         self, main_move_obj: Move, stage: float
@@ -241,6 +177,45 @@ class AnalysisRetriever:
         except Exception:
             main_move_obj.trace = None
         main_move_obj.phase = self._determine_game_phase(board_after_move)
+        # Multi-depth instability on the after-move position (search swings / PV changes)
+        def _cp_and_pv1(info_any: Any) -> Tuple[Optional[int], Optional[str]]:
+            inf = info_any[0] if isinstance(info_any, list) and info_any else info_any
+            if not isinstance(inf, dict):
+                return None, None
+            sc = inf.get("score")
+            if sc is None:
+                return None, None
+            try:
+                cp = int(sc.white().score(mate_score=MATE_SCORE))
+            except Exception:
+                return None, None
+            pv = inf.get("pv") or []
+            uci = pv[0].uci() if pv else None
+            return cp, uci
+
+        eval_at_depth: Dict[int, int] = {}
+        pv1_ucis: List[Optional[str]] = []
+        stage_i = int(stage)
+        for d in (8, 12, 16):
+            if d == stage_i:
+                inf = after_primary
+            else:
+                try:
+                    inf = self.engine_connector.analyse(
+                        board_after_move, depth=d, multiPv=1
+                    )
+                except Exception:
+                    inf = None
+            cp, uci = _cp_and_pv1(inf)
+            if cp is not None:
+                eval_at_depth[d] = cp
+            pv1_ucis.append(uci)
+        pv1_change_count = sum(
+            1
+            for i in range(len(pv1_ucis) - 1)
+            if pv1_ucis[i] and pv1_ucis[i + 1] and pv1_ucis[i] != pv1_ucis[i + 1]
+        )
+
         # Hidden features on the after-move position + before/after delta for strategic context
         try:
             after_features = compute_hidden_features(board_after_move)
@@ -249,6 +224,10 @@ class AnalysisRetriever:
                 f"Hidden features (after) failed at depth {main_move_obj.depth} FEN={board_after_move.fen()}: {e}"
             )
             after_features = {"error": str(e)}
+        if isinstance(after_features, dict):
+            after_features.setdefault("_engine", {})
+            after_features["_engine"]["eval_at_depth"] = eval_at_depth
+            after_features["_engine"]["pv1_change_count"] = pv1_change_count
         (
             main_move_obj.capturedByWhite,
             main_move_obj.capturedByBlack,
@@ -390,14 +369,6 @@ class AnalysisRetriever:
             all_pvs_as_list_of_moves.append(current_pv_as_moves_list)
 
         return main_move_obj, all_pvs_as_list_of_moves
-
-    def move_trace(self, move: Move) -> Dict:
-        """
-        Returns the trace of a move.
-        """
-        board = chess.Board(move.position)
-        self.engine_connector.analyse(board, time_limit=0.01, multiPv=1)
-        return self.engine_connector.trace()
 
     def _get_piece_for_move(
         self, board_before_move: chess.Board, san_move: str
@@ -673,6 +644,9 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 move_quality=me.move_quality.value if me else None,
                 event_type=me.event_type.value if me else None,
                 tactical_motifs=[m.value for m in (me.tactical_motifs if me else [])],
+                strategic_motifs=[m.value for m in (me.strategic_motifs if me else [])],
+                move_category=me.move_category.value if me and me.move_category else None,
+                plan_comparison=me.plan_comparison.model_dump() if me and me.plan_comparison else None,
                 is_critical=bool(me.is_critical if me else False),
                 episode_index=ep_idx,
             )
@@ -683,6 +657,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         moves=game_moves,
         episodes=episode_summaries,
         game_narrative=context.game_narrative,
+        game_summary=context.game_digest or None,
         analysis_info=AnalysisInfo(
             engine="Stockfish",
             depth=16,
@@ -753,6 +728,9 @@ async def run_engine_analysis_to_json(
         except Exception:
             pass
 
+        _eng = {}
+        if isinstance(analyzed_move.hiddenFeatures, dict):
+            _eng = (analyzed_move.hiddenFeatures.get("_engine") or {}) if analyzed_move.hiddenFeatures else {}
         analyzed_rows.append(
             AnalyzedMoveData(
                 index=idx,
@@ -769,6 +747,8 @@ async def run_engine_analysis_to_json(
                 captured_by_white=analyzed_move.capturedByWhite or {},
                 captured_by_black=analyzed_move.capturedByBlack or {},
                 analyzed_move=analyzed_move,
+                eval_at_depth=dict(_eng.get("eval_at_depth") or {}),
+                pv1_change_count=int(_eng.get("pv1_change_count", 0)),
             )
         )
         previous_move_obj = analyzed_move
@@ -795,7 +775,13 @@ async def run_engine_analysis_to_json(
             break
 
     context = GameAnalysisContext(
-        metadata={"white": headers.whiteName, "black": headers.blackName, "result": headers.result},
+        metadata={
+            "white": headers.whiteName,
+            "black": headers.blackName,
+            "result": headers.result,
+            "whiteElo": headers.whiteElo,
+            "blackElo": headers.blackElo,
+        },
         move_events=move_events,
         episodes=episodes,
         critical_moments=[e for e in move_events if e.is_critical],
@@ -847,7 +833,7 @@ async def run_llm_commentary(
     llm_model: Optional[str] = None,
     llm_effort: Optional[str] = None,
 ) -> None:
-    """Pass 4: LLM commentary for critical moves, episodes, and game narrative (streams via callback)."""
+    """Pass 4: LLM commentary for key-moment moves, episodes, and game narrative (streams via callback)."""
     mdl = llm_model or os.environ.get("LLM_DEFAULT_MODEL", "gpt-5")
     eff = llm_effort or os.environ.get("LLM_DEFAULT_EFFORT", "medium")
     analyzed_rows = state.analyzed_rows
@@ -856,18 +842,27 @@ async def run_llm_commentary(
     context = state.context
     ply_to_episode = state.ply_to_episode
 
-    critical_list = [me for me in move_events if me.is_critical]
-    n_crit = max(len(critical_list), 1)
-    crit_idx = 0
+    key_moment_list = [me for me in move_events if me.key_moment_type]
+    n_key_moments = max(len(key_moment_list), 1)
+    key_moment_idx = 0
 
-    for me in move_events:
-        if not me.is_critical:
+    try:
+        game_digest = await advanced_commenter.generate_game_digest(context, model=mdl, effort=eff)
+    except Exception as e:
+        logger.warning("game digest failed: %s", e)
+        game_digest = {}
+    context.game_digest = game_digest
+    if commentary_callback and game_digest:
+        await commentary_callback("GAME_SUMMARY", {"digest": game_digest})
+
+    for mi, me in enumerate(move_events):
+        if not me.key_moment_type:
             continue
         ep = next((e for e in episodes if e.episode_index == ply_to_episode.get(me.ply)), None)
-        pct = 95.0 + (crit_idx / n_crit) * 3.0
-        crit_idx += 1
+        pct = 95.0 + (key_moment_idx / n_key_moments) * 3.0
+        key_moment_idx += 1
         if progress_callback:
-            await progress_callback(pct, f"LLM: critical move {me.san} (ply {me.ply})")
+            await progress_callback(pct, f"LLM: key moment {me.san} (ply {me.ply})")
         row = analyzed_rows[me.move_index] if 0 <= me.move_index < len(analyzed_rows) else None
         depth_bm25 = int(os.environ.get("RAG_BM25_STOCKFISH_DEPTH", "14"))
         pv_san_bm25: List[str] = []
@@ -875,7 +870,39 @@ async def run_llm_commentary(
             pv_san_bm25 = _bm25_pv_san_from_fen_after(
                 state.retriever.engine_connector, row.fen_after, depth_bm25
             )
-        me_for_rag = me.model_copy(update={"pv_san": pv_san_bm25})
+        future_delta = None
+        if row and me.best_move_uci and me.uci != me.best_move_uci:
+            depth_fl = int(os.environ.get("FUTURE_LINE_DEPTH", "18"))
+            n_plies = int(os.environ.get("FUTURE_LINE_PLIES", "6"))
+            try:
+                future_delta = compare_played_vs_best_future_lines(
+                    state.retriever.engine_connector,
+                    me.fen_before,
+                    row.fen_after,
+                    me.best_move_uci,
+                    me.uci,
+                    depth=depth_fl,
+                    n_plies=n_plies,
+                )
+            except Exception as e:
+                logger.warning("future_line_compare failed ply %s: %s", me.ply, e)
+        me_for_rag = me.model_copy(
+            update={
+                "pv_san": pv_san_bm25,
+                "future_line": future_delta,
+                "move_category": classify_move_event(
+                    me.model_copy(update={"future_line": future_delta}),
+                    future_delta,
+                ),
+            }
+        )
+        move_events[mi] = me_for_rag
+        context.move_events[mi] = me_for_rag
+        for ep in episodes:
+            for ej, ev in enumerate(ep.move_events):
+                if ev.ply == me_for_rag.ply:
+                    ep.move_events[ej] = me_for_rag
+                    break
         # Frontend GameStateManager uses move id = mainline index + 1 (see loadGameFromJson).
         move_id = me.move_index + 1
         if commentary_callback:
@@ -891,7 +918,7 @@ async def run_llm_commentary(
                 },
             )
         try:
-            text, rag_results = await advanced_commenter.analyze_and_compose_event(
+            text, rag_results, llm_debug = await advanced_commenter.analyze_and_compose_event(
                 me_for_rag,
                 ep,
                 context,
@@ -920,6 +947,7 @@ async def run_llm_commentary(
                             "pv_line": _pv_line_for_ai_payload(row),
                             "resolved_tokens": resolved_tokens,
                             "rag_refs": rag_results_to_ws_refs(rag_results),
+                            "llm_debug": llm_debug,
                         },
                     },
                 )
@@ -938,6 +966,8 @@ async def run_llm_commentary(
                         "effort": eff,
                     },
                 )
+
+    context.critical_moments = [e for e in move_events if e.is_critical]
 
     if progress_callback:
         await progress_callback(98.5, "LLM: episode narratives...")
@@ -972,17 +1002,3 @@ async def run_llm_commentary(
 
     if progress_callback:
         await progress_callback(99.0, "Commentary complete.")
-
-
-async def run_full_analysis_to_json(
-    pgn_string: str,
-    engine_connector: EngineConnector,
-    progress_callback: Callable[[float, str], Awaitable[None]],
-) -> GameJson:
-    """Run engine + LLM in one call (no WebSocket); useful for tests or batch."""
-    game_json, state = await run_engine_analysis_to_json(
-        pgn_string, engine_connector, progress_callback
-    )
-    advanced_commenter = AdvancedCommentService(rag_retriever=get_default_retriever())
-    await run_llm_commentary(state, advanced_commenter, progress_callback=progress_callback)
-    return assemble_game_json(state)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Tantivy BM25 index from PGN files (Bolčič 2024-style tokens + Stockfish PV)."""
+"""Build a Tantivy BM25 index from annotated PGN files (Bolčič tokens + Stockfish PV + master comments)."""
 
 from __future__ import annotations
 
@@ -25,6 +25,10 @@ import chess.engine
 import chess.pgn
 import tantivy
 
+from app.core.commentary.annotation_corpus import (
+    nearest_annotation_distance,
+    ply_to_comment_map_from_game,
+)
 from app.core.commentary.features.positional_tokens import ENCODER_VERSION, encode_position
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -60,15 +64,50 @@ def _build_schema() -> tantivy.Schema:
         "center",
         "dynamic_general",
         "dynamic_solution",
+        "king_placement",
+        "imbalance_signature",
     ):
         sb.add_text_field(name, tokenizer_name="whitespace", stored=False)
-    for name in ("player_color", "game_id", "eco", "source", "fen", "pv_san"):
+    for name in (
+        "player_color",
+        "game_id",
+        "eco",
+        "source",
+        "fen",
+        "pv_san",
+        "annotation_text",
+        "annotation_ply",
+        "plies_to_next_annotation",
+    ):
         sb.add_text_field(name, tokenizer_name="raw", stored=True)
     return sb.build()
 
 
 def _iter_pgn_files(root: Path) -> List[Path]:
     return sorted(p for p in root.rglob("*.pgn") if p.is_file())
+
+
+def _ply_to_comment_map(game: chess.pgn.Game) -> Dict[int, str]:
+    """
+    Map half-move ply -> non-junk comment text.
+    Ply counts moves from the start position (1 after the first half-move).
+    """
+    out: Dict[int, str] = {}
+    root_comment = (game.comment or "").strip()
+    if root_comment and not is_junk_comment(root_comment):
+        out[0] = root_comment
+    ply = 0
+    node = game
+    while not node.is_end():
+        nxt = node.variation(0)
+        if nxt.move is None:
+            break
+        ply += 1
+        node = nxt
+        raw = (node.comment or "").strip()
+        if raw and not is_junk_comment(raw):
+            out[ply] = raw
+    return out
 
 
 def _collect_rows_from_pgns(
@@ -79,6 +118,7 @@ def _collect_rows_from_pgns(
     max_ply: int,
     limit: int,
     seen_fens: Set[str],
+    max_annotation_delta: int,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     engine = chess.engine.SimpleEngine.popen_uci(engine_path)
@@ -94,6 +134,7 @@ def _collect_rows_from_pgns(
                 game = chess.pgn.read_game(buf)
                 if game is None:
                     break
+                ply_to_comment = ply_to_comment_map_from_game(game)
                 board = game.board()
                 node = game
                 eco = (game.headers.get("ECO") or "")[:16] if game.headers else ""
@@ -110,6 +151,17 @@ def _collect_rows_from_pgns(
                     node = next_node
 
                     if ply < min_ply or ply > max_ply:
+                        continue
+
+                    delta = nearest_annotation_distance(
+                        ply_to_comment, ply, max_delta=max_annotation_delta
+                    )
+                    if delta is None:
+                        continue
+
+                    ann_ply = ply + delta
+                    ann_text = ply_to_comment.get(ann_ply, "")
+                    if not ann_text:
                         continue
 
                     fen = board.fen()
@@ -147,12 +199,17 @@ def _collect_rows_from_pgns(
                             "center": enc["center"],
                             "dynamic_general": enc["dynamic_general"],
                             "dynamic_solution": enc["dynamic_solution"],
+                            "king_placement": enc.get("king_placement", ""),
+                            "imbalance_signature": enc.get("imbalance_signature", ""),
                             "player_color": enc["player_color"],
                             "game_id": f"{pgn_path.name}:g{gi}",
                             "eco": eco,
                             "source": pgn_path.name,
                             "fen": fen,
                             "pv_san": enc["pv_san"],
+                            "annotation_text": ann_text,
+                            "annotation_ply": str(ann_ply),
+                            "plies_to_next_annotation": str(delta),
                         }
                     )
                 gi += 1
@@ -182,6 +239,12 @@ def main() -> None:
     p.add_argument("--limit", type=int, default=30_000, help="Max unique FENs (0 = no limit)")
     p.add_argument("--dry-run", action="store_true", help="Sample encode_position only; no Stockfish / no index")
     p.add_argument("--resume", action="store_true", help="Skip FENs listed in output/fen_seen.txt")
+    p.add_argument(
+        "--max-annotation-delta",
+        type=int,
+        default=4,
+        help="Max forward plies to look for a non-junk comment (strict: skip position if none)",
+    )
     args = p.parse_args()
 
     pgn_dir: Path = args.pgn_dir.resolve()
@@ -234,6 +297,7 @@ def main() -> None:
         args.max_ply,
         limit,
         seen_fens,
+        max_annotation_delta=args.max_annotation_delta,
     )
     elapsed = time.perf_counter() - t0
     LOG.info("Collected %d documents in %.1fs", len(rows), elapsed)
@@ -260,12 +324,17 @@ def main() -> None:
                 center=r["center"],
                 dynamic_general=r["dynamic_general"],
                 dynamic_solution=r["dynamic_solution"],
+                king_placement=r["king_placement"],
+                imbalance_signature=r["imbalance_signature"],
                 player_color=r["player_color"],
                 game_id=r["game_id"],
                 eco=r["eco"],
                 source=r["source"],
                 fen=r["fen"],
                 pv_san=r["pv_san"],
+                annotation_text=r.get("annotation_text", ""),
+                annotation_ply=r.get("annotation_ply", ""),
+                plies_to_next_annotation=r.get("plies_to_next_annotation", "0"),
             )
         )
     writer.commit()
@@ -276,6 +345,9 @@ def main() -> None:
         "encoder_version": ENCODER_VERSION,
         "corpus_source": "pgn",
         "n_docs": len(rows),
+        "annotated_only": True,
+        "annotated_rows": len(rows),
+        "max_annotation_delta": args.max_annotation_delta,
         "pgn_files": [str(f.name) for f in files],
         "stockfish_depth": args.depth,
         "min_ply": args.min_ply,

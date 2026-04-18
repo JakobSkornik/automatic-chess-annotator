@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.routes import evaluator, jobs
+from app.routes import jobs
 from app.core.worker import analysis_worker
 from app.core.cleanup import cleanup_old_files
 
@@ -40,9 +40,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(evaluator.router) # Keep old router for now or remove? Plan says "restructure", but maybe keep for backward compat if needed. Plan implies replacing. I'll keep it for now but new flow uses jobs.
 app.include_router(jobs.router)
 
 @app.get("/")
 def read_root():
     return {"message": "API is running."}
+
+
+@app.get("/health")
+def health():
+    return {"ok": True}

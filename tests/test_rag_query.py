@@ -23,11 +23,14 @@ class TestRAGQuery(unittest.TestCase):
             move_quality=MoveQuality.GOOD,
             event_type=MoveEventType.QUIET,
             tactical_motifs=[],
+            opening_eco="B20",
             pv_san=["e5", "Nf3"],
         )
         q = build_rag_query(me, None)
         self.assertEqual(q.fen, me.fen_after)
         self.assertEqual(q.pv_san, ["e5", "Nf3"])
+        self.assertEqual(q.eco, "B20")
+        self.assertEqual(q.ply, 10)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ from app.core.queue_manager import queue_manager
 from app.models.job import JobStatus
 from app.core.engine.engine_connector import global_engine_connector
 from app.core.commentary.advanced_comment_service import AdvancedCommentService
-from app.core.commentary.chroma_rag_retriever import get_default_retriever
+from app.core.commentary.tantivy_positional_retriever import get_default_retriever
 from app.core.engine.analysis_retriever import (
     assemble_game_json,
     run_engine_analysis_to_json,

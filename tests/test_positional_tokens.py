@@ -9,7 +9,7 @@ from app.core.commentary.features.positional_tokens import ENCODER_VERSION, enco
 
 class TestPositionalTokens(unittest.TestCase):
     def test_encoder_version(self) -> None:
-        self.assertEqual(ENCODER_VERSION, "1")
+        self.assertEqual(ENCODER_VERSION, "2")
 
     def test_encode_position_golden_starting_italian(self) -> None:
         """Stable token snapshot for a fixed FEN + PV (regression guard)."""
@@ -25,6 +25,8 @@ class TestPositionalTokens(unittest.TestCase):
         self.assertTrue(d["dynamic_solution"].startswith("$e4"))
         self.assertEqual(d["player_color"], "w")
         self.assertIn("encoder_version", d)
+        self.assertIn("king_placement", d)
+        self.assertIn("imbalance_signature", d)
 
     def test_encode_after_e4(self) -> None:
         b = chess.Board()

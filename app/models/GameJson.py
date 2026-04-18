@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 class MoveScore(BaseModel):
     cp: Optional[int] = None
@@ -24,6 +24,9 @@ class GameMove(BaseModel):
     move_quality: Optional[str] = None
     event_type: Optional[str] = None
     tactical_motifs: List[str] = []
+    strategic_motifs: List[str] = []
+    move_category: Optional[str] = None
+    plan_comparison: Optional[Dict[str, Any]] = None
     is_critical: bool = False
     episode_index: Optional[int] = None
 
@@ -57,6 +60,7 @@ class GameJson(BaseModel):
     moves: List[GameMove]
     episodes: List[EpisodeSummary] = []
     game_narrative: Optional[str] = None
+    game_summary: Optional[Dict[str, Any]] = None
     analysis_info: AnalysisInfo
 
 

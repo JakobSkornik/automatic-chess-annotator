@@ -1,7 +1,10 @@
 {
-  "encoder_version": "1",
+  "encoder_version": "2",
   "corpus_source": "pgn",
-  "n_docs": 16085,
+  "n_docs": 9259,
+  "annotated_only": true,
+  "annotated_rows": 9259,
+  "max_annotation_delta": 4,
   "pgn_files": [
     "annotatedsetone.pgn",
     "annotatedsettwo.pgn",
@@ -30,6 +33,6 @@
   "stockfish_depth": 18,
   "min_ply": 10,
   "max_ply": 40,
-  "built_at": "2026-04-17T14:54:04Z",
-  "wall_seconds": 3188.63
+  "built_at": "2026-04-18T14:47:52Z",
+  "wall_seconds": 2029.63
 }

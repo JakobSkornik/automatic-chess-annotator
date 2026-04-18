@@ -6,6 +6,9 @@ import chess
 import chess.pgn
 from typing import Any, Dict, List, Optional
 
+from app.core.commentary.features.move_category import classify_move_event
+from app.core.commentary.features.plan_extractor import build_plan_comparison
+from app.core.commentary.features.strategic_motifs import detect_strategic_motifs
 from app.core.commentary.features.tactical_motifs import detect_tactical_motifs
 from app.core.commentary.key_moment_detector import KeyMomentDetector
 from app.core.commentary.openings.eco_book import ECOBook
@@ -15,50 +18,8 @@ from app.models.chess_events import (
     MoveEvent,
     MoveEventType,
     MoveQuality,
+    PlanComparison,
 )
-
-
-def board_before_mainline_index(game: chess.pgn.Game, move_index: int) -> chess.Board:
-    board = game.board()
-    for i, gm in enumerate(game.mainline_moves()):
-        if i >= move_index:
-            break
-        board.push(gm)
-    return board
-
-
-def build_analyzed_row_from_interactive(
-    game: chess.pgn.Game,
-    move_idx: int,
-    analyzed_move: Move,
-    pvs: Optional[List[List[Move]]],
-) -> AnalyzedMoveData:
-    """Build AnalyzedMoveData for a single WebSocket-analyzed move (same shape as batch pipeline)."""
-    board_before = board_before_mainline_index(game, move_idx)
-    fen_before = board_before.fen()
-    try:
-        uci = str(analyzed_move.move)
-        ch = chess.Move.from_uci(uci)
-        san = board_before.san(ch)
-    except Exception:
-        san = str(analyzed_move.move)
-        uci = str(analyzed_move.move)
-    return AnalyzedMoveData(
-        index=move_idx,
-        ply=analyzed_move.depth,
-        san=san,
-        uci=uci,
-        fen_before=fen_before,
-        fen_after=analyzed_move.position,
-        score_cp=analyzed_move.score,
-        phase_raw=str(analyzed_move.phase or "mid"),
-        pvs=list(pvs) if pvs else [],
-        hidden_features=analyzed_move.hiddenFeatures or {},
-        trace=analyzed_move.trace,
-        captured_by_white=analyzed_move.capturedByWhite or {},
-        captured_by_black=analyzed_move.capturedByBlack or {},
-        analyzed_move=analyzed_move,
-    )
 
 
 def _map_phase(raw: str) -> str:
@@ -207,7 +168,47 @@ class ChessEventExtractor:
 
             km = self._key_moment_detector.detect(analyzed, prev_move_obj, pvs)
 
+            eval_instability_cp: Optional[int] = None
+            ead = row.eval_at_depth or {}
+            if len(ead) >= 2:
+                vals = list(ead.values())
+                eval_instability_cp = max(vals) - min(vals)
+            if (
+                not km
+                and eval_instability_cp is not None
+                and eval_instability_cp >= 100
+                and loss < 100
+            ):
+                km = "hidden_inflection"
+
             phase = _map_phase(row.phase_raw or (analyzed.phase or "mid"))
+
+            pv_ucis: List[str] = []
+            if pvs and pvs[0]:
+                for pm in pvs[0]:
+                    u = getattr(pm, "move", None)
+                    if u:
+                        pv_ucis.append(str(u))
+
+            strat_motifs = detect_strategic_motifs(
+                board_before,
+                board_after,
+                ch_move,
+                hf,
+                eval_after_cp=int(cur_score) if cur_score is not None else None,
+                phase=phase,
+                best_pv_ucis=pv_ucis or None,
+            )
+
+            pt, bt, ps, bs, pchain, bchain = build_plan_comparison(row.fen_before, pvs, uci)
+            plan_cmp = PlanComparison(
+                played_target_squares=pt,
+                best_target_squares=bt,
+                played_plan_seed=ps,
+                best_plan_seed=bs,
+                played_recurring_destinations=pchain,
+                best_recurring_destinations=bchain,
+            )
 
             event_type = MoveEventType.QUIET
             if km == "missed_opportunity":
@@ -236,6 +237,11 @@ class ChessEventExtractor:
                 or bool(motifs)
                 or loss >= 50
                 or event_type != MoveEventType.QUIET
+                or (
+                    eval_instability_cp is not None
+                    and eval_instability_cp >= 100
+                    and loss < 80
+                )
             )
 
             ev = MoveEvent(
@@ -252,6 +258,8 @@ class ChessEventExtractor:
                 move_quality=mq,
                 event_type=event_type,
                 tactical_motifs=motifs,
+                strategic_motifs=strat_motifs,
+                plan_comparison=plan_cmp,
                 is_critical=is_critical,
                 best_move_san=best_san,
                 best_move_uci=best_uci,
@@ -264,6 +272,10 @@ class ChessEventExtractor:
                 opening_name=opening_name,
                 opening_eco=opening_eco,
                 key_moment_type=km,
+                eval_instability_cp=eval_instability_cp,
+            )
+            ev = ev.model_copy(
+                update={"move_category": classify_move_event(ev, future_delta=None)}
             )
             events.append(ev)
             prev_move_obj = analyzed
