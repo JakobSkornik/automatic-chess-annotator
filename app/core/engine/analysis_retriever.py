@@ -842,10 +842,6 @@ async def run_llm_commentary(
     context = state.context
     ply_to_episode = state.ply_to_episode
 
-    key_moment_list = [me for me in move_events if me.key_moment_type]
-    n_key_moments = max(len(key_moment_list), 1)
-    key_moment_idx = 0
-
     try:
         game_digest = await advanced_commenter.generate_game_digest(context, model=mdl, effort=eff)
     except Exception as e:
@@ -854,6 +850,35 @@ async def run_llm_commentary(
     context.game_digest = game_digest
     if commentary_callback and game_digest:
         await commentary_callback("GAME_SUMMARY", {"digest": game_digest})
+
+    # Ensure every digest turning point gets key-moment commentary (LLM pass).
+    tps = (game_digest or {}).get("turning_points") or []
+    ply_to_mi = {me.ply: mi for mi, me in enumerate(move_events)}
+    for tp in tps:
+        if not isinstance(tp, dict):
+            continue
+        try:
+            p = int(tp.get("ply", 0))
+        except (TypeError, ValueError):
+            continue
+        mi = ply_to_mi.get(p)
+        if mi is None:
+            continue
+        me = move_events[mi]
+        if me.key_moment_type:
+            continue
+        promoted = me.model_copy(update={"key_moment_type": "critical_decision"})
+        move_events[mi] = promoted
+        context.move_events[mi] = promoted
+        for ep in episodes:
+            for ej, ev in enumerate(ep.move_events):
+                if ev.ply == promoted.ply:
+                    ep.move_events[ej] = promoted
+                    break
+
+    key_moment_list = [me for me in move_events if me.key_moment_type]
+    n_key_moments = max(len(key_moment_list), 1)
+    key_moment_idx = 0
 
     for mi, me in enumerate(move_events):
         if not me.key_moment_type:
