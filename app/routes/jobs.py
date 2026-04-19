@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, WebSocket, status
+from fastapi import APIRouter, HTTPException, WebSocket, status, Query
 from starlette.websockets import WebSocketDisconnect
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import os
 import json
 from app.core.queue_manager import queue_manager
@@ -11,10 +11,17 @@ from app.models.GameJson import GameJson
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
+
 class SubmitPgnRequest(BaseModel):
     pgn_string: str
     llm_model: Optional[str] = None
     llm_effort: Optional[str] = None
+
+
+@router.get("", response_model=List[JobResponse])
+async def list_jobs(limit: int = Query(20, ge=1, le=100)):
+    return queue_manager.list_jobs(limit)
+
 
 @router.post("/submit", response_model=JobResponse)
 async def submit_job(request: SubmitPgnRequest):
@@ -31,17 +38,37 @@ async def submit_job(request: SubmitPgnRequest):
         llm_model=request.llm_model,
         llm_effort=request.llm_effort,
     )
-    status = queue_manager.get_job_status(job_id)
-    if not status:
+    st = queue_manager.get_job_status(job_id)
+    if not st:
         raise HTTPException(status_code=500, detail="Failed to create job")
-    return status
+    return st
+
+
+@router.post("/{job_id}/retry", response_model=JobResponse)
+async def retry_job(job_id: str):
+    job = queue_manager.get_job_data(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["status"] != JobStatus.FAILED:
+        raise HTTPException(status_code=400, detail="Can only retry failed jobs")
+    new_id = await queue_manager.add_job(
+        job["pgn"],
+        llm_model=job.get("llm_model"),
+        llm_effort=job.get("llm_effort"),
+    )
+    st = queue_manager.get_job_status(new_id)
+    if not st:
+        raise HTTPException(status_code=500, detail="Failed to create retry job")
+    return st
+
 
 @router.get("/{job_id}/status", response_model=JobResponse)
 async def get_job_status(job_id: str):
-    status = queue_manager.get_job_status(job_id)
-    if not status:
+    st = queue_manager.get_job_status(job_id)
+    if not st:
         raise HTTPException(status_code=404, detail="Job not found")
-    return status
+    return st
+
 
 @router.get("/{job_id}/game", response_model=GameJson)
 async def get_job_game(job_id: str):
@@ -88,6 +115,3 @@ async def job_commentary_ws(websocket: WebSocket, job_id: str):
         pass
     finally:
         queue_manager.remove_job_ws(job_id, websocket)
-
-
-

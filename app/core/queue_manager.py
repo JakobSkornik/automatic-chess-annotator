@@ -7,15 +7,95 @@ from typing import Any, Dict, List, Optional
 from starlette.websockets import WebSocket
 
 from app.models.job import JobStatus, JobResponse
+from app.models.PgnMetadata import PgnMetadata
+from app.core.io.pgn_reader import PGNReader
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_pgn_snapshot(pgn_string: str) -> tuple[Optional[PgnMetadata], int]:
+    """Parse PGN once at enqueue time for job sidebar / recent list."""
+    try:
+        game = PGNReader.read_game_from_string(pgn_string)
+    except ValueError:
+        return None, 0
+    if game is None:
+        return None, 0
+    h = game.headers
+    we = h.get("WhiteElo", "")
+    be = h.get("BlackElo", "")
+    white_elo: Optional[int] = None
+    black_elo: Optional[int] = None
+    try:
+        if we and str(we).isdigit():
+            white_elo = int(we)
+    except (TypeError, ValueError):
+        pass
+    try:
+        if be and str(be).isdigit():
+            black_elo = int(be)
+    except (TypeError, ValueError):
+        pass
+    opening = h.get("Opening", "") or ""
+    eco = h.get("ECO", "")
+    if eco and opening:
+        opening = f"{opening} ({eco})" if eco not in opening else opening
+    elif eco and not opening:
+        opening = eco
+    meta = PgnMetadata(
+        whiteName=h.get("White", ""),
+        blackName=h.get("Black", ""),
+        whiteElo=white_elo,
+        blackElo=black_elo,
+        event=h.get("Event", ""),
+        opening=opening,
+        result=h.get("Result", "*"),
+    )
+    n = 0
+    node = game
+    while node.variations:
+        node = node.variations[0]
+        n += 1
+    return meta, n
+
 
 class QueueManager:
     def __init__(self):
         self.job_queue: asyncio.Queue = asyncio.Queue()
-        self.jobs: Dict[str, Dict] = {} # job_id -> {status, progress, created_at, ...}
+        self.jobs: Dict[str, Dict] = {}  # job_id -> job dict
         self.ws_connections: Dict[str, List[WebSocket]] = {}
         self.commentary_buffer: Dict[str, List[Dict[str, Any]]] = {}
+        self._enqueue_seq: int = 0
+
+    def _compute_queued_ahead(self, job_id: str) -> Optional[int]:
+        job = self.jobs.get(job_id)
+        if not job or job["status"] != JobStatus.WAITING:
+            return None
+        waiting = [j for j in self.jobs.values() if j["status"] == JobStatus.WAITING]
+        waiting_sorted = sorted(waiting, key=lambda j: (j["created_at"], j.get("enqueue_seq", 0)))
+        for i, j in enumerate(waiting_sorted):
+            if j["id"] == job_id:
+                return i
+        return None
+
+    def _job_to_response(self, job: Dict) -> JobResponse:
+        q_ahead = self._compute_queued_ahead(job["id"])
+        qp = (q_ahead + 1) if q_ahead is not None else job.get("queue_position")
+        return JobResponse(
+            job_id=job["id"],
+            status=job["status"],
+            queue_position=qp,
+            progress=job.get("progress"),
+            message=job.get("message"),
+            created_at=job["created_at"],
+            pgn_headers=job.get("pgn_headers"),
+            move_count=job.get("move_count"),
+            llm_model=job.get("llm_model"),
+            llm_effort=job.get("llm_effort"),
+            error=job.get("error"),
+            queued_ahead=q_ahead,
+            pgn_preview=job.get("pgn_preview"),
+        )
 
     async def add_job(
         self,
@@ -24,8 +104,12 @@ class QueueManager:
         llm_effort: Optional[str] = None,
     ) -> str:
         job_id = str(uuid.uuid4())
+        self._enqueue_seq += 1
+        seq = self._enqueue_seq
+        pgn_headers, move_count = _extract_pgn_snapshot(pgn_string)
         job_data = {
             "id": job_id,
+            "enqueue_seq": seq,
             "pgn": pgn_string,
             "status": JobStatus.WAITING,
             "created_at": time.time(),
@@ -34,6 +118,10 @@ class QueueManager:
             "message": "Waiting in queue",
             "llm_model": llm_model,
             "llm_effort": llm_effort,
+            "pgn_headers": pgn_headers,
+            "move_count": move_count,
+            "error": None,
+            "pgn_preview": (pgn_string[:500] + "…") if len(pgn_string) > 500 else pgn_string,
         }
         self.jobs[job_id] = job_data
         await self.job_queue.put(job_id)
@@ -44,23 +132,12 @@ class QueueManager:
         job = self.jobs.get(job_id)
         if not job:
             return None
-        
-        # Calculate dynamic queue position if waiting
-        queue_pos = None
-        if job["status"] == JobStatus.WAITING:
-             # This is a simplification; for a real queue position we might need to iterate or track index
-             # For now, just None or estimated
-             pass 
+        return self._job_to_response(job)
 
-        return JobResponse(
-            job_id=job["id"],
-            status=job["status"],
-            queue_position=queue_pos, # Simplified
-            progress=job.get("progress"),
-            message=job.get("message"),
-            created_at=job["created_at"]
-        )
-    
+    def list_jobs(self, limit: int = 20) -> List[JobResponse]:
+        items = sorted(self.jobs.values(), key=lambda j: (-j["created_at"], -j.get("enqueue_seq", 0)))
+        return [self._job_to_response(j) for j in items[:limit]]
+
     def update_job_status(self, job_id: str, status: JobStatus, progress: float = 0.0, message: str = ""):
         if job_id in self.jobs:
             self.jobs[job_id]["status"] = status
@@ -71,7 +148,11 @@ class QueueManager:
         return self.jobs.get(job_id)
 
     def mark_failed(self, job_id: str, error: str):
-        self.update_job_status(job_id, JobStatus.FAILED, message=error)
+        if job_id in self.jobs:
+            self.jobs[job_id]["status"] = JobStatus.FAILED
+            self.jobs[job_id]["progress"] = 0.0
+            self.jobs[job_id]["message"] = error
+            self.jobs[job_id]["error"] = error
 
     def buffer_commentary(self, job_id: str, msg_type: str, payload: Dict[str, Any]) -> None:
         """Store commentary messages for late-connecting WebSocket clients."""
@@ -107,7 +188,5 @@ class QueueManager:
                 logger.debug("Removing dead WS for job %s: %s", job_id, e)
                 self.remove_job_ws(job_id, ws)
 
+
 queue_manager = QueueManager()
-
-
-
