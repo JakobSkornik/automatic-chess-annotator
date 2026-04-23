@@ -25,7 +25,7 @@ class TestQueueManager(unittest.TestCase):
     def test_list_jobs_ordering_and_retry(self):
         async def run():
             qm = QueueManager()
-            id1 = await qm.add_job(MIN_PGN, llm_model="gpt-5.4", llm_effort="medium")
+            id1 = await qm.add_job(MIN_PGN, llm_provider="openai", llm_effort="medium")
             id2 = await qm.add_job(MIN_PGN)
             lst = qm.list_jobs(10)
             self.assertEqual(len(lst), 2)
@@ -37,7 +37,7 @@ class TestQueueManager(unittest.TestCase):
             assert st is not None
             self.assertEqual(st.status, JobStatus.FAILED)
             self.assertEqual(st.error, "boom")
-            id3 = await qm.add_job(qm.get_job_data(id2)["pgn"], llm_model="gpt-5.4", llm_effort="medium")
+            id3 = await qm.add_job(qm.get_job_data(id2)["pgn"], llm_provider="openai", llm_effort="medium")
             self.assertNotEqual(id3, id2)
 
         asyncio.run(run())

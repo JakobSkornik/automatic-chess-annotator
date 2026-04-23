@@ -24,6 +24,15 @@ class TacticalMotif(str, Enum):
     DECOY = "decoy"
     INTERFERENCE = "interference"
     ZWISCHENZUG = "zwischenzug"
+    QUIET_MOVE_THREAT = "quiet_move_threat"
+    X_RAY = "x_ray"
+    DOUBLE_ATTACK = "double_attack"
+    WINDMILL = "windmill"
+    CLEARANCE = "clearance"
+    ATTRACTION = "attraction"
+    DESPERADO = "desperado"
+    POSITIONAL_PAWN_SAC = "positional_pawn_sac"
+    TRADE_TO_DEFUSE_ATTACK = "trade_to_defuse_attack"
 
 
 class StrategicMotif(str, Enum):
@@ -31,17 +40,37 @@ class StrategicMotif(str, Enum):
 
     MINORITY_ATTACK = "minority_attack"
     BACKWARD_PAWN_TARGET = "backward_pawn_target"
+    OUTPOST_OCCUPIED = "outpost_occupied"
+    OUTPOST_AVAILABLE = "outpost_available"
     OUTPOST = "outpost"
+    WEAK_SQUARE_CREATED = "weak_square_created"
+    WEAK_SQUARE_EXPLOITED = "weak_square_exploited"
     WEAK_SQUARE_CREATION = "weak_square_creation"
     COLOR_COMPLEX_WEAKNESS = "color_complex_weakness"
     ISOLATED_QUEEN_PAWN = "isolated_queen_pawn"
     HANGING_PAWNS = "hanging_pawns"
     OPEN_FILE_OCCUPATION = "open_file_occupation"
     BAD_BISHOP = "bad_bishop"
+    GOOD_BISHOP = "good_bishop"
+    BISHOP_PAIR_ADVANTAGE = "bishop_pair_advantage"
     OPPOSITE_SIDE_CASTLING_RACE = "opposite_side_castling_race"
+    CENTRAL_COUNTER_VS_WING_ATTACK = "central_counter_vs_wing_attack"
+    WRONG_WING_PIECE_IN_RACE = "wrong_wing_piece_in_race"
     PROPHYLAXIS = "prophylaxis"
+    LUFT = "luft"
     DOMINATION = "domination"
     PIECE_REROUTING = "piece_rerouting"
+    PAWN_LEVER = "pawn_lever"
+    SPACE_ADVANTAGE = "space_advantage"
+    PAWN_MAJORITY_ATTACK = "pawn_majority_attack"
+    PASSED_PAWN_MIDDLEGAME = "passed_pawn_middlegame"
+    CONNECTED_PASSERS = "connected_passers"
+    BLOCKADE = "blockade"
+    OVERPROTECTION = "overprotection"
+    RESTRICTION = "restriction"
+    ROOK_ON_SEVENTH = "rook_on_seventh"
+    ROOK_LIFT = "rook_lift"
+    SIMPLIFICATION_WHEN_AHEAD = "simplification_when_ahead"
     OPPOSITION = "opposition"
     TRIANGULATION = "triangulation"
     OUTSIDE_PASSER = "outside_passer"
@@ -106,6 +135,10 @@ class MoveRationale(BaseModel):
     played_plan: Optional[str] = None
     best_plan: Optional[str] = None
     risk: Optional[str] = None
+    glossary_phrasings: Dict[str, str] = Field(default_factory=dict)
+    primary_motif_label: str = ""
+    narrative_template: str = ""
+    coach_scratchpad: Dict[str, str] = Field(default_factory=dict)
 
 
 class FutureLineDelta(BaseModel):
@@ -152,9 +185,13 @@ class MoveEvent(BaseModel):
     opening_name: Optional[str] = None
     opening_eco: Optional[str] = None
     key_moment_type: Optional[str] = None
+    brief_commentary: bool = False
+    teaching_moment: bool = False
+    # When back-to-back key moments are suppressed, points to prior ply for stub text
+    commentary_stub_ref_ply: Optional[int] = None
     # PV from fen_after (engine), first plies as SAN — used by Tantivy BM25 RAG
     pv_san: Optional[List[str]] = None
-    # Future-line comparison (played vs best continuation); set in run_llm_commentary for critical moves
+    # Future-line comparison (played vs best continuation); set in GameAnnotationPipeline for critical moves
     future_line: Optional[FutureLineDelta] = None
     # max(eval@depth) - min(eval@depth) across depths 8/12/16 on after-move position
     eval_instability_cp: Optional[int] = None
@@ -189,6 +226,8 @@ class GameAnalysisContext(BaseModel):
     game_narrative: Optional[str] = None
     # Whole-game LLM digest (JSON); injected into per-move prompts before commentary runs
     game_digest: Dict[str, Any] = Field(default_factory=dict)
+    # Last few one-line hints from prior LLM comments (motifs + archetype) for continuity
+    prior_context_snippets: List[str] = Field(default_factory=list)
 
 
 class AnalyzedMoveData(BaseModel):
@@ -213,3 +252,5 @@ class AnalyzedMoveData(BaseModel):
     # Search instability: eval at multiple depths on the after-move position (multipv=1)
     eval_at_depth: Dict[int, int] = Field(default_factory=dict)
     pv1_change_count: int = 0
+    # Cached from ChessEventExtractor / KeyMomentDetector (single source of truth)
+    key_moment_type: Optional[str] = None

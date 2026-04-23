@@ -7,11 +7,8 @@ from app.models.job import JobStatus
 from app.core.engine.engine_connector import global_engine_connector
 from app.core.commentary.advanced_comment_service import AdvancedCommentService
 from app.core.commentary.tantivy_positional_retriever import get_default_retriever
-from app.core.engine.analysis_retriever import (
-    assemble_game_json,
-    run_engine_analysis_to_json,
-    run_llm_commentary,
-)
+from app.core.engine.analysis_retriever import assemble_game_json, run_engine_analysis_to_json
+from app.core.commentary.pipeline.game_pipeline import GameAnnotationPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +65,11 @@ async def analysis_worker():
                     message="Engine analysis done, generating commentary...",
                 )
 
-                advanced_commenter = AdvancedCommentService(rag_retriever=get_default_retriever())
+                prov = (job_data.get("llm_provider") or os.environ.get("LLM_DEFAULT_PROVIDER") or "openai").strip().lower()
+                advanced_commenter = AdvancedCommentService(
+                    rag_retriever=get_default_retriever(),
+                    provider_key=prov,
+                )
 
                 async def commentary_callback(msg_type: str, payload: dict):
                     queue_manager.buffer_commentary(job_id, msg_type, payload)
@@ -83,12 +84,11 @@ async def analysis_worker():
                     )
                     await asyncio.sleep(0)
 
-                await run_llm_commentary(
+                await GameAnnotationPipeline().run_llm_phases(
                     state,
                     advanced_commenter,
                     progress_callback=llm_progress,
                     commentary_callback=commentary_callback,
-                    llm_model=job_data.get("llm_model") or os.environ.get("LLM_DEFAULT_MODEL"),
                     llm_effort=job_data.get("llm_effort") or os.environ.get("LLM_DEFAULT_EFFORT"),
                 )
 

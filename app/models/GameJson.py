@@ -29,6 +29,8 @@ class GameMove(BaseModel):
     plan_comparison: Optional[Dict[str, Any]] = None
     is_critical: bool = False
     episode_index: Optional[int] = None
+    named_motifs: List[str] = []
+    primary_motif_label: Optional[str] = None
 
 class GameMetadata(BaseModel):
     id: str
@@ -40,6 +42,8 @@ class GameMetadata(BaseModel):
     whiteElo: Optional[int] = None
     blackElo: Optional[int] = None
     opening: Optional[str] = None
+    opening_eco: Optional[str] = None
+    strategic_archetype: Optional[str] = None
 
 class AnalysisInfo(BaseModel):
     engine: str

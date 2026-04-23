@@ -22,7 +22,7 @@ class JobResponse(BaseModel):
     created_at: float
     pgn_headers: Optional[PgnMetadata] = None
     move_count: Optional[int] = None
-    llm_model: Optional[str] = None
+    llm_provider: Optional[str] = None
     llm_effort: Optional[str] = None
     error: Optional[str] = None
     queued_ahead: Optional[int] = None

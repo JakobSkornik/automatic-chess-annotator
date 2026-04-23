@@ -4,7 +4,19 @@ from __future__ import annotations
 
 import chess
 
+from app.core.commentary.motif_phrases import glossary_phrase_for
 from app.models.chess_events import FutureLineDelta, MoveEvent, MoveRationale
+
+
+def _squares_attacked_by_moved_piece(board: chess.Board, to_square: int) -> str:
+    try:
+        names = []
+        for sq in chess.SQUARES:
+            if sq in board.attacks(to_square):
+                names.append(chess.square_name(sq))
+        return ", ".join(names[:12]) + ("..." if len(names) > 12 else "")
+    except Exception:
+        return ""
 
 
 def build_rationale(
@@ -14,20 +26,44 @@ def build_rationale(
     """Symbolic 'why this move matters' for composer prompts."""
     swing = int(me.eval_swing_cp) if me.eval_swing_cp is not None else 0
 
+    tactical_keys = [m.value for m in me.tactical_motifs]
+    strategic_keys = [m.value for m in me.strategic_motifs]
+    glossary_phrasings = {k: glossary_phrase_for(k) for k in tactical_keys + strategic_keys}
+
     immediate = ""
+    narrative_template = ""
     try:
         b = chess.Board(me.fen_before)
         m = chess.Move.from_uci(me.uci)
+        cap = b.piece_at(m.to_square) if b.is_capture(m) else None
+        movers = b.piece_at(m.from_square)
+        mover_sym = movers.symbol().upper() if movers else "?"
+        dest = chess.square_name(m.to_square)
         if b.is_capture(m):
-            immediate = "Capture."
+            vs = cap.symbol() if cap else "?"
+            immediate = f"Captures {vs} on {dest} with the {mover_sym}."
+            narrative_template = immediate
         elif b.gives_check(m):
-            immediate = "Check."
+            immediate = f"Check with the {mover_sym} to {dest}."
+            narrative_template = immediate
         elif me.tactical_motifs:
-            immediate = f"Tactical idea: {me.tactical_motifs[0].value}."
+            immediate = f"Tactical theme: {me.tactical_motifs[0].value.replace('_', ' ')}."
+            narrative_template = immediate
+        elif me.strategic_motifs:
+            immediate = f"Strategic idea: {me.strategic_motifs[0].value.replace('_', ' ')}."
+            narrative_template = immediate
         else:
-            immediate = "Quiet repositioning / structural change."
+            ba = chess.Board(me.fen_after)
+            att = _squares_attacked_by_moved_piece(ba, m.to_square)
+            immediate = (
+                f"Piece move {mover_sym} to {dest}; influences squares including {att}."
+                if att
+                else f"Quiet repositioning of the {mover_sym} to {dest}."
+            )
+            narrative_template = immediate
     except Exception:
         immediate = "Position update."
+        narrative_template = immediate
 
     future_eff = ""
     if future_delta and future_delta.feature_deltas:
@@ -48,11 +84,16 @@ def build_rationale(
     elif me.strategic_motifs:
         motif = me.strategic_motifs[0].value
 
+    primary = primary_motif_label(me)
+
     counterfactual: str | None = None
     if me.best_move_san and me.uci != me.best_move_uci:
-        counterfactual = f"If {me.best_move_san} instead, the engine-preferred continuation starts."
+        counterfactual = (
+            f"If {me.best_move_san} instead, the engine-preferred continuation starts "
+            f"(fits the plan pressure better when the game arc calls for it)."
+        )
     if future_delta and future_delta.best_line_san:
-        counterfactual = (counterfactual or "") + f" Best line sample: {' '.join(future_delta.best_line_san[:5])}."
+        counterfactual = (counterfactual or "") + f" Sample best line: {' '.join(future_delta.best_line_san[:5])}."
 
     played_plan = None
     best_plan = None
@@ -67,6 +108,13 @@ def build_rationale(
     if me.key_moment_type:
         risk = f"Key moment: {me.key_moment_type}"
 
+    coach_scratchpad = {
+        "why": immediate.strip(),
+        "risk": (risk or "").strip(),
+        "plan": f"Played: {played_plan or 'n/a'} | Engine lean: {best_plan or 'n/a'}".strip(),
+        "counterplay": (counterfactual or "").strip(),
+    }
+
     return MoveRationale(
         eval_change_cp=swing,
         immediate_effect=immediate.strip(),
@@ -76,6 +124,10 @@ def build_rationale(
         played_plan=played_plan,
         best_plan=best_plan,
         risk=risk,
+        glossary_phrasings=glossary_phrasings,
+        primary_motif_label=primary,
+        narrative_template=narrative_template.strip(),
+        coach_scratchpad=coach_scratchpad,
     )
 
 

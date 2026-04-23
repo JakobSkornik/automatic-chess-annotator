@@ -10,7 +10,9 @@ class TestPerCategoryPrompts(unittest.TestCase):
     def test_all_categories_mapped(self) -> None:
         for c in MoveCategory:
             self.assertIn(c.value, CATEGORY_COMPOSER_PROMPTS)
-            self.assertIn("segment", CATEGORY_COMPOSER_PROMPTS[c.value].lower())
+            prompt = CATEGORY_COMPOSER_PROMPTS[c.value]
+            self.assertIn("named_motifs", prompt.lower())
+            self.assertIn("plain prose", prompt.lower())
 
 
 if __name__ == "__main__":

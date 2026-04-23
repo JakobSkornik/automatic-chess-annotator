@@ -42,6 +42,8 @@ class KeyMomentDetector:
         self._prev_phase: Optional[str] = None
         self._prev_pawn_structure_type: Optional[str] = None
         self._last_book_depth: int = 0  # ply of last detected opening/book move
+        self._fired_opening_transition: bool = False
+        self._fired_endgame_transition: bool = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -52,13 +54,19 @@ class KeyMomentDetector:
         current_move: Move,
         previous_move: Optional[Move],
         pvs_for_move: Optional[List[List[Move]]],
+        *,
+        pv1_change_count: int = 0,
     ) -> Optional[str]:
         """Return the highest-priority key moment type, or *None*."""
         candidates: List[str] = []
 
         # --- Score-based triggers (require both moves to have scores) ---
         if previous_move and current_move.score is not None and previous_move.score is not None:
-            candidates.extend(self._score_based(current_move, previous_move, pvs_for_move))
+            candidates.extend(
+                self._score_based(
+                    current_move, previous_move, pvs_for_move, pv1_change_count=pv1_change_count
+                )
+            )
 
         # --- Feature / strategic triggers ---
         candidates.extend(self._strategic_triggers(current_move, previous_move, pvs_for_move))
@@ -84,14 +92,18 @@ class KeyMomentDetector:
         current_move: Move,
         previous_move: Move,
         pvs_for_move: Optional[List[List[Move]]],
+        *,
+        pv1_change_count: int = 0,
     ) -> List[str]:
         results: List[str] = []
 
         is_white_move = current_move.depth % 2 == 1
         score_change = current_move.score - previous_move.score  # type: ignore[operator]
 
-        # Adjust for mover's perspective
+        # Adjust for mover's perspective (both scores are White POV after each ply)
         perspective_change = score_change if is_white_move else -score_change
+        prev_hf = (previous_move.hiddenFeatures or {}) if previous_move else {}
+        curr_hf = (current_move.hiddenFeatures or {}) if current_move.hiddenFeatures else {}
 
         log_msg = (
             f"Move {current_move.depth} ({'White' if is_white_move else 'Black'}): "
@@ -112,10 +124,13 @@ class KeyMomentDetector:
         elif perspective_change <= -50:
             results.append("inaccuracy")
 
-        # -- Good defense: under pressure but score stabilises or improves --
-        prev_eval = previous_move.score if is_white_move else -previous_move.score  # type: ignore[operator]
-        if prev_eval is not None and prev_eval <= -100 and perspective_change >= 0:
-            results.append("good_defense")
+        # -- Good defense: under pressure (bad eval for side to move) but holds or improves --
+        prev_s = previous_move.score
+        if prev_s is not None:
+            if is_white_move and prev_s <= -100 and perspective_change >= 0:
+                results.append("good_defense")
+            if not is_white_move and prev_s >= 100 and perspective_change >= 0:
+                results.append("good_defense")
 
         # -- Missed opportunity (PV-based) --
         if pvs_for_move and pvs_for_move[0]:
@@ -127,12 +142,12 @@ class KeyMomentDetector:
                 if opportunity_diff >= 200:
                     results.append("missed_opportunity")
 
-        # -- Brilliant: best move + material sacrifice + position improves --
+        # -- Brilliant: best move + material sacrifice + engine instability (non-obvious) --
         if pvs_for_move and pvs_for_move[0]:
             played_is_best = (
                 pvs_for_move[0][0] and getattr(pvs_for_move[0][0], "move", None) == current_move.move
             )
-            if played_is_best and perspective_change >= 0:
+            if played_is_best and pv1_change_count >= 1:
                 material_before = self._get_material_diff(previous_move)
                 material_after = self._get_material_diff(current_move)
                 if material_before is not None and material_after is not None:
@@ -157,17 +172,32 @@ class KeyMomentDetector:
                     if gap >= 80:
                         results.append("great_move")
 
-        # -- Critical decision: top-2 PVs within 20cp but different plans --
+        # -- Critical decision: top-2 PVs close but different structure, or king/material story forks --
         if pvs_for_move and len(pvs_for_move) >= 2:
             pv1_first = pvs_for_move[0][0] if pvs_for_move[0] else None
             pv2_first = pvs_for_move[1][0] if pvs_for_move[1] else None
             if pv1_first and pv2_first and pv1_first.score is not None and pv2_first.score is not None:
                 gap = abs(pv1_first.score - pv2_first.score)
                 if gap <= 20:
-                    # Check if they lead to different pawn structures
                     ps1 = self._pawn_structure_type(pv1_first)
                     ps2 = self._pawn_structure_type(pv2_first)
-                    if ps1 and ps2 and ps1 != ps2:
+                    king_brk = False
+                    for clr in ("white", "black"):
+                        pe = (prev_hf.get(clr) or {}).get("kingExposure")
+                        ce = (curr_hf.get(clr) or {}).get("kingExposure")
+                        if isinstance(pe, (int, float)) and isinstance(ce, (int, float)):
+                            if abs(ce - pe) >= 2:
+                                king_brk = True
+                    mat_brk = False
+                    pm = prev_hf.get("material") or {}
+                    cm = curr_hf.get("material") or {}
+                    pd = (pm.get("diff") or {}).get("total") if isinstance(pm.get("diff"), dict) else None
+                    cd = (cm.get("diff") or {}).get("total") if isinstance(cm.get("diff"), dict) else None
+                    if isinstance(pd, (int, float)) and isinstance(cd, (int, float)):
+                        if abs(cd - pd) >= 100:
+                            mat_brk = True
+                    struct_diff = bool(ps1 and ps2 and ps1 != ps2)
+                    if struct_diff or king_brk or mat_brk:
                         results.append("critical_decision")
 
         return results
@@ -212,11 +242,11 @@ class KeyMomentDetector:
             if mob_delta >= 8 and atk_delta >= 2:
                 results.append("initiative_shift")
 
-        # -- Piece activation: centralization improves >= 3 --
+        # -- Piece activation: centralization improves a lot from a passive starting point --
         curr_cent = (curr_hf.get(side) or {}).get("centralization")
         prev_cent = (prev_hf.get(side) or {}).get("centralization")
         if curr_cent is not None and prev_cent is not None:
-            if curr_cent - prev_cent >= 3:
+            if curr_cent - prev_cent >= 3 and prev_cent <= 35:
                 results.append("piece_activation")
 
         # -- Opening transition: first move out of book --
@@ -226,14 +256,27 @@ class KeyMomentDetector:
             if had_opening:
                 curr_trace = current_move.trace if isinstance(current_move.trace, dict) else {}
                 has_opening = curr_trace.get("openingName") or curr_trace.get("openingCode")
-                if not has_opening and current_move.depth > self._last_book_depth:
+                if (
+                    not has_opening
+                    and current_move.depth > self._last_book_depth
+                    and not self._fired_opening_transition
+                ):
                     results.append("opening_transition")
+                    self._fired_opening_transition = True
                     self._last_book_depth = current_move.depth
 
-        # -- Endgame transition: phase changes from mid to end --
-        if self._prev_phase and current_move.phase:
-            if self._prev_phase in ("opening", "mid", "middlegame") and current_move.phase in ("end", "endgame"):
+        # -- Endgame transition: phase changes from mid to end (once per game) --
+        if (
+            self._prev_phase
+            and current_move.phase
+            and not self._fired_endgame_transition
+        ):
+            if self._prev_phase in ("opening", "mid", "middlegame", "early") and current_move.phase in (
+                "end",
+                "endgame",
+            ):
                 results.append("endgame_transition")
+                self._fired_endgame_transition = True
 
         return results
 

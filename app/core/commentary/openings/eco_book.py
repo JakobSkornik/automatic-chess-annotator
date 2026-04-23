@@ -1,12 +1,15 @@
 from __future__ import annotations
+
+import logging
 import os
 import json
 import chess
-import logging
+import chess.pgn
 from dataclasses import dataclass
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class OpeningInfo:
@@ -14,69 +17,166 @@ class OpeningInfo:
     name: str
     variation: Optional[str] = None
 
+
+def mainline_uci_list(game: chess.pgn.Game) -> List[str]:
+    """UCI plies in mainline order."""
+    out: List[str] = []
+    board = game.board()
+    for m in game.mainline_moves():
+        out.append(board.uci(m))
+        board.push(m)
+    return out
+
+
+def _fen_lookup_variants(fen: str) -> List[str]:
+    """Try exact FEN and common normalizations for ECO JSON keys."""
+    parts = fen.split()
+    seen: List[str] = []
+    for candidate in (
+        fen,
+        " ".join(parts[:4]) + " 0 1" if len(parts) >= 4 else fen,
+        " ".join(parts[:4]) + " - 0 1" if len(parts) >= 4 else fen,
+    ):
+        if candidate not in seen:
+            seen.append(candidate)
+    return seen
+
+
+def parse_pgn_eco_tag(headers: chess.pgn.Headers) -> Optional[str]:
+    """
+    Valid ECO codes are A00–E99 (letter + two digits), case-sensitive per PGN convention.
+    Returns None and logs a warning if malformed.
+    """
+    raw = (headers.get("ECO") or "").strip().strip('"')
+    if not raw:
+        return None
+    if len(raw) != 3 or raw[0] not in "ABCDEabcde" or not raw[1:].isdigit():
+        logger.warning("Invalid ECO PGN tag %r — ignoring; internal book will be used", raw)
+        return None
+    return raw.upper()
+
+
+_ABSENT_OPENING_NAMES = frozenset(
+    {"", "?", "unknown", "custom", "opening unknown", "general", "irregular"}
+)
+
+
+def is_absent_opening_header(name: Optional[str]) -> bool:
+    if not name:
+        return True
+    s = name.strip()
+    if not s:
+        return True
+    return s.lower() in _ABSENT_OPENING_NAMES
+
+
+def merge_opening_with_headers(
+    detected: Optional[OpeningInfo],
+    header_opening: str,
+    header_eco: Optional[str],
+) -> Optional[OpeningInfo]:
+    """
+    Internal book is source of truth for ECO code when detection succeeds.
+    Opening *name* may come from the PGN when it clearly matches the detected family.
+    """
+    ho = header_opening.strip() if header_opening else ""
+    if detected:
+        code = detected.code
+        name = detected.name
+        var = detected.variation
+        if not is_absent_opening_header(ho):
+            eco_match = header_eco and header_eco == code
+            prefix_match = header_eco and len(header_eco) >= 2 and code.startswith(header_eco[:2])
+            name_match = ho.lower() in name.lower() or name.lower() in ho.lower()
+            if eco_match or prefix_match or name_match:
+                name = ho
+        return OpeningInfo(code=code, name=name, variation=var)
+    if header_eco and not is_absent_opening_header(ho):
+        return OpeningInfo(code=header_eco, name=ho)
+    if header_eco:
+        return OpeningInfo(code=header_eco, name=ho or "Unknown")
+    return None
+
+
+def detect_opening(game: chess.pgn.Game, book: Optional["ECOBook"] = None) -> Tuple[Optional[OpeningInfo], int]:
+    """
+    Longest-prefix ECO match for the full mainline (for game-level metadata).
+    Returns (OpeningInfo | None, matched_ply_count).
+    """
+    b = book or ECOBook()
+    uci_moves = mainline_uci_list(game)
+    return b.match(uci_moves)
+
+
 class ECOBook:
-    """A comprehensive ECO lookup service using a JSON database."""
+    """ECO lookup: longest UCI-prefix match, then FEN (transposition) fallback."""
 
     def __init__(self) -> None:
-        self._eco_data: Dict[str, OpeningInfo] = self._load_eco_data()
+        self._by_uci: Dict[str, OpeningInfo] = {}
+        self._by_fen: Dict[str, OpeningInfo] = {}
+        self._load()
 
-    def _load_eco_data(self) -> Dict[str, OpeningInfo]:
-        """Loads ECO data from JSON files and builds a lookup dictionary."""
-        eco_dict: Dict[str, OpeningInfo] = {}
+    def _load(self) -> None:
         data_dir = os.path.join(os.path.dirname(__file__), "data")
         for filename in os.listdir(data_dir):
-            if filename.endswith(".json"):
-                with open(os.path.join(data_dir, filename), "r") as f:
-                    data = json.load(f)
-                    for fen, entry in data.items():
-                        moves_str = entry.get("moves", "")
-                        # The moves are in SAN format with move numbers, like "1. e4 e5"
-                        # We need to convert this to a UCI sequence
-                        board = chess.Board()
-                        uci_sequence = []
-                        try:
-                            for san_move in moves_str.split():
-                                if "." not in san_move:
-                                    move = board.parse_san(san_move)
-                                    uci_sequence.append(move.uci())
-                                    board.push(move)
-                            eco_dict[" ".join(uci_sequence)] = OpeningInfo(
-                                code=entry["eco"],
-                                name=entry["name"],
-                                variation=entry.get("v"),
-                            )
-                        except Exception:
+            if not filename.endswith(".json"):
+                continue
+            path = os.path.join(data_dir, filename)
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for fen_key, entry in data.items():
+                if not isinstance(entry, dict):
+                    continue
+                eco = entry.get("eco")
+                name = entry.get("name")
+                if not eco or not name:
+                    continue
+                info = OpeningInfo(
+                    code=str(eco),
+                    name=str(name),
+                    variation=entry.get("v"),
+                )
+                self._by_fen[fen_key] = info
+                moves_str = entry.get("moves", "")
+                board = chess.Board()
+                uci_sequence: List[str] = []
+                try:
+                    for san_move in moves_str.split():
+                        if "." in san_move:
                             continue
-        logger.info(f"Loaded {len(eco_dict)} opening positions from ECO data.")
-        return eco_dict
+                        move = board.parse_san(san_move)
+                        uci_sequence.append(move.uci())
+                        board.push(move)
+                    if uci_sequence:
+                        key = " ".join(uci_sequence)
+                        self._by_uci[key] = info
+                except Exception:
+                    continue
+        logger.info(
+            "ECO book: %s UCI prefixes, %s FEN keys",
+            len(self._by_uci),
+            len(self._by_fen),
+        )
 
-    def _build_uci_sequence(self, board: chess.Board) -> str:
-        """Builds a UCI move sequence from a board state."""
-        moves = []
-        temp_board = board.copy()
-        while temp_board.move_stack:
-            move = temp_board.pop()
-            moves.insert(0, move.uci())
-        return " ".join(moves)
-
-    def match(self, uci_moves: List[str]) -> Optional[OpeningInfo]:
-        """Return the longest matching opening for the given UCI move list."""
+    def match(self, uci_moves: List[str]) -> Tuple[Optional[OpeningInfo], int]:
+        """Longest matching opening for the given UCI prefix; returns (info, ply_count_matched)."""
         if not uci_moves:
-            return None
-
-        # Create a board and play the moves to get the correct fen
-        board = chess.Board()
-        for move in uci_moves:
-            board.push_uci(move)
-        
-        # Build the uci sequence and look it up
-        uci_sequence = self._build_uci_sequence(board)
-        logger.info(f"Looking up UCI sequence: '{uci_sequence}'")
-        result = self._eco_data.get(uci_sequence)
-        if result:
-            logger.info(f"Found opening: {result.name}")
-        else:
-            logger.info("No opening found for this sequence.")
-        return result
-
-
+            return None, 0
+        for n in range(len(uci_moves), 0, -1):
+            prefix = uci_moves[:n]
+            seq = " ".join(prefix)
+            hit = self._by_uci.get(seq)
+            if hit:
+                return hit, n
+            board = chess.Board()
+            try:
+                for u in prefix:
+                    board.push_uci(u)
+            except Exception:
+                continue
+            fen = board.fen()
+            for variant in _fen_lookup_variants(fen):
+                hit = self._by_fen.get(variant)
+                if hit:
+                    return hit, n
+        return None, 0

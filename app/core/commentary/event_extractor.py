@@ -56,9 +56,13 @@ class ChessEventExtractor:
     EVAL_SWING_CRITICAL = 80
     SCORE_TREND_WINDOW = 6
 
-    def __init__(self, eco_book: Optional[ECOBook] = None) -> None:
+    def __init__(
+        self,
+        eco_book: Optional[ECOBook] = None,
+        key_moment_detector: Optional[KeyMomentDetector] = None,
+    ) -> None:
         self._eco = eco_book or ECOBook()
-        self._key_moment_detector = KeyMomentDetector()
+        self._key_moment_detector = key_moment_detector or KeyMomentDetector()
         self._prev_pawn_center: Optional[str] = None
 
     def extract_events(
@@ -73,7 +77,7 @@ class ChessEventExtractor:
         prev_move_obj: Optional[Move] = previous_engine_move
         score_history: List[int] = []
 
-        for row in analyzed_rows:
+        for i, row in enumerate(analyzed_rows):
             idx = row.index
             board_before = chess.Board(row.fen_before)
             board_after = chess.Board(row.fen_after)
@@ -161,12 +165,15 @@ class ChessEventExtractor:
             opening_name: Optional[str] = None
             opening_eco: Optional[str] = None
             if seq_uci:
-                info = self._eco.match(seq_uci)
+                info, _matched_ply = self._eco.match(seq_uci)
                 if info:
-                    opening_eco = getattr(info, "code", None)
-                    opening_name = getattr(info, "name", None)
+                    opening_eco = info.code
+                    opening_name = info.name
 
-            km = self._key_moment_detector.detect(analyzed, prev_move_obj, pvs)
+            km = self._key_moment_detector.detect(
+                analyzed, prev_move_obj, pvs, pv1_change_count=row.pv1_change_count
+            )
+            analyzed_rows[i] = row.model_copy(update={"key_moment_type": km})
 
             eval_instability_cp: Optional[int] = None
             ead = row.eval_at_depth or {}
@@ -190,16 +197,6 @@ class ChessEventExtractor:
                     if u:
                         pv_ucis.append(str(u))
 
-            strat_motifs = detect_strategic_motifs(
-                board_before,
-                board_after,
-                ch_move,
-                hf,
-                eval_after_cp=int(cur_score) if cur_score is not None else None,
-                phase=phase,
-                best_pv_ucis=pv_ucis or None,
-            )
-
             pt, bt, ps, bs, pchain, bchain = build_plan_comparison(row.fen_before, pvs, uci)
             plan_cmp = PlanComparison(
                 played_target_squares=pt,
@@ -208,6 +205,19 @@ class ChessEventExtractor:
                 best_plan_seed=bs,
                 played_recurring_destinations=pchain,
                 best_recurring_destinations=bchain,
+            )
+
+            strat_motifs = detect_strategic_motifs(
+                board_before,
+                board_after,
+                ch_move,
+                hf,
+                eval_after_cp=int(cur_score) if cur_score is not None else None,
+                eval_before_cp=int(prev_score) if prev_score is not None else None,
+                eval_swing_cp=int(swing) if swing is not None else None,
+                phase=phase,
+                best_pv_ucis=pv_ucis or None,
+                plan_comparison=plan_cmp,
             )
 
             event_type = MoveEventType.QUIET

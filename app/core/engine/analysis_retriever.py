@@ -25,10 +25,14 @@ from app.models.GameJson import (
 )
 from app.core.io.pgn_reader import PGNReader
 from app.core.commentary.key_moment_detector import KeyMomentDetector
-from app.core.commentary.advanced_comment_service import AdvancedCommentService
+from app.core.commentary.openings.eco_book import (
+    ECOBook,
+    detect_opening,
+    is_absent_opening_header,
+    merge_opening_with_headers,
+    parse_pgn_eco_tag,
+)
 from app.core.commentary.tantivy_positional_retriever import get_default_retriever
-from app.core.commentary.rag_retriever import rag_results_to_ws_refs
-from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
 from app.core.commentary.event_extractor import ChessEventExtractor
 from app.core.commentary.episode_segmenter import EpisodeSegmenter
 from app.core.commentary.features.future_line_compare import (
@@ -40,6 +44,7 @@ from app.models.chess_events import (
     Episode,
     GameAnalysisContext,
     MoveEvent,
+    MoveQuality,
 )
 
 # ANALYSIS_STAGES = [0.05, 0.1, 0.2, 0.4]
@@ -47,6 +52,116 @@ ANALYSIS_STAGES = [4, 8, 16]
 DEFAULT_PV_COUNT = 3
 MATE_SCORE = 1000000
 logger = logging.getLogger(__name__)
+
+
+def _heuristic_llm_fallback_comment(me: MoveEvent) -> str:
+    """Same shape as assemble_game_json heuristic when LLM returns empty."""
+    key_moment = me.key_moment_type or ""
+    if key_moment:
+        swing = me.eval_swing_cp
+        if swing is not None:
+            return (
+                f"{key_moment.replace('_', ' ').capitalize()} "
+                f"(Eval swing: {swing / 100:+.2f} pawns, White POV step)"
+            )
+        return key_moment.replace("_", " ").capitalize()
+    if me.teaching_moment:
+        tact = ", ".join(m.value for m in me.tactical_motifs[:3])
+        strat = ", ".join(m.value for m in me.strategic_motifs[:3])
+        parts = [p for p in (tact, strat) if p]
+        return "Teaching highlight" + (f": {', '.join(parts)}" if parts else "")
+    return ""
+
+
+def _game_winner_from_result(result: Optional[str]) -> Optional[str]:
+    r = (result or "").strip()
+    if r == "1-0":
+        return "white"
+    if r == "0-1":
+        return "black"
+    return None
+
+
+def _apply_back_to_back_key_moment_suppression(
+    move_events: List[MoveEvent],
+    episodes: List[Episode],
+    context: GameAnalysisContext,
+) -> None:
+    """Second of two same-type key moments within 2 plies loses LLM pass; gets stub reference."""
+    last_ply: Optional[int] = None
+    last_type: Optional[str] = None
+    for mi, me in enumerate(move_events):
+        km = me.key_moment_type
+        if not km:
+            continue
+        if last_type == km and last_ply is not None and (me.ply - last_ply) <= 2:
+            updated = me.model_copy(
+                update={
+                    "key_moment_type": None,
+                    "brief_commentary": True,
+                    "commentary_stub_ref_ply": last_ply,
+                    "is_critical": True,
+                }
+            )
+            move_events[mi] = updated
+            context.move_events[mi] = updated
+            for ep in episodes:
+                for ej, ev in enumerate(ep.move_events):
+                    if ev.ply == updated.ply:
+                        ep.move_events[ej] = updated
+                        break
+        else:
+            last_ply, last_type = me.ply, km
+
+
+def _mark_teaching_moments_per_episode(
+    move_events: List[MoveEvent],
+    episodes: List[Episode],
+    context: GameAnalysisContext,
+    result: Optional[str],
+) -> None:
+    """One teaching highlight per episode: strong quiet move by eventual winner with strategy."""
+    winner = _game_winner_from_result(result)
+    if winner is None:
+        return
+    taken_plys: set[int] = set()
+    ply_to_mi = {move_events[i].ply: i for i in range(len(move_events))}
+    for ep in episodes:
+        candidates: List[Tuple[int, int, int]] = []
+        for ev in ep.move_events:
+            if ev.key_moment_type or ev.teaching_moment or ev.brief_commentary:
+                continue
+            if ev.move_quality not in (MoveQuality.BEST, MoveQuality.EXCELLENT):
+                continue
+            if not ev.strategic_motifs:
+                continue
+            is_white = ev.ply % 2 == 1
+            if winner == "white" and not is_white:
+                continue
+            if winner == "black" and is_white:
+                continue
+            mi = ply_to_mi.get(ev.ply)
+            if mi is None:
+                continue
+            richness = len(ev.strategic_motifs) * 3 + len(ev.tactical_motifs)
+            candidates.append((richness, ev.ply, mi))
+        if not candidates:
+            continue
+        candidates.sort(key=lambda x: -x[0])
+        _score, ply, mi = candidates[0]
+        if ply in taken_plys:
+            continue
+        taken_plys.add(ply)
+        promoted = move_events[mi].model_copy(
+            update={"teaching_moment": True, "is_critical": True}
+        )
+        move_events[mi] = promoted
+        context.move_events[mi] = promoted
+        for ep2 in episodes:
+            for ej, ev2 in enumerate(ep2.move_events):
+                if ev2.ply == promoted.ply:
+                    ep2.move_events[ej] = promoted
+                    break
 
 
 def _bm25_pv_san_from_fen_after(engine: EngineConnector, fen_after: str, depth: int) -> List[str]:
@@ -100,6 +215,7 @@ class AnalysisRetriever:
             ),
             event=headers.get("Event", ""),
             opening=headers.get("Opening", ""),
+            eco=parse_pgn_eco_tag(headers),
             result=headers.get("Result", ""),
         )
 
@@ -570,30 +686,48 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         analyzed_move = row.analyzed_move
         pvs = row.pvs if isinstance(row.pvs, list) else []
 
-        key_moment = retriever.key_moment_detector.detect(
-            analyzed_move,
-            analyzed_rows[idx - 1].analyzed_move if idx > 0 else None,
-            list(pvs) if pvs else None,
+        me = move_events[idx] if idx < len(move_events) else None
+        key_moment = (me.key_moment_type if me else None) or getattr(
+            analyzed_rows[idx], "key_moment_type", None
         )
 
-        me = move_events[idx] if idx < len(move_events) else None
         comment: Optional[str] = None
+        named_motifs: List[str] = []
+        primary_motif_label: Optional[str] = None
         if me and me.is_critical:
             try:
                 hf = analyzed_move.hiddenFeatures or {}
                 llm = hf.get("_llm") if isinstance(hf, dict) else None
                 if isinstance(llm, dict) and llm.get("comment"):
                     comment = str(llm["comment"])
+                if isinstance(llm, dict):
+                    nm = llm.get("named_motifs")
+                    if isinstance(nm, list):
+                        named_motifs = [str(x) for x in nm if x]
+                    pm = llm.get("primary_motif_label")
+                    if pm:
+                        primary_motif_label = str(pm)
             except Exception:
                 comment = None
-        if not comment and key_moment:
-            ps = analyzed_move.score if analyzed_move.score is not None else 0
-            prev_s = (
-                analyzed_rows[idx - 1].analyzed_move.score
-                if idx > 0 and analyzed_rows[idx - 1].analyzed_move.score is not None
-                else 0
+        if (
+            not comment
+            and me
+            and me.brief_commentary
+            and me.commentary_stub_ref_ply is not None
+        ):
+            comment = (
+                f"Continues the same theme as around ply {me.commentary_stub_ref_ply} "
+                f"(see that move's commentary)."
             )
-            comment = f"{key_moment.replace('_', ' ').capitalize()} (Score change: {(ps - prev_s) / 100:.2f})"
+        if not comment and key_moment and me:
+            swing = me.eval_swing_cp
+            if swing is not None:
+                comment = (
+                    f"{key_moment.replace('_', ' ').capitalize()} "
+                    f"(Eval swing: {swing / 100:+.2f} pawns, White POV step)"
+                )
+            else:
+                comment = key_moment.replace("_", " ").capitalize()
 
         variations: List[Variation] = []
         board_pv_start = _board_before_mainline_move(game, idx)
@@ -649,6 +783,8 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 plan_comparison=me.plan_comparison.model_dump() if me and me.plan_comparison else None,
                 is_critical=bool(me.is_critical if me else False),
                 episode_index=ep_idx,
+                named_motifs=named_motifs,
+                primary_motif_label=primary_motif_label,
             )
         )
 
@@ -683,6 +819,16 @@ async def run_engine_analysis_to_json(
 
     retriever = AnalysisRetriever(engine_connector, game)
     headers = retriever.get_pgn_headers()
+    eco_book = ECOBook()
+    detected_opening, _det_ply = detect_opening(game, eco_book)
+    header_opening = "" if is_absent_opening_header(headers.opening) else headers.opening.strip()
+    merged_opening = merge_opening_with_headers(
+        detected_opening,
+        header_opening,
+        headers.eco,
+    )
+    meta_opening_name = merged_opening.name if merged_opening else (header_opening or None)
+    meta_opening_eco = merged_opening.code if merged_opening else headers.eco
 
     metadata = GameMetadata(
         id=metadata_id or str(uuid.uuid4()),
@@ -693,7 +839,8 @@ async def run_engine_analysis_to_json(
         eventId=headers.event,
         whiteElo=headers.whiteElo,
         blackElo=headers.blackElo,
-        opening=headers.opening,
+        opening=meta_opening_name,
+        opening_eco=meta_opening_eco,
     )
 
     moves_list = retriever.get_move_list()
@@ -754,7 +901,10 @@ async def run_engine_analysis_to_json(
         previous_move_obj = analyzed_move
 
     await progress_callback(92.0, "Extracting events and episodes...")
-    extractor = ChessEventExtractor()
+    extractor = ChessEventExtractor(
+        eco_book=eco_book,
+        key_moment_detector=retriever.key_moment_detector,
+    )
     move_events = extractor.extract_events(game, analyzed_rows)
     segmenter = EpisodeSegmenter()
     episodes = segmenter.segment(move_events)
@@ -764,14 +914,14 @@ async def run_engine_analysis_to_json(
         for me in ep.move_events:
             ply_to_episode[me.ply] = ep.episode_index
 
-    opening_name = None
-    opening_eco = None
+    opening_name = meta_opening_name
+    opening_eco_ctx = meta_opening_eco
     for me in move_events:
         if me.opening_name:
             opening_name = me.opening_name
         if me.opening_eco:
-            opening_eco = me.opening_eco
-        if opening_name and opening_eco:
+            opening_eco_ctx = me.opening_eco
+        if opening_name and opening_eco_ctx:
             break
 
     context = GameAnalysisContext(
@@ -786,7 +936,7 @@ async def run_engine_analysis_to_json(
         episodes=episodes,
         critical_moments=[e for e in move_events if e.is_critical],
         opening_name=opening_name,
-        opening_eco=opening_eco,
+        opening_eco=opening_eco_ctx,
     )
 
     await progress_callback(95.0, "Engine analysis complete.")
@@ -822,208 +972,3 @@ def _pv_line_for_ai_payload(row: Optional[AnalyzedMoveData]) -> List[Dict[str, s
         except Exception:
             break
     return out
-
-
-async def run_llm_commentary(
-    state: EnginePipelineState,
-    advanced_commenter: AdvancedCommentService,
-    *,
-    progress_callback: Optional[Callable[[float, str], Awaitable[None]]] = None,
-    commentary_callback: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
-    llm_model: Optional[str] = None,
-    llm_effort: Optional[str] = None,
-) -> None:
-    """Pass 4: LLM commentary for key-moment moves, episodes, and game narrative (streams via callback)."""
-    mdl = llm_model or os.environ.get("LLM_DEFAULT_MODEL", "gpt-5.4")
-    eff = llm_effort or os.environ.get("LLM_DEFAULT_EFFORT", "medium")
-    analyzed_rows = state.analyzed_rows
-    move_events = state.move_events
-    episodes = state.episodes
-    context = state.context
-    ply_to_episode = state.ply_to_episode
-
-    try:
-        game_digest = await advanced_commenter.generate_game_digest(context, model=mdl, effort=eff)
-    except Exception as e:
-        logger.warning("game digest failed: %s", e)
-        game_digest = {}
-    context.game_digest = game_digest
-    if commentary_callback and game_digest:
-        await commentary_callback("GAME_SUMMARY", {"digest": game_digest})
-
-    # Ensure every digest turning point gets key-moment commentary (LLM pass).
-    tps = (game_digest or {}).get("turning_points") or []
-    ply_to_mi = {me.ply: mi for mi, me in enumerate(move_events)}
-    for tp in tps:
-        if not isinstance(tp, dict):
-            continue
-        try:
-            p = int(tp.get("ply", 0))
-        except (TypeError, ValueError):
-            continue
-        mi = ply_to_mi.get(p)
-        if mi is None:
-            continue
-        me = move_events[mi]
-        if me.key_moment_type:
-            continue
-        promoted = me.model_copy(update={"key_moment_type": "critical_decision"})
-        move_events[mi] = promoted
-        context.move_events[mi] = promoted
-        for ep in episodes:
-            for ej, ev in enumerate(ep.move_events):
-                if ev.ply == promoted.ply:
-                    ep.move_events[ej] = promoted
-                    break
-
-    key_moment_list = [me for me in move_events if me.key_moment_type]
-    n_key_moments = max(len(key_moment_list), 1)
-    key_moment_idx = 0
-
-    for mi, me in enumerate(move_events):
-        if not me.key_moment_type:
-            continue
-        ep = next((e for e in episodes if e.episode_index == ply_to_episode.get(me.ply)), None)
-        pct = 95.0 + (key_moment_idx / n_key_moments) * 3.0
-        key_moment_idx += 1
-        if progress_callback:
-            await progress_callback(pct, f"LLM: key moment {me.san} (ply {me.ply})")
-        row = analyzed_rows[me.move_index] if 0 <= me.move_index < len(analyzed_rows) else None
-        depth_bm25 = int(os.environ.get("RAG_BM25_STOCKFISH_DEPTH", "14"))
-        pv_san_bm25: List[str] = []
-        if row:
-            pv_san_bm25 = _bm25_pv_san_from_fen_after(
-                state.retriever.engine_connector, row.fen_after, depth_bm25
-            )
-        future_delta = None
-        if row and me.best_move_uci and me.uci != me.best_move_uci:
-            depth_fl = int(os.environ.get("FUTURE_LINE_DEPTH", "18"))
-            n_plies = int(os.environ.get("FUTURE_LINE_PLIES", "6"))
-            try:
-                future_delta = compare_played_vs_best_future_lines(
-                    state.retriever.engine_connector,
-                    me.fen_before,
-                    row.fen_after,
-                    me.best_move_uci,
-                    me.uci,
-                    depth=depth_fl,
-                    n_plies=n_plies,
-                )
-            except Exception as e:
-                logger.warning("future_line_compare failed ply %s: %s", me.ply, e)
-        me_for_rag = me.model_copy(
-            update={
-                "pv_san": pv_san_bm25,
-                "future_line": future_delta,
-                "move_category": classify_move_event(
-                    me.model_copy(update={"future_line": future_delta}),
-                    future_delta,
-                ),
-            }
-        )
-        move_events[mi] = me_for_rag
-        context.move_events[mi] = me_for_rag
-        for ep in episodes:
-            for ej, ev in enumerate(ep.move_events):
-                if ev.ply == me_for_rag.ply:
-                    ep.move_events[ej] = me_for_rag
-                    break
-        # Frontend GameStateManager uses move id = mainline index + 1 (see loadGameFromJson).
-        move_id = me.move_index + 1
-        if commentary_callback:
-            await commentary_callback(
-                "AI_GENERATION_STATUS",
-                {
-                    "moveId": move_id,
-                    "context": "mainline",
-                    "status": "start",
-                    "startedAt": time.time(),
-                    "model": mdl,
-                    "effort": eff,
-                },
-            )
-        try:
-            text, rag_results, llm_debug = await advanced_commenter.analyze_and_compose_event(
-                me_for_rag,
-                ep,
-                context,
-                model=mdl,
-                effort=eff,
-                key_moment_type=me.key_moment_type,
-                analyzed_row=row,
-            )
-            if text:
-                for r in analyzed_rows:
-                    if r.ply == me.ply:
-                        if isinstance(r.analyzed_move.hiddenFeatures, dict):
-                            r.analyzed_move.hiddenFeatures.setdefault("_llm", {})
-                            r.analyzed_move.hiddenFeatures["_llm"]["comment"] = text
-                        break
-            if commentary_callback and text:
-                resolved_tokens = resolve_tokens_for_comment(text, me.fen_before, me.fen_after)
-                await commentary_callback(
-                    "AI_COMMENT_UPDATE",
-                    {
-                        "moveId": move_id,
-                        "context": "mainline",
-                        "data": {
-                            "summary": text,
-                            "commentary": text,
-                            "pv_line": _pv_line_for_ai_payload(row),
-                            "resolved_tokens": resolved_tokens,
-                            "rag_refs": rag_results_to_ws_refs(rag_results),
-                            "llm_debug": llm_debug,
-                        },
-                    },
-                )
-        except Exception as e:
-            logger.error(f"LLM move commentary failed at ply {me.ply}: {e}")
-        finally:
-            if commentary_callback:
-                await commentary_callback(
-                    "AI_GENERATION_STATUS",
-                    {
-                        "moveId": move_id,
-                        "context": "mainline",
-                        "status": "end",
-                        "endedAt": time.time(),
-                        "model": mdl,
-                        "effort": eff,
-                    },
-                )
-
-    context.critical_moments = [e for e in move_events if e.is_critical]
-
-    if progress_callback:
-        await progress_callback(98.5, "LLM: episode narratives...")
-    for ep in episodes:
-        try:
-            ep.narrative_summary = await advanced_commenter.generate_episode_commentary(
-                ep, model=mdl, effort=eff
-            )
-            if commentary_callback and ep.narrative_summary:
-                await commentary_callback(
-                    "EPISODE_NARRATIVE",
-                    {
-                        "episode_index": ep.episode_index,
-                        "title": ep.title,
-                        "narrative": ep.narrative_summary,
-                    },
-                )
-        except Exception as e:
-            logger.error(f"Episode commentary failed: {e}")
-
-    try:
-        context.game_narrative = await advanced_commenter.generate_game_narrative(
-            context, model=mdl, effort=eff
-        )
-        if commentary_callback and context.game_narrative:
-            await commentary_callback(
-                "GAME_NARRATIVE",
-                {"narrative": context.game_narrative},
-            )
-    except Exception as e:
-        logger.error(f"Game narrative failed: {e}")
-
-    if progress_callback:
-        await progress_callback(99.0, "Commentary complete.")

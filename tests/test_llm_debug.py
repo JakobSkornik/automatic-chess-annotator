@@ -47,7 +47,10 @@ class TestLlmDebug(unittest.TestCase):
             move_category=MoveCategory.POSITIONAL,
             key_moment_type="great_move",
         )
-        svc = AdvancedCommentService(rag_retriever=_StubRAG())
+        for provider_key in ("openai", "anthropic"):
+            svc = AdvancedCommentService(rag_retriever=_StubRAG(), provider_key=provider_key)
+            self.assertEqual(svc.provider_name, provider_key)
+        svc = AdvancedCommentService(rag_retriever=_StubRAG(), provider_key="openai")
         ctx = GameAnalysisContext()
 
         async def _run() -> None:
@@ -55,6 +58,7 @@ class TestLlmDebug(unittest.TestCase):
                 me, None, ctx, analyzed_row=None
             )
             self.assertIn("MOVE_RATIONALE_JSON", structured_text)
+            self.assertIn("===DYNAMIC===", structured_text)
             self.assertIn("REFERENCE EXAMPLES FROM MASTER GAMES", structured_text)
             self.assertIn("stub master note", structured_text)
             self.assertIn("rag_query", debug)

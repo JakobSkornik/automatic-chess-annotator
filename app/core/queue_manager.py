@@ -90,7 +90,7 @@ class QueueManager:
             created_at=job["created_at"],
             pgn_headers=job.get("pgn_headers"),
             move_count=job.get("move_count"),
-            llm_model=job.get("llm_model"),
+            llm_provider=job.get("llm_provider"),
             llm_effort=job.get("llm_effort"),
             error=job.get("error"),
             queued_ahead=q_ahead,
@@ -100,7 +100,7 @@ class QueueManager:
     async def add_job(
         self,
         pgn_string: str,
-        llm_model: Optional[str] = None,
+        llm_provider: Optional[str] = None,
         llm_effort: Optional[str] = None,
     ) -> str:
         job_id = str(uuid.uuid4())
@@ -116,7 +116,7 @@ class QueueManager:
             "progress": 0.0,
             "queue_position": self.job_queue.qsize(),
             "message": "Waiting in queue",
-            "llm_model": llm_model,
+            "llm_provider": llm_provider,
             "llm_effort": llm_effort,
             "pgn_headers": pgn_headers,
             "move_count": move_count,

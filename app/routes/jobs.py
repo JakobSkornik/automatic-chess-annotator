@@ -14,7 +14,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 class SubmitPgnRequest(BaseModel):
     pgn_string: str
-    llm_model: Optional[str] = None
+    llm_provider: Optional[str] = None
     llm_effort: Optional[str] = None
 
 
@@ -35,7 +35,7 @@ async def submit_job(request: SubmitPgnRequest):
 
     job_id = await queue_manager.add_job(
         request.pgn_string,
-        llm_model=request.llm_model,
+        llm_provider=request.llm_provider,
         llm_effort=request.llm_effort,
     )
     st = queue_manager.get_job_status(job_id)
@@ -53,7 +53,7 @@ async def retry_job(job_id: str):
         raise HTTPException(status_code=400, detail="Can only retry failed jobs")
     new_id = await queue_manager.add_job(
         job["pgn"],
-        llm_model=job.get("llm_model"),
+        llm_provider=job.get("llm_provider"),
         llm_effort=job.get("llm_effort"),
     )
     st = queue_manager.get_job_status(new_id)
