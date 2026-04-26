@@ -23,8 +23,11 @@ pip install -r requirements.txt
 | `OPENAI_API_KEY` | Required when using provider `openai` |
 | `ANTHROPIC_API_KEY` | Required when using provider `anthropic` |
 | `LLM_DEFAULT_PROVIDER` | `openai` or `anthropic` (default `openai`) when a job omits `llm_provider` |
-| `RAG_BM25_PATH` | Directory of the committed Tantivy BM25 index (e.g. `data/bm25_positions`). If unset or invalid, commentary runs without reference examples |
+| `RAG_BM25_PATH` | Directory of the Tantivy BM25 index. **v2** phase-aware index default build: `data/bm25_positions_v2` (see below). Legacy: `data/bm25_positions`. If unset or invalid, commentary runs without reference examples |
 | `RAG_BM25_STOCKFISH_DEPTH` | Depth for runtime PV used in BM25 queries (default `14`) |
+| `RAG_MIN_SCORE_OPENING` | Minimum combined BM25+board score to inject opening examples (default `0.45`; below → no RAG) |
+| `RAG_MIN_SCORE_MIDDLEGAME` | Same for middlegame (default `0.42`) |
+| `RAG_MIN_SCORE_ENDGAME` | Same for endgame (default `0.40`) |
 | `LLM_DEFAULT_EFFORT` | Optional default reasoning effort for the worker (`low` / `medium` / `high`). Concrete model ids per stage are fixed in `app/core/commentary/llm_policy.py`. |
 | `LOG_LLM_PROMPTS` | Set to `1` or `true` to log full user/system prompts for each LLM pass (server `logger.info`; dev only) |
 
@@ -66,23 +69,26 @@ flowchart LR
 
 1. **Engine + events** — `analyze_move` depth sweep (8/12/16), instability, PVs, motifs, `PlanComparison`, `move_category`.
 2. **Critical moves** — optional dual `analyse` for **future-line delta** (played vs best PV leaves).
-3. **RAG** — BM25 over positional tokens + **king_placement / imbalance** fields (encoder v2); **rerank** with `0.7*BM25_norm + 0.3*board_sim` (material, kings, pawn skeleton, piece map, ECO match; ECO gated in endgame).
+3. **RAG** — **v2 index** (`metadata.json` → `corpus_version: "2"`): BM25 with **phase Must** (`opening` / `middlegame` / `endgame` from the live position), phase-specific field boosts, `strategic_tags` / `endgame_signature` / ECO+ply buckets for opening, and **per-phase min score** env gates (weak match → no examples). **Legacy v1** indexes: same BM25 + board rerank without phase filter. Encoder still uses `positional_tokens` v2 fields.
 4. **Prompting** — detected-motif glossary subset + `MoveRationale` JSON + tiered position block; **per-category** plain-text composer (`tactical`, `positional`, `defensive`, …) returning `named_motifs` + prose (then `auto_tokenize` for `[move:]`, `[pv:]`, etc.).
 5. **Single composer call** — all key-moment tiers use one structured-output pass; **full** tiers get the full engine block, **compact/minimal** get trimmed rationale/RAG/position text and lower output caps (no narrator pre-pass).
 
 ## BM25 index
 
-Build or refresh the Tantivy corpus from **annotated** PGNs (local one-off). **Rebuild after encoder changes** (`encoder_version` in `positional_tokens.py`):
+Build or refresh the Tantivy corpus from **annotated** PGNs (local one-off). The script walks `--pgn-dir` **recursively** for all `*.pgn` files. **Rebuild after encoder changes** (`encoder_version` in `positional_tokens.py`) or when changing phase features.
 
 ```bash
 python scripts/build_bm25_corpus.py --help
+# v2 default output directory:
+#   data/bm25_positions_v2
+# Defaults: --min-ply 1 --max-ply 200 (full game including endgames)
 ```
 
 **Strict annotated mode (default):** each indexed position must have a non-junk `{...}` comment within the next `--max-annotation-delta` half-moves (default **4**). Positions with no such comment are **skipped** (smaller index than PV-only builds). Junk is filtered the same way as in `app/core/commentary/annotation_corpus.py` (too short, NAG-only, etc.).
 
-Stored fields per row include `annotation_text`, `annotation_ply`, and `plies_to_next_annotation`. At query time, [`TantivyPositionalRetriever`](app/core/commentary/tantivy_positional_retriever.py) prefers the master comment for RAG text and applies a `1/(1+Δ)` boost; if the comment refers to a position a few plies ahead, the UI may show the prefix `(annotation +N plies)`.
+**v2 rows** add `rag_phase`, ECO book fields, `endgame_sig` / endgame tag text, middlegame `strategic_tags`, `material_signature`, `pawn_fingerprint`, and `corpus_version`. At query time, [`TantivyPositionalRetriever`](app/core/commentary/tantivy_positional_retriever.py) prefers the master comment for RAG text and applies a `1/(1+Δ)` boost; if the comment refers to a position a few plies ahead, the UI may show the prefix `(annotation +N plies)`.
 
-See `data/bm25_positions/README.md` for index layout. `metadata.json` records `annotated_only`, `annotated_rows`, and `max_annotation_delta` after each build.
+See [`data/bm25_positions_v2/README.md`](data/bm25_positions_v2/README.md) for the v2 schema summary. `metadata.json` records build parameters, `corpus_version`, and suggested RAG thresholds.
 
 ## Debugging RAG + prompts
 
@@ -90,7 +96,7 @@ See `data/bm25_positions/README.md` for index layout. `metadata.json` records `a
 
 ```bash
 python scripts/random_rag_hits.py --count 5
-python scripts/random_rag_hits.py --path data/bm25_positions --count 3
+python scripts/random_rag_hits.py --path data/bm25_positions_v2 --count 3
 python scripts/random_rag_hits.py --query-fen "<FEN>" --pv-san "e5 Nf3 Nc6" --eco B12 --phase middlegame --ply 10 --top-k 5
 ```
 

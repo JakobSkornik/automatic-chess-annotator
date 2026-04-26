@@ -20,7 +20,7 @@ from tantivy import Occur, Query
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-DEFAULT_INDEX_PATH = REPO_ROOT / "data" / "bm25_positions"
+DEFAULT_INDEX_PATH = REPO_ROOT / "data" / "bm25_positions_v2"
 
 
 def _wrap(text: str, width: int = 88) -> str:
@@ -50,6 +50,9 @@ def _print_doc_block(searcher: Any, addr: Any, idx: int) -> None:
     source = (doc.get_first("source") or "").strip()
     game_id = (doc.get_first("game_id") or "").strip()
     eco = (doc.get_first("eco") or "").strip()
+    rph = (doc.get_first("rag_phase") or "").strip()
+    oeco = (doc.get_first("opening_eco") or "").strip()
+    esig = (doc.get_first("endgame_sig") or "").strip()[:100]
     plies = (doc.get_first("plies_to_next_annotation") or "").strip()
     ann_ply = (doc.get_first("annotation_ply") or "").strip()
     fen = (doc.get_first("fen") or "").strip()
@@ -59,6 +62,12 @@ def _print_doc_block(searcher: Any, addr: Any, idx: int) -> None:
     print(f"source: {source}")
     print(f"game_id: {game_id}")
     print(f"eco: {eco}")
+    if rph:
+        print(f"rag_phase: {rph}")
+    if oeco:
+        print(f"opening_eco: {oeco}")
+    if esig:
+        print(f"endgame_sig: {esig}")
     print(f"plies_to_next_annotation: {plies}")
     print(f"annotation_ply: {ann_ply}")
     print(f"fen: {fen}")

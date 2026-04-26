@@ -614,8 +614,12 @@ class AdvancedCommentService:
             "use them as plan inspiration, not as the current position's evaluation.)",
         ]
         for i, r in enumerate(results, 1):
-            tags = ", ".join(f"{k}={v}" for k, v in list(r.relevance_tags.items())[:6])
-            lines.append(f"[{i}] Source: {r.source}")
+            tags = ", ".join(f"{k}={v}" for k, v in list(r.relevance_tags.items())[:10])
+            ph = (r.relevance_tags.get("phase") or "").strip()
+            sc = r.similarity_score
+            score_txt = f" score={sc:.3f}" if sc is not None else ""
+            ph_txt = f" phase={ph}" if ph else ""
+            lines.append(f"[{i}]{ph_txt}{score_txt} source={r.source}")
             if tags:
                 lines.append(f"    Matched: {tags}")
             ann = r.annotation_text or ""

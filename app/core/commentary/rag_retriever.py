@@ -16,6 +16,7 @@ class RAGQuery(BaseModel):
     pawn_structure_type: Optional[str] = None
     phase: Optional[str] = None
     eco: Optional[str] = None
+    opening_name: Optional[str] = None
     ply: Optional[int] = None
     eco_prefix: Optional[str] = None
     tactical_motifs: List[str] = Field(default_factory=list)
@@ -74,6 +75,7 @@ def build_rag_query(
         pawn_structure_type=move_event.pawn_structure_type,
         phase=move_event.phase,
         eco=eco_full or None,
+        opening_name=move_event.opening_name,
         ply=move_event.ply,
         eco_prefix=eco_prefix,
         tactical_motifs=[m.value for m in move_event.tactical_motifs],

@@ -16,3 +16,5 @@ data/rag_corpus/
 # Tantivy writer artifacts (regenerate index if missing)
 data/bm25_positions/.tantivy-*.lock
 data/bm25_positions/.tmp*
+data/cbh
+data/pgn

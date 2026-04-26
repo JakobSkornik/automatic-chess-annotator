@@ -5,43 +5,43 @@
   },
   "segments": [
     {
-      "segment_id": "67e4337f-25a6-48d3-8105-4864c13177e5",
-      "max_doc": 1867,
+      "segment_id": "fd3fb965-e9b8-451e-9f8e-322382c45c98",
+      "max_doc": 4279,
       "deletes": null
     },
     {
-      "segment_id": "4eed7feb-e074-40d5-a7ae-b666f8f6cb83",
-      "max_doc": 1633,
+      "segment_id": "79744a38-ab1c-4b21-9484-dc2dc381bafd",
+      "max_doc": 4173,
       "deletes": null
     },
     {
-      "segment_id": "ca61fa38-e9de-4cde-8cef-8f547a3c0c53",
-      "max_doc": 1331,
+      "segment_id": "d58d0467-3516-4259-9ee6-ee2da44fc93b",
+      "max_doc": 4054,
       "deletes": null
     },
     {
-      "segment_id": "b0a78c5e-8971-4b3b-aa5b-7f007b2457db",
-      "max_doc": 1190,
+      "segment_id": "4aba2530-c2ad-40c1-bff6-5193df2d7921",
+      "max_doc": 3761,
       "deletes": null
     },
     {
-      "segment_id": "2b09e93d-4ec3-4e29-9d88-ab92a17424b2",
-      "max_doc": 1146,
+      "segment_id": "b3bef95e-c0de-40dc-b1c9-e9e3532e75c5",
+      "max_doc": 3657,
       "deletes": null
     },
     {
-      "segment_id": "39c790bb-653e-4b99-9728-255a0dd81916",
-      "max_doc": 928,
+      "segment_id": "7b587519-4261-42dc-b655-5f08deada3be",
+      "max_doc": 3618,
       "deletes": null
     },
     {
-      "segment_id": "f030295e-2b3f-487c-9c67-b67a1f8e363c",
-      "max_doc": 653,
+      "segment_id": "4a1491a3-4d48-42a3-ae80-7189a4433d43",
+      "max_doc": 3305,
       "deletes": null
     },
     {
-      "segment_id": "4ad1f95b-44ea-4522-a874-a927bc9a42d3",
-      "max_doc": 511,
+      "segment_id": "3f7ae505-bc7e-4d7e-a304-ce4359372cb6",
+      "max_doc": 3153,
       "deletes": null
     }
   ],
@@ -126,6 +126,32 @@
     },
     {
       "name": "imbalance_signature",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "strategic_tags",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "whitespace"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "endgame_signature",
       "type": "text",
       "options": {
         "indexing": {
@@ -253,7 +279,150 @@
         "stored": true,
         "fast": false
       }
+    },
+    {
+      "name": "rag_phase",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "opening_eco",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "opening_prefix",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "opening_name",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "opening_matched_ply",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "opening_ply_bucket",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "material_signature",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "material_bucket",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "pawn_fingerprint",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "corpus_version",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "endgame_sig",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
     }
   ],
-  "opstamp": 9267
+  "opstamp": 30008
 }
