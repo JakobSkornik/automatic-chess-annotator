@@ -89,7 +89,13 @@ def build_rag_query(
 
 class RAGRetriever(ABC):
     @abstractmethod
-    async def retrieve(self, query: RAGQuery, top_k: int = 2) -> List[RAGResult]:
+    async def retrieve(
+        self,
+        query: RAGQuery,
+        top_k: int = 2,
+        *,
+        retrieval_debug: Optional[Dict[str, Any]] = None,
+    ) -> List[RAGResult]:
         ...
 
 
@@ -97,14 +103,24 @@ def rag_results_to_ws_refs(results: List[RAGResult]) -> List[Dict[str, Any]]:
     """Serialize RAG results for WebSocket `data.rag_refs` (FE + debugging)."""
     out: List[Dict[str, Any]] = []
     for r in results:
+        tags = r.relevance_tags or {}
+        eco = (
+            tags.get("opening_eco")
+            or tags.get("eco")
+            or ""
+        )
+        oname = tags.get("opening_name") or tags.get("opening") or ""
         out.append(
             {
                 "source": r.source,
                 "fen": r.fen or "",
                 "text": r.annotation_text[:300],
                 "score": float(r.similarity_score) if r.similarity_score is not None else 0.0,
-                "san": (r.relevance_tags.get("san") or ""),
-                "phase": (r.relevance_tags.get("phase") or ""),
+                "san": (tags.get("san") or ""),
+                "phase": (tags.get("phase") or ""),
+                "opening_eco": eco,
+                "opening_name": str(oname)[:200],
+                "material_signature": (tags.get("material_signature") or ""),
             }
         )
     return out

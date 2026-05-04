@@ -11,8 +11,8 @@ class TestPerCategoryPrompts(unittest.TestCase):
         for c in MoveCategory:
             self.assertIn(c.value, CATEGORY_COMPOSER_PROMPTS)
             prompt = CATEGORY_COMPOSER_PROMPTS[c.value]
-            self.assertIn("named_motifs", prompt.lower())
-            self.assertIn("plain prose", prompt.lower())
+            self.assertIn("better_alternative", prompt.lower())
+            self.assertIn("rag_applied", prompt.lower())
 
 
 if __name__ == "__main__":

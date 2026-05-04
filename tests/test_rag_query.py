@@ -2,7 +2,9 @@
 
 import unittest
 
+from app.core.commentary.advanced_comment_service import COMPOSER_OUTPUT_SCHEMA
 from app.core.commentary.rag_retriever import build_rag_query
+from app.models.GameJson import RagRef
 from app.models.chess_events import MoveEvent, MoveEventType, MoveQuality
 
 
@@ -31,6 +33,14 @@ class TestRAGQuery(unittest.TestCase):
         self.assertEqual(q.pv_san, ["e5", "Nf3"])
         self.assertEqual(q.eco, "B20")
         self.assertEqual(q.ply, 10)
+
+    def test_composer_schema_has_extended_fields(self) -> None:
+        props = COMPOSER_OUTPUT_SCHEMA["properties"]
+        self.assertEqual(props["rag_applied"]["type"], "boolean")
+
+    def test_ragref_model_minimal(self) -> None:
+        rr = RagRef(source="s", text="t")
+        self.assertEqual(rr.opening_eco, "")
 
 
 if __name__ == "__main__":

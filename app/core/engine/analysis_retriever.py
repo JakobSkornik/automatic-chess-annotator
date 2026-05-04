@@ -22,6 +22,7 @@ from app.models.GameJson import (
     Variation,
     MoveScore,
     EpisodeSummary,
+    RagRef,
 )
 from app.core.io.pgn_reader import PGNReader
 from app.core.commentary.key_moment_detector import KeyMomentDetector
@@ -694,6 +695,22 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         comment: Optional[str] = None
         named_motifs: List[str] = []
         primary_motif_label: Optional[str] = None
+        rag_refs: List[RagRef] = []
+        try:
+            hf_all = analyzed_move.hiddenFeatures or {}
+            llm_rr = hf_all.get("_llm") if isinstance(hf_all, dict) else None
+            if isinstance(llm_rr, dict):
+                raw_rr = llm_rr.get("rag_refs")
+                if isinstance(raw_rr, list):
+                    for item in raw_rr:
+                        if isinstance(item, dict):
+                            try:
+                                rag_refs.append(RagRef.model_validate(item))
+                            except Exception:
+                                continue
+        except Exception:
+            rag_refs = []
+
         if me and me.is_critical:
             try:
                 hf = analyzed_move.hiddenFeatures or {}
@@ -785,6 +802,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 episode_index=ep_idx,
                 named_motifs=named_motifs,
                 primary_motif_label=primary_motif_label,
+                rag_refs=rag_refs,
             )
         )
 

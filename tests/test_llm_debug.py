@@ -14,7 +14,13 @@ from app.models.chess_events import (
 
 
 class _StubRAG(RAGRetriever):
-    async def retrieve(self, query: RAGQuery, top_k: int = 2):  # type: ignore[override]
+    async def retrieve(
+        self,
+        query: RAGQuery,
+        top_k: int = 2,
+        *,
+        retrieval_debug=None,
+    ):  # type: ignore[override]
         return [
             RAGResult(
                 source="stub.pgn",
@@ -59,8 +65,11 @@ class TestLlmDebug(unittest.TestCase):
             )
             self.assertIn("MOVE_RATIONALE_JSON", structured_text)
             self.assertIn("===DYNAMIC===", structured_text)
-            self.assertIn("REFERENCE EXAMPLES FROM MASTER GAMES", structured_text)
+            self.assertIn("MASTER ANNOTATIONS", structured_text)
             self.assertIn("stub master note", structured_text)
+            rationale_pos = structured_text.rfind("MOVE_RATIONALE_JSON")
+            master_pos = structured_text.rfind("MASTER ANNOTATIONS")
+            self.assertGreater(master_pos, rationale_pos)
             self.assertIn("rag_query", debug)
             self.assertIn("rationale", debug)
             self.assertIn("system_prompts", debug)

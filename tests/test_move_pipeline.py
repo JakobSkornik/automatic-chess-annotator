@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unittest
-from typing import Any
+from typing import Any, Dict, Optional
 from unittest.mock import AsyncMock
 
 from app.core.commentary.pipeline.move_pipeline import (
@@ -21,7 +21,14 @@ from app.models.chess_events import (
 
 
 class _StubRAG(RAGRetriever):
-    async def retrieve(self, query: RAGQuery, top_k: int = 2):  # type: ignore[override]
+    async def retrieve(
+        self,
+        query: RAGQuery,
+        top_k: int = 2,
+        *,
+        retrieval_debug: Optional[Dict[str, Any]] = None,
+    ):  # type: ignore[override]
+        _ = retrieval_debug
         return [
             RAGResult(
                 source="s",

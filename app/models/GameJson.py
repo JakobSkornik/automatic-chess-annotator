@@ -1,6 +1,21 @@
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 
+
+class RagRef(BaseModel):
+    """Serialized RAG hit persisted on a move (mirrors WebSocket rag_refs payload)."""
+
+    source: str = ""
+    fen: str = ""
+    text: str = ""
+    score: float = 0.0
+    san: str = ""
+    phase: str = ""
+    opening_eco: str = ""
+    opening_name: str = ""
+    material_signature: str = ""
+
+
 class MoveScore(BaseModel):
     cp: Optional[int] = None
     mate: Optional[int] = None
@@ -31,6 +46,7 @@ class GameMove(BaseModel):
     episode_index: Optional[int] = None
     named_motifs: List[str] = []
     primary_motif_label: Optional[str] = None
+    rag_refs: List[RagRef] = []
 
 class GameMetadata(BaseModel):
     id: str

@@ -191,13 +191,23 @@ class KeyMomentDetector:
                     mat_brk = False
                     pm = prev_hf.get("material") or {}
                     cm = curr_hf.get("material") or {}
-                    pd = (pm.get("diff") or {}).get("total") if isinstance(pm.get("diff"), dict) else None
-                    cd = (cm.get("diff") or {}).get("total") if isinstance(cm.get("diff"), dict) else None
+                    pd = (
+                        (pm.get("diff") or {}).get("total")
+                        if isinstance(pm.get("diff"), dict)
+                        else None
+                    )
+                    cd = (
+                        (cm.get("diff") or {}).get("total")
+                        if isinstance(cm.get("diff"), dict)
+                        else None
+                    )
                     if isinstance(pd, (int, float)) and isinstance(cd, (int, float)):
                         if abs(cd - pd) >= 100:
                             mat_brk = True
                     struct_diff = bool(ps1 and ps2 and ps1 != ps2)
-                    if struct_diff or king_brk or mat_brk:
+                    # Require a tangible eval swing (White POV cp ladder) — tiny blips are noise.
+                    eval_swing_abs = abs(current_move.score - previous_move.score)  # type: ignore[operator]
+                    if eval_swing_abs >= 60 and (struct_diff or king_brk or mat_brk):
                         results.append("critical_decision")
 
         return results

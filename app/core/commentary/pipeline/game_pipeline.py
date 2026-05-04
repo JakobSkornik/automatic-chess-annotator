@@ -98,6 +98,8 @@ class GameAnnotationPipeline:
         audit_coverage: List[float] = []
         audit_evals: List[int] = []
         audit_forbidden = 0
+        rag_usage_num = 0
+        rag_usage_den = 0
 
         key_moment_list = [
             me for me in move_events if me.key_moment_type or me.teaching_moment
@@ -185,6 +187,10 @@ class GameAnnotationPipeline:
                 llm_debug = dict(mctx.llm_debug or {})
 
                 if text:
+                    persist_rag = (
+                        os.environ.get("RAG_PERSIST_REFS", "1").strip().lower()
+                        not in ("0", "false", "")
+                    )
                     for r in analyzed_rows:
                         if r.ply == me.ply:
                             if isinstance(r.analyzed_move.hiddenFeatures, dict):
@@ -194,6 +200,9 @@ class GameAnnotationPipeline:
                                 _slot["named_motifs"] = llm_debug.get("composer_named_motifs", [])
                                 rat = llm_debug.get("rationale") or {}
                                 _slot["primary_motif_label"] = rat.get("primary_motif_label", "")
+                                if persist_rag:
+                                    _slot["rag_refs"] = rag_results_to_ws_refs(rag_results or [])
+                                _slot["composer_rag_applied"] = llm_debug.get("composer_rag_applied")
                             break
                     arch_snip = str((context.game_digest or {}).get("strategic_archetype") or "")
                     motif_hint = ", ".join(llm_debug.get("composer_named_motifs") or []) or (
@@ -215,6 +224,10 @@ class GameAnnotationPipeline:
                             audit_forbidden += int(ca.get("forbidden_phrase_hits", 0))
                         except (TypeError, ValueError):
                             pass
+                        if ca.get("rag_had_hits"):
+                            rag_usage_den += 1
+                            if ca.get("rag_applied"):
+                                rag_usage_num += 1
                 if commentary_callback and text:
                     resolved_tokens = resolve_tokens_for_comment(text, me.fen_before, me.fen_after)
                     await commentary_callback(
@@ -296,6 +309,14 @@ class GameAnnotationPipeline:
                 sum(audit_evals) / max(len(audit_evals), 1),
                 audit_forbidden,
                 len(audit_coverage),
+            )
+        if rag_usage_den > 0:
+            logger.info(
+                "game %s rag_quality moves_with_rag_hits=%d rag_applied=%d ratio=%.3f",
+                state.metadata.id,
+                rag_usage_den,
+                rag_usage_num,
+                rag_usage_num / rag_usage_den,
             )
 
         if progress_callback:

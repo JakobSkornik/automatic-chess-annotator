@@ -6,7 +6,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import chess
 import tantivy
@@ -49,9 +49,9 @@ def _env_float(name: str, default: float) -> float:
 def _min_score_for_phase(phase: str) -> float:
     p = (phase or "middlegame").lower()
     if p == "opening":
-        return _env_float("RAG_MIN_SCORE_OPENING", 0.45)
+        return _env_float("RAG_MIN_SCORE_OPENING", 0.35)
     if p == "endgame":
-        return _env_float("RAG_MIN_SCORE_ENDGAME", 0.40)
+        return _env_float("RAG_MIN_SCORE_ENDGAME", 0.35)
     return _env_float("RAG_MIN_SCORE_MIDDLEGAME", 0.42)
 
 
@@ -225,7 +225,13 @@ def _fpc_match(qfp: str, dfp: str) -> float:
 class _NoopRetriever(RAGRetriever):
     """No examples when RAG_BM25_PATH is unset or invalid."""
 
-    async def retrieve(self, query: RAGQuery, top_k: int = 2) -> List[RAGResult]:
+    async def retrieve(
+        self,
+        query: RAGQuery,
+        top_k: int = 2,
+        *,
+        retrieval_debug: Optional[Dict[str, Any]] = None,
+    ) -> List[RAGResult]:
         return []
 
 
@@ -262,13 +268,28 @@ class TantivyPositionalRetriever(RAGRetriever):
             self._corpus_version = _read_corpus_version(self._path)
         return self._corpus_version == "2"
 
-    async def retrieve(self, query: RAGQuery, top_k: int = 2) -> List[RAGResult]:
+    async def retrieve(
+        self,
+        query: RAGQuery,
+        top_k: int = 2,
+        *,
+        retrieval_debug: Optional[Dict[str, Any]] = None,
+    ) -> List[RAGResult]:
+        if retrieval_debug is not None:
+            retrieval_debug.clear()
+
+        def _dbg(**kwargs: Any) -> None:
+            if retrieval_debug is not None:
+                retrieval_debug.update(kwargs)
+
         if not query.fen or not query.pv_san:
+            _dbg(reason="missing_fen_or_pv_san")
             return []
         try:
             board = chess.Board(query.fen)
         except Exception:
             logger.warning("Tantivy RAG: invalid FEN")
+            _dbg(reason="invalid_fen")
             return []
 
         rag_phase = classify_rag_phase(board)
@@ -290,6 +311,7 @@ class TantivyPositionalRetriever(RAGRetriever):
             index = self._get_index()
         except Exception as e:
             logger.warning("Tantivy RAG: cannot open index: %s", e)
+            _dbg(reason="index_open_failed")
             return []
 
         index.reload()
@@ -313,11 +335,13 @@ class TantivyPositionalRetriever(RAGRetriever):
                 continue
             subqueries.append((Occur.Should, Query.boost_query(q, boost)))
         if not subqueries:
+            _dbg(reason="no_subqueries", rag_phase=rag_phase)
             return []
 
         try:
             q_pc = index.parse_query(base_enc["player_color"], default_field_names=["player_color"])
         except Exception:
+            _dbg(reason="player_color_parse_failed")
             return []
         subqueries.append((Occur.Must, q_pc))
 
@@ -364,6 +388,7 @@ class TantivyPositionalRetriever(RAGRetriever):
             hits = searcher.search(bool_q, limit=limit).hits
         except Exception as e:
             logger.warning("Tantivy RAG search failed: %s", e)
+            _dbg(reason="search_failed")
             return []
 
         q_phase = rag_phase
@@ -435,6 +460,7 @@ class TantivyPositionalRetriever(RAGRetriever):
 
         finals.sort(key=lambda x: x[0], reverse=True)
         if not finals:
+            _dbg(reason="no_final_scores", rag_phase=rag_phase, min_score_threshold=min_score)
             return []
         best_score = finals[0][0]
         if best_score < min_score:
@@ -443,6 +469,12 @@ class TantivyPositionalRetriever(RAGRetriever):
                 rag_phase,
                 best_score,
                 min_score,
+            )
+            _dbg(
+                reason="below_min_score_threshold",
+                rag_phase=rag_phase,
+                best_score=float(best_score),
+                min_score_threshold=float(min_score),
             )
             return []
 
@@ -477,11 +509,15 @@ class TantivyPositionalRetriever(RAGRetriever):
                 tags["endgame_sig"] = d_sig[:120]
             if v2 and oeco:
                 tags["opening_eco"] = oeco
+            if query.material_imbalance:
+                tags["material_signature"] = str(query.material_imbalance)[:120]
             if v2 and (doc.get_first("opening_ply_bucket") or ""):
                 tags["opening_ply_bucket"] = (doc.get_first("opening_ply_bucket") or "").strip()
-            if v2 and (query.opening_name or (doc.get_first("opening_name") or "")):
-                if query.opening_name:
-                    tags["opening"] = (query.opening_name or "")[:80]
+            on_doc = (doc.get_first("opening_name") or "").strip() if v2 else ""
+            if on_doc:
+                tags["opening_name"] = on_doc[:160]
+            elif query.opening_name:
+                tags["opening_name"] = (query.opening_name or "").strip()[:160]
             out.append(
                 RAGResult(
                     source=source or "lichess",

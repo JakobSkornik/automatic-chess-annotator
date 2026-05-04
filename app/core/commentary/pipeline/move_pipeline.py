@@ -54,11 +54,14 @@ class RagRetrievalStage:
     async def run(self, ctx: MoveCommentaryContext) -> None:
         if ctx.skip:
             return
-        from app.core.commentary.advanced_comment_service import _detail_level_for_key_moment
+        from app.core.commentary.advanced_comment_service import (
+            compute_rag_top_k,
+            _detail_level_for_key_moment,
+        )
 
         query = build_rag_query(ctx.move_event, ctx.episode)
         detail_pre = _detail_level_for_key_moment(ctx.move_event.key_moment_type)
-        rag_top_k = 1 if detail_pre == "minimal" else 2
+        rag_top_k = compute_rag_top_k(detail_pre, query.phase)
         ctx.rag_results = await ctx.service._rag.retrieve(query, top_k=rag_top_k)
         logger.info(
             "RAG query: phase=%s fen=%.80s",
