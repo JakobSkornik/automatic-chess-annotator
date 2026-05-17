@@ -135,6 +135,7 @@ class MoveRationale(BaseModel):
     played_plan: Optional[str] = None
     best_plan: Optional[str] = None
     risk: Optional[str] = None
+    stakes: Optional[str] = None
     glossary_phrasings: Dict[str, str] = Field(default_factory=dict)
     primary_motif_label: str = ""
     narrative_template: str = ""
@@ -152,6 +153,16 @@ class FutureLineDelta(BaseModel):
     best_targets: List[str] = Field(default_factory=list)
     played_line_san: List[str] = Field(default_factory=list)
     best_line_san: List[str] = Field(default_factory=list)
+
+
+class PvHorizonDiff(BaseModel):
+    """Root vs leaf hidden features along engine PV1 (current position horizon)."""
+
+    plies: int
+    pv_san: List[str] = Field(default_factory=list)
+    leaf_eval_cp: Optional[int] = None
+    scalar_deltas: Dict[str, float] = Field(default_factory=dict)
+    list_deltas: Dict[str, Dict[str, List[str]]] = Field(default_factory=dict)
 
 
 class MoveEvent(BaseModel):
@@ -193,6 +204,8 @@ class MoveEvent(BaseModel):
     pv_san: Optional[List[str]] = None
     # Future-line comparison (played vs best continuation); set in GameAnnotationPipeline for critical moves
     future_line: Optional[FutureLineDelta] = None
+    # Root vs PV-leaf feature deltas along engine PV1 (engine pass, out-of-book positions)
+    pv_horizon_diff: Optional[PvHorizonDiff] = None
     # max(eval@depth) - min(eval@depth) across depths 8/12/16 on after-move position
     eval_instability_cp: Optional[int] = None
 
@@ -254,3 +267,4 @@ class AnalyzedMoveData(BaseModel):
     pv1_change_count: int = 0
     # Cached from ChessEventExtractor / KeyMomentDetector (single source of truth)
     key_moment_type: Optional[str] = None
+    pv_horizon_diff: Optional[PvHorizonDiff] = None

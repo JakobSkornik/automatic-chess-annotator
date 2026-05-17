@@ -173,7 +173,6 @@ class ChessEventExtractor:
             km = self._key_moment_detector.detect(
                 analyzed, prev_move_obj, pvs, pv1_change_count=row.pv1_change_count
             )
-            analyzed_rows[i] = row.model_copy(update={"key_moment_type": km})
 
             eval_instability_cp: Optional[int] = None
             ead = row.eval_at_depth or {}
@@ -187,6 +186,13 @@ class ChessEventExtractor:
                 and loss < 100
             ):
                 km = "hidden_inflection"
+
+            if not km and mq == MoveQuality.BLUNDER:
+                km = "blunder"
+            elif not km and mq == MoveQuality.MISTAKE:
+                km = "mistake"
+
+            analyzed_rows[i] = analyzed_rows[i].model_copy(update={"key_moment_type": km})
 
             phase = _map_phase(row.phase_raw or (analyzed.phase or "mid"))
 
@@ -283,6 +289,7 @@ class ChessEventExtractor:
                 opening_eco=opening_eco,
                 key_moment_type=km,
                 eval_instability_cp=eval_instability_cp,
+                pv_horizon_diff=row.pv_horizon_diff,
             )
             ev = ev.model_copy(
                 update={"move_category": classify_move_event(ev, future_delta=None)}

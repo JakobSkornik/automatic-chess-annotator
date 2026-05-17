@@ -204,6 +204,10 @@ flowchart TD
   ep --> gn
 ```
 
+### Capturing LLM prompts for review
+
+Set **`LOG_LLM_TO_FILE=1`** (or **`true`**) to append one JSON object per LLM request (full `system`, `user`, and raw `response`, plus timing and metadata) to **`logs/llm/{game_id}.jsonl`**, where **`game_id`** is the job/game id (`GameMetadata.id`, same as the worker’s job id). Enabled only when this env var is set; toggling it in the worker environment is enough for that run.
+
 ## PGN input format
 
 - **Required:** a single game that `python-chess` can parse (see [`PGNReader.validate_single_game`](app/core/io/pgn_reader.py)).

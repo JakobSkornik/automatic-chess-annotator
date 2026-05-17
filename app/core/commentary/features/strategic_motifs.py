@@ -43,6 +43,15 @@ def _pawn_files(board: chess.Board, color: chess.Color) -> Dict[int, List[int]]:
 MATE_SCORE = 1_000_000
 
 
+def _list_feature_len(side: Dict[str, Any], key: str) -> int:
+    v = side.get(key)
+    if isinstance(v, list):
+        return len(v)
+    if isinstance(v, int):
+        return v
+    return 0
+
+
 def _dedupe(xs: List[StrategicMotif]) -> List[StrategicMotif]:
     seen: Set[StrategicMotif] = set()
     out: List[StrategicMotif] = []
@@ -51,6 +60,21 @@ def _dedupe(xs: List[StrategicMotif]) -> List[StrategicMotif]:
             seen.add(x)
             out.append(x)
     return out
+
+
+def _sq_light(sq: int) -> bool:
+    return (chess.square_file(sq) + chess.square_rank(sq)) % 2 == 1
+
+
+def _strict_bad_bishop_board(board: chess.Board, color: chess.Color) -> bool:
+    """Stricter than hiddenFeatures alone: reduces fianchetto false positives (need more same-color pawns)."""
+    own_pawns = list(board.pieces(chess.PAWN, color))
+    for b_sq in board.pieces(chess.BISHOP, color):
+        light = _sq_light(b_sq)
+        n_same = sum(1 for ps in own_pawns if _sq_light(ps) == light)
+        if n_same >= 4:
+            return True
+    return False
 
 
 def detect_strategic_motifs(
@@ -90,16 +114,21 @@ def detect_strategic_motifs(
     if avail and not occ:
         motifs.append(StrategicMotif.OUTPOST_AVAILABLE)
 
-    if isinstance(w.get("badBishops"), int) and w["badBishops"] >= 1:
+    white_bad_hf = isinstance(w.get("badBishops"), int) and w["badBishops"] >= 1
+    black_bad_hf = isinstance(b.get("badBishops"), int) and b["badBishops"] >= 1
+    white_bad = white_bad_hf and _strict_bad_bishop_board(board_after, chess.WHITE)
+    black_bad = black_bad_hf and _strict_bad_bishop_board(board_after, chess.BLACK)
+
+    if white_bad:
         motifs.append(StrategicMotif.BAD_BISHOP)
-    if isinstance(b.get("badBishops"), int) and b["badBishops"] >= 1:
+    if black_bad:
         motifs.append(StrategicMotif.BAD_BISHOP)
     if isinstance(w.get("goodBishops"), int) and w["goodBishops"] >= 1:
-        if not (isinstance(w.get("badBishops"), int) and w["badBishops"] >= 1):
+        if not white_bad_hf:
             if mover == chess.WHITE:
                 motifs.append(StrategicMotif.GOOD_BISHOP)
     if isinstance(b.get("goodBishops"), int) and b["goodBishops"] >= 1:
-        if not (isinstance(b.get("badBishops"), int) and b["badBishops"] >= 1):
+        if not black_bad_hf:
             if mover == chess.BLACK:
                 motifs.append(StrategicMotif.GOOD_BISHOP)
     if w.get("hasBishopPair") and mover == chess.WHITE:
@@ -121,14 +150,14 @@ def detect_strategic_motifs(
 
     # IQP / hanging pawns (heuristic from counts + center type)
     ct = ps.get("centerType") if isinstance(ps, dict) else None
-    if isinstance(w.get("isolatedPawns"), int) and w["isolatedPawns"] >= 1 and ct in (
+    if _list_feature_len(w, "isolatedPawns") >= 1 and ct in (
         "open",
         "semi-open",
         "small",
     ):
         motifs.append(StrategicMotif.ISOLATED_QUEEN_PAWN)
-    if isinstance(w.get("doubledPawns"), int) and w["doubledPawns"] >= 1:
-        if isinstance(b.get("doubledPawns"), int) and b["doubledPawns"] >= 1:
+    if _list_feature_len(w, "doubledPawns") >= 1:
+        if _list_feature_len(b, "doubledPawns") >= 1:
             motifs.append(StrategicMotif.HANGING_PAWNS)
 
     # Open file: rook/queen on open file

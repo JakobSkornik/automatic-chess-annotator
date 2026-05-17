@@ -169,11 +169,20 @@ def _decoy_sacrifice(
     return False
 
 
-def _interference_block(board_before: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
-    """Piece lands on a square between a sliding attacker and a valuable target."""
+def _interference_block(
+    board_before: chess.Board, board_after: chess.Board, move: chess.Move, mover_color: chess.Color
+) -> bool:
+    """Piece lands on a square between a sliding attacker and a valuable target (clear ray)."""
     enemy = not mover_color
     piece = board_before.piece_at(move.from_square)
     if not piece or piece.piece_type not in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.PAWN):
+        return False
+    if (
+        not board_before.is_capture(move)
+        and not board_after.is_check()
+        and board_before.fullmove_number <= 4
+        and piece.piece_type in (chess.PAWN, chess.KNIGHT)
+    ):
         return False
     inter_sq = move.to_square
     for atk_sq in chess.SQUARES:
@@ -187,8 +196,18 @@ def _interference_block(board_before: chess.Board, move: chess.Move, mover_color
             if PIECE_VALUES.get(tp.piece_type, 0) < 3 and tp.piece_type != chess.KING:
                 continue
             between_bb = chess.between(atk_sq, tgt_sq)
-            if inter_sq in chess.SquareSet(between_bb):
-                return True
+            if inter_sq not in chess.SquareSet(between_bb):
+                continue
+            blocked = False
+            for sq in chess.SquareSet(between_bb):
+                if sq == inter_sq:
+                    continue
+                if board_before.piece_at(sq) is not None:
+                    blocked = True
+                    break
+            if blocked:
+                continue
+            return True
     return False
 
 
@@ -251,7 +270,12 @@ def _x_ray_attack(board_after: chess.Board, moved_to: int, mover_color: chess.Co
                     break
                 seen_own = True
                 continue
-            if p.color == enemy and seen_own and p.piece_type != chess.KING:
+            if (
+                p.color == enemy
+                and seen_own
+                and p.piece_type != chess.KING
+                and PIECE_VALUES.get(p.piece_type, 0) >= 3
+            ):
                 return True
             break
     return False
@@ -273,17 +297,61 @@ def _double_attack_non_fork(board_after: chess.Board, moved_to: int, mover_color
 
 
 def _clearance_move(board_before: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
-    """Rook/queen steps off a rank/file opening a battery line."""
+    """Rook/queen steps off a line so a friendly rook/queen behind gains a new attacked square."""
     p = board_before.piece_at(move.from_square)
     if not p or p.piece_type not in (chess.ROOK, chess.QUEEN):
         return False
     fr, ff = chess.square_rank(move.from_square), chess.square_file(move.from_square)
     tr, tf = chess.square_rank(move.to_square), chess.square_file(move.to_square)
-    if p.piece_type == chess.ROOK and fr == tr:
-        return True
-    if p.piece_type == chess.ROOK and ff == tf:
-        return True
-    return False
+    if fr != tr and ff != tf:
+        return False
+    df = tf - ff
+    dr = tr - fr
+    if df != 0 and dr != 0:
+        return False
+    bf = -_sign(df)
+    br = -_sign(dr)
+    if bf == 0 and br == 0:
+        return False
+    f, r = ff, fr
+    behind_sq: Optional[int] = None
+    while True:
+        f += bf
+        r += br
+        if not (0 <= f <= 7 and 0 <= r <= 7):
+            break
+        sq = chess.square(f, r)
+        pc = board_before.piece_at(sq)
+        if pc is None:
+            continue
+        if pc.color == mover_color and pc.piece_type in (chess.ROOK, chess.QUEEN):
+            behind_sq = sq
+            break
+        break
+    if behind_sq is None:
+        return False
+    between_bb = chess.between(behind_sq, move.from_square)
+    for sq in chess.SquareSet(between_bb):
+        if sq in (behind_sq, move.from_square):
+            continue
+        if board_before.piece_at(sq) is not None:
+            return False
+    uf = _sign(ff - chess.square_file(behind_sq))
+    ur = _sign(fr - chess.square_rank(behind_sq))
+    past_sq = chess.square(ff + uf, fr + ur)
+    if not (0 <= chess.square_file(past_sq) <= 7 and 0 <= chess.square_rank(past_sq) <= 7):
+        return False
+    try:
+        seen_before = board_before.attacks(behind_sq)
+    except Exception:
+        return False
+    board_after = board_before.copy()
+    board_after.push(move)
+    try:
+        seen_after = board_after.attacks(behind_sq)
+    except Exception:
+        return False
+    return past_sq in seen_after and past_sq not in seen_before
 
 
 def _back_rank_threat(board_after: chess.Board, mover_color: chess.Color) -> bool:
@@ -381,7 +449,7 @@ def detect_tactical_motifs(
     if _decoy_sacrifice(board_before, board_after, move, moved_color):
         motifs.append(TacticalMotif.DECOY)
 
-    if _interference_block(board_before, move, moved_color):
+    if _interference_block(board_before, board_after, move, moved_color):
         motifs.append(TacticalMotif.INTERFERENCE)
 
     if _zwischenzug_check(board_before, board_after, move):

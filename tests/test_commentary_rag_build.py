@@ -13,6 +13,15 @@ from app.models.GameJson import AnalysisInfo, GameJson, GameMetadata, GameMove, 
 from app.models.chess_events import GameAnalysisContext, MoveCategory, MoveEvent, MoveEventType, MoveQuality
 
 
+_LONG_MASTER_NOTE = (
+    "White develops naturally while Black fianchettoes the king bishop. "
+    "Both sides contest the center with pawns and minor pieces. "
+    "The middlegame brings opposite-side castling and mutual threats. "
+    "Tactical motifs appear along open files and weak squares near the king. "
+    "Eventually simplifications favor the side with better coordination. "
+)
+
+
 class _StubRAG(RAGRetriever):
     async def retrieve(
         self,
@@ -25,7 +34,7 @@ class _StubRAG(RAGRetriever):
             RAGResult(
                 source="gm.pgn",
                 fen="8/8/8/8/8/8/8/8 b - -",
-                annotation_text="Paraphrase-able master idea.",
+                annotation_text=_LONG_MASTER_NOTE + "Paraphrase-able master idea.",
                 similarity_score=0.77,
                 relevance_tags={
                     "phase": "middlegame",

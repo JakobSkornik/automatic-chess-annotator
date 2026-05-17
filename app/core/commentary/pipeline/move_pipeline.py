@@ -32,6 +32,7 @@ class MoveCommentaryContext:
     llm_debug: Dict[str, Any] = field(default_factory=dict)
     final_text: str = ""
     fallback_used: Optional[str] = None
+    composer_pass_label: Optional[str] = None
 
 
 class MoveStage(Protocol):
@@ -60,7 +61,10 @@ class RagRetrievalStage:
         )
 
         query = build_rag_query(ctx.move_event, ctx.episode)
-        detail_pre = _detail_level_for_key_moment(ctx.move_event.key_moment_type)
+        detail_pre = _detail_level_for_key_moment(ctx.move_event)
+        if detail_pre == "book":
+            ctx.rag_results = []
+            return
         rag_top_k = compute_rag_top_k(detail_pre, query.phase)
         ctx.rag_results = await ctx.service._rag.retrieve(query, top_k=rag_top_k)
         logger.info(
@@ -107,7 +111,10 @@ class LlmCallStage:
     async def run(self, ctx: MoveCommentaryContext) -> None:
         if ctx.skip:
             return
-        model = resolve_model(ctx.service.provider_name, "composer")
+        pl = ctx.composer_pass_label or (
+            "key_moment" if ctx.move_event.key_moment_type else "teaching"
+        )
+        model = resolve_model(ctx.service.provider_name, "composer", pass_label=pl)
         ctx.final_text = await ctx.service.analyze_and_compose_raw_text(
             ctx.user_prompt or "",
             model=model,

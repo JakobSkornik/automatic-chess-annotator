@@ -2,10 +2,36 @@
 
 from __future__ import annotations
 
+from typing import Any, Dict
+
 import chess
 
 from app.core.commentary.motif_phrases import glossary_phrase_for
 from app.models.chess_events import FutureLineDelta, MoveEvent, MoveRationale
+
+
+def primary_motif_label(me: MoveEvent) -> str:
+    if me.tactical_motifs:
+        return me.tactical_motifs[0].value
+    if me.strategic_motifs:
+        return me.strategic_motifs[0].value
+    return "none"
+
+
+def prompt_projection(rationale: MoveRationale, *, detail: str = "minimal") -> Dict[str, Any]:
+    """Slim dict for MOVE_RATIONALE_JSON in prompts (full MoveRationale stays in llm_debug)."""
+    out: Dict[str, Any] = {
+        "eval_change_cp": rationale.eval_change_cp,
+    }
+    if rationale.immediate_effect:
+        out["immediate_effect"] = rationale.immediate_effect
+    if rationale.played_plan:
+        out["played_plan"] = rationale.played_plan
+    if rationale.best_plan:
+        out["best_plan"] = rationale.best_plan
+    if detail != "minimal" and rationale.counterfactual:
+        out["counterfactual"] = rationale.counterfactual
+    return {k: v for k, v in out.items() if v not in (None, "", [])}
 
 
 def _squares_attacked_by_moved_piece(board: chess.Board, to_square: int) -> str:
@@ -104,13 +130,22 @@ def build_rationale(
         if pc.best_plan_seed:
             best_plan = pc.best_plan_seed
 
-    risk = None
-    if me.key_moment_type:
-        risk = f"Key moment: {me.key_moment_type}"
+    stakes = None
+    km_type = me.key_moment_type or ""
+    if km_type == "blunder":
+        stakes = "decisive_error"
+    elif km_type == "critical_decision":
+        stakes = "high_stakes_choice"
+    elif km_type == "mistake":
+        stakes = "significant_error"
+    elif km_type == "brilliant":
+        stakes = "exceptional_resources"
+    elif km_type == "inaccuracy":
+        stakes = "minor_slip"
 
     coach_scratchpad = {
         "why": immediate.strip(),
-        "risk": (risk or "").strip(),
+        "risk": (f"Key moment: {km_type}" if km_type else "").strip(),
         "plan": f"Played: {played_plan or 'n/a'} | Engine lean: {best_plan or 'n/a'}".strip(),
         "counterplay": (counterfactual or "").strip(),
     }
@@ -123,17 +158,11 @@ def build_rationale(
         counterfactual=counterfactual.strip() if counterfactual else None,
         played_plan=played_plan,
         best_plan=best_plan,
-        risk=risk,
+        risk=None,
+        stakes=stakes,
         glossary_phrasings=glossary_phrasings,
         primary_motif_label=primary,
         narrative_template=narrative_template.strip(),
         coach_scratchpad=coach_scratchpad,
     )
 
-
-def primary_motif_label(me: MoveEvent) -> str:
-    if me.tactical_motifs:
-        return me.tactical_motifs[0].value
-    if me.strategic_motifs:
-        return me.strategic_motifs[0].value
-    return "none"

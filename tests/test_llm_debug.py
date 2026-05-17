@@ -12,6 +12,15 @@ from app.models.chess_events import (
     MoveQuality,
 )
 
+_LONG_STUB_NOTE = (
+    "White develops naturally while Black fianchettoes the king bishop. "
+    "Both sides contest the center with pawns and minor pieces. "
+    "The middlegame brings opposite-side castling and mutual threats. "
+    "Tactical motifs appear along open files and weak squares near the king. "
+    "Eventually simplifications favor the side with better coordination. "
+    "stub master note marker for debug test."
+)
+
 
 class _StubRAG(RAGRetriever):
     async def retrieve(
@@ -25,7 +34,7 @@ class _StubRAG(RAGRetriever):
             RAGResult(
                 source="stub.pgn",
                 fen="fen",
-                annotation_text="stub master note",
+                annotation_text=_LONG_STUB_NOTE,
                 similarity_score=0.9,
             )
         ]
@@ -66,7 +75,7 @@ class TestLlmDebug(unittest.TestCase):
             self.assertIn("MOVE_RATIONALE_JSON", structured_text)
             self.assertIn("===DYNAMIC===", structured_text)
             self.assertIn("MASTER ANNOTATIONS", structured_text)
-            self.assertIn("stub master note", structured_text)
+            self.assertIn("stub master note marker", structured_text)
             rationale_pos = structured_text.rfind("MOVE_RATIONALE_JSON")
             master_pos = structured_text.rfind("MASTER ANNOTATIONS")
             self.assertGreater(master_pos, rationale_pos)

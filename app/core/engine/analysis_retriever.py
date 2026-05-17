@@ -14,6 +14,7 @@ from app.models.Move import Move
 from app.models.PgnMetadata import PgnMetadata
 from app.models.Move import AnalysisStage
 from app.core.commentary.features.positional_features import compute_hidden_features
+from app.core.commentary.features.pv_horizon_diff import compute_pv_horizon_diff
 from app.models.GameJson import (
     GameJson,
     GameMetadata,
@@ -46,6 +47,7 @@ from app.models.chess_events import (
     GameAnalysisContext,
     MoveEvent,
     MoveQuality,
+    PvHorizonDiff,
 )
 
 # ANALYSIS_STAGES = [0.05, 0.1, 0.2, 0.4]
@@ -94,6 +96,9 @@ def _apply_back_to_back_key_moment_suppression(
     for mi, me in enumerate(move_events):
         km = me.key_moment_type
         if not km:
+            continue
+        if km in ("blunder", "mistake", "critical_decision"):
+            last_ply, last_type = me.ply, km
             continue
         if last_type == km and last_ply is not None and (me.ply - last_ply) <= 2:
             updated = me.model_copy(
@@ -189,13 +194,30 @@ def _bm25_pv_san_from_fen_after(engine: EngineConnector, fen_after: str, depth: 
 
 
 class AnalysisRetriever:
-    def __init__(self, engine_connector: EngineConnector, game: Game):
+    def __init__(
+        self,
+        engine_connector: EngineConnector,
+        game: Game,
+        eco_book: Optional[ECOBook] = None,
+    ):
         self.analysis_stages = ANALYSIS_STAGES
         self.engine_connector = engine_connector
         self.game = game
+        self._eco_book = eco_book or ECOBook()
         self.id_counter = 0
         self.analyzed_game: List[Move] = self.get_move_list()
         self.key_moment_detector = KeyMomentDetector()
+
+    def _uci_prefix_for_depth(self, depth: int) -> List[str]:
+        """First ``depth`` mainline half-moves as UCI (same order as ``Move.depth``)."""
+        out: List[str] = []
+        board = self.game.board()
+        for i, gm in enumerate(self.game.mainline_moves()):
+            if i >= depth:
+                break
+            out.append(board.uci(gm))
+            board.push(gm)
+        return out
 
     def get_pgn_headers(self) -> PgnMetadata:
         """Extract game metadata from PGN headers."""
@@ -293,7 +315,15 @@ class AnalysisRetriever:
             main_move_obj.trace = self.engine_connector.trace()
         except Exception:
             main_move_obj.trace = None
-        main_move_obj.phase = self._determine_game_phase(board_after_move)
+
+        uci_prefix = self._uci_prefix_for_depth(main_move_obj.depth)
+        _info_book, matched_ply = self._eco_book.match(uci_prefix)
+        in_book = (
+            len(uci_prefix) > 0
+            and _info_book is not None
+            and matched_ply >= len(uci_prefix)
+        )
+        main_move_obj.phase = self._determine_game_phase(board_after_move, uci_prefix)
         # Multi-depth instability on the after-move position (search swings / PV changes)
         def _cp_and_pv1(info_any: Any) -> Tuple[Optional[int], Optional[str]]:
             inf = info_any[0] if isinstance(info_any, list) and info_any else info_any
@@ -335,7 +365,9 @@ class AnalysisRetriever:
 
         # Hidden features on the after-move position + before/after delta for strategic context
         try:
-            after_features = compute_hidden_features(board_after_move)
+            after_features = compute_hidden_features(
+                board_after_move, in_opening_book_phase=in_book
+            )
         except Exception as e:
             logger.error(
                 f"Hidden features (after) failed at depth {main_move_obj.depth} FEN={board_after_move.fen()}: {e}"
@@ -345,6 +377,24 @@ class AnalysisRetriever:
             after_features.setdefault("_engine", {})
             after_features["_engine"]["eval_at_depth"] = eval_at_depth
             after_features["_engine"]["pv1_change_count"] = pv1_change_count
+            after_features["_engine"]["opening_book_hit"] = bool(in_book)
+            after_features["_engine"]["opening_matched_ply"] = int(matched_ply)
+            if not in_book:
+                try:
+                    hv_plies = int(os.environ.get("PV_HORIZON_PLIES", "10"))
+                    hv_depth = int(os.environ.get("PV_HORIZON_DEPTH", "18"))
+                    pv_horizon_obj = compute_pv_horizon_diff(
+                        self.engine_connector,
+                        board_after_move.fen(),
+                        plies=hv_plies,
+                        depth=hv_depth,
+                    )
+                    if pv_horizon_obj is not None:
+                        after_features["_engine"]["pv_horizon_diff"] = pv_horizon_obj.model_dump()
+                except Exception as e_hv:
+                    logger.warning(
+                        "pv_horizon_diff failed depth=%s: %s", main_move_obj.depth, e_hv
+                    )
         (
             main_move_obj.capturedByWhite,
             main_move_obj.capturedByBlack,
@@ -372,8 +422,17 @@ class AnalysisRetriever:
             board_before_move.push(game_move)
 
         # Compute features for BEFORE position and a small delta map for AI context
+        prefix_before = self._uci_prefix_for_depth(max(0, main_move_obj.depth - 1))
+        _ib_bef, _mb_bef = self._eco_book.match(prefix_before)
+        in_book_before = (
+            len(prefix_before) > 0
+            and _ib_bef is not None
+            and _mb_bef >= len(prefix_before)
+        )
         try:
-            before_features = compute_hidden_features(board_before_move)
+            before_features = compute_hidden_features(
+                board_before_move, in_opening_book_phase=in_book_before
+            )
         except Exception as e:
             logger.error(
                 f"Hidden features (before) failed at depth {main_move_obj.depth} FEN={board_before_move.fen()}: {e}"
@@ -392,13 +451,26 @@ class AnalysisRetriever:
                         delta["openFiles"]["semiOpenBlackCount"] = len(after["openFiles"].get("semiOpenBlack", [])) - len(before["openFiles"].get("semiOpenBlack", []))
                     except Exception:
                         pass
+
+                def _list_or_int_len(d: dict, key: str) -> int:
+                    v = d.get(key)
+                    if isinstance(v, list):
+                        return len(v)
+                    if isinstance(v, int):
+                        return v
+                    return 0
+
                 for side in ("white", "black"):
                     b = before.get(side, {}) if isinstance(before.get(side, {}), dict) else {}
                     a = after.get(side, {}) if isinstance(after.get(side, {}), dict) else {}
+
                     def diff_num(key: str):
                         if isinstance(b.get(key), int) and isinstance(a.get(key), int):
                             delta[side][key] = a[key] - b[key]
-                    for k in ("doubledPawns", "isolatedPawns", "passedPawns", "attackedPieces", "attackingPieces", "rooksOnOpenFiles", "rooksOnSemiOpenFiles"):
+
+                    for k in ("doubledPawns", "isolatedPawns", "passedPawns"):
+                        delta[side][k] = _list_or_int_len(a, k) - _list_or_int_len(b, k)
+                    for k in ("attackedPieces", "attackingPieces", "rooksOnOpenFiles", "rooksOnSemiOpenFiles"):
                         diff_num(k)
                     # Booleans as changed flags
                     for k in ("hasBishopPair", "canCastleKingSide", "canCastleQueenSide", "connectedRooks"):
@@ -565,14 +637,11 @@ class AnalysisRetriever:
         # The function is expected to return (pieces_captured_by_white, pieces_captured_by_black)
         return black_pieces_captured_by_white, white_pieces_captured_by_black
 
-    def _determine_game_phase(self, board: chess.Board) -> str:
+    def _determine_game_phase(self, board: chess.Board, uci_prefix: List[str]) -> str:
         """
-        Determine the game phase based on piece count and move number.
-        Returns "early", "mid", or "end".
-
-        Source: https://lichess.org/forum/general-chess-discussion/opening--middle--end-what-defines-the-phase
+        Opening lasts while the full UCI prefix matches the ECO book (longest hit covers all plies).
+        Falls back to fullmove≤10 only when ``uci_prefix`` is unavailable (caller should pass real prefix).
         """
-        # --- Piece Counts ---
         white_knights = len(board.pieces(chess.KNIGHT, chess.WHITE))
         white_bishops = len(board.pieces(chess.BISHOP, chess.WHITE))
         white_rooks = len(board.pieces(chess.ROOK, chess.WHITE))
@@ -583,7 +652,6 @@ class AnalysisRetriever:
         black_rooks = len(board.pieces(chess.ROOK, chess.BLACK))
         black_queens = len(board.pieces(chess.QUEEN, chess.BLACK))
 
-        # Sum of all minor (Knights, Bishops) and major (Rooks, Queens) pieces on the board
         current_minor_major_pieces_count = (
             white_knights
             + white_bishops
@@ -595,26 +663,17 @@ class AnalysisRetriever:
             + black_queens
         )
 
-        # --- Phase Determination ---
+        if uci_prefix:
+            info, matched = self._eco_book.match(uci_prefix)
+            if info is not None and matched >= len(uci_prefix):
+                return "early"
+        else:
+            if board.fullmove_number <= 10:
+                return "early"
 
-        # 1. Early Game (Opening)
-        # The game starts in the "early" phase.
-        # Transition out of early game after a certain number of moves, e.g., 10 full moves.
-        # This also implies that pieces are somewhat developed.
-        if board.fullmove_number <= 10:  # Threshold for early game
-            return "early"
-
-        # 2. End Game
-        # "when there are less than 7 minor and major pieces on the board the end-game has begun"
         if current_minor_major_pieces_count < 7:
             return "end"
 
-        # 3. Mid Game
-        # If the game is not in the early phase and not yet in the end game, it's considered mid-game.
-        # This covers scenarios where the position is complex, pieces are developed,
-        # and potentially 2 or more sets of minor/major pieces have been exchanged.
-        # (Initial minor/major pieces = 14. If >=4 are off, count <= 10.
-        # If count is between 7 and 10 (inclusive) and not early, it's mid).
         return "mid"
 
 
@@ -835,9 +894,9 @@ async def run_engine_analysis_to_json(
     if not game:
         raise ValueError("Invalid PGN")
 
-    retriever = AnalysisRetriever(engine_connector, game)
-    headers = retriever.get_pgn_headers()
     eco_book = ECOBook()
+    retriever = AnalysisRetriever(engine_connector, game, eco_book)
+    headers = retriever.get_pgn_headers()
     detected_opening, _det_ply = detect_opening(game, eco_book)
     header_opening = "" if is_absent_opening_header(headers.opening) else headers.opening.strip()
     merged_opening = merge_opening_with_headers(
@@ -896,6 +955,13 @@ async def run_engine_analysis_to_json(
         _eng = {}
         if isinstance(analyzed_move.hiddenFeatures, dict):
             _eng = (analyzed_move.hiddenFeatures.get("_engine") or {}) if analyzed_move.hiddenFeatures else {}
+        _pv_horizon: Optional[PvHorizonDiff] = None
+        try:
+            _raw_hv = (_eng or {}).get("pv_horizon_diff")
+            if isinstance(_raw_hv, dict):
+                _pv_horizon = PvHorizonDiff.model_validate(_raw_hv)
+        except Exception:
+            _pv_horizon = None
         analyzed_rows.append(
             AnalyzedMoveData(
                 index=idx,
@@ -914,6 +980,7 @@ async def run_engine_analysis_to_json(
                 analyzed_move=analyzed_move,
                 eval_at_depth=dict(_eng.get("eval_at_depth") or {}),
                 pv1_change_count=int(_eng.get("pv1_change_count", 0)),
+                pv_horizon_diff=_pv_horizon,
             )
         )
         previous_move_obj = analyzed_move
@@ -939,8 +1006,6 @@ async def run_engine_analysis_to_json(
             opening_name = me.opening_name
         if me.opening_eco:
             opening_eco_ctx = me.opening_eco
-        if opening_name and opening_eco_ctx:
-            break
 
     context = GameAnalysisContext(
         metadata={

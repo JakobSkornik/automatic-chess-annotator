@@ -4,7 +4,7 @@ import traceback
 import os
 from app.core.queue_manager import queue_manager
 from app.models.job import JobStatus
-from app.core.engine.engine_connector import global_engine_connector
+from app.core.engine.engine_connector import get_global_engine_connector
 from app.core.commentary.advanced_comment_service import AdvancedCommentService
 from app.core.commentary.tantivy_positional_retriever import get_default_retriever
 from app.core.engine.analysis_retriever import assemble_game_json, run_engine_analysis_to_json
@@ -45,7 +45,7 @@ async def analysis_worker():
 
                 _, state = await run_engine_analysis_to_json(
                     pgn_string,
-                    global_engine_connector,
+                    get_global_engine_connector(),
                     progress_callback,
                     metadata_id=job_id,
                 )

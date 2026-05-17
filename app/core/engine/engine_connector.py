@@ -5,9 +5,10 @@ This module provides the EngineConnector class, a thin wrapper around a UCI ches
 (e.g., Stockfish). It abstracts engine initialization, analysis calls, and shutdown procedures.
 """
 
+import atexit
 import chess.engine
-import platform
 import os
+import platform
 from typing import Optional
 
 MULTIPV = 3
@@ -110,10 +111,31 @@ class EngineConnector:
         """
         self.close()
 
-# Global Engine Connector Instance
+
 stockfish_executable = (
     "stockfish.exe" if platform.system() == "Windows" else "stockfish"
 )
-# Navigate from app/core/engine/ to root
-stockfish_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", stockfish_executable))
-global_engine_connector = EngineConnector(stockfish_path)
+# Navigate from app/core/engine/ to repo root
+stockfish_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", stockfish_executable)
+)
+
+_global_engine_connector: Optional[EngineConnector] = None
+
+
+def _shutdown_global_engine() -> None:
+    global _global_engine_connector
+    if _global_engine_connector is not None:
+        _global_engine_connector.close()
+        _global_engine_connector = None
+
+
+atexit.register(_shutdown_global_engine)
+
+
+def get_global_engine_connector() -> EngineConnector:
+    """Lazily start Stockfish so importing this module (e.g. in tests) does not spawn a process."""
+    global _global_engine_connector
+    if _global_engine_connector is None:
+        _global_engine_connector = EngineConnector(stockfish_path)
+    return _global_engine_connector

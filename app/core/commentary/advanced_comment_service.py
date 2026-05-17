@@ -6,9 +6,12 @@ import logging
 import os
 import re
 import time
+import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.commentary.annotation_tokens import auto_tokenize
+from app.core.commentary.forbidden_phrases import forbidden_hit_count, forbidden_hit_strings
+from app.core.commentary.llm_call_log import append_postcheck, log_call as log_llm_call
 from app.core.commentary.llm_policy import resolve_model
 from app.core.commentary.llm_providers import DYNAMIC_SECTION_SENTINEL, LlmProvider, make_llm_provider
 from app.core.commentary.rag_retriever import (
@@ -17,15 +20,18 @@ from app.core.commentary.rag_retriever import (
     build_rag_query,
 )
 from app.core.commentary.tantivy_positional_retriever import get_default_retriever
-from app.core.commentary.move_rationale import build_rationale
-from app.core.commentary.motif_phrases import glossary_phrase_for, motif_glossary_prompt_block_for
+from app.core.commentary.move_rationale import build_rationale, prompt_projection
+from app.core.commentary.motif_phrases import glossary_phrase_for
 from app.models.chess_events import (
     AnalyzedMoveData,
     Episode,
     GameAnalysisContext,
     MoveCategory,
     MoveEvent,
+    MoveQuality,
     MoveRationale,
+    StrategicMotif,
+    TacticalMotif,
 )
 
 logger = logging.getLogger(__name__)
@@ -147,16 +153,62 @@ ARCHETYPE_IDEAS: Dict[str, List[str]] = {
 }
 
 
-def _detail_level_for_key_moment(km: Optional[str]) -> str:
+def _detail_level_for_key_moment(move_event: MoveEvent) -> str:
+    km = move_event.key_moment_type or ""
     if km in ("brilliant", "blunder", "critical_decision"):
         return "full"
     if km in ("mistake", "structural_transformation", "king_safety_crisis"):
         return "compact"
+    ph = (move_event.phase or "").strip().lower()
+    if (
+        ph == "opening"
+        and move_event.move_index <= 14
+        and move_event.move_quality in (MoveQuality.BEST, MoveQuality.EXCELLENT)
+        and km not in ("blunder", "mistake", "critical_decision", "brilliant")
+    ):
+        return "book"
+    if (
+        not km
+        and move_event.best_move_uci
+        and move_event.uci == move_event.best_move_uci
+        and abs(move_event.eval_swing_cp or 0) < 15
+    ):
+        return "book"
     return "minimal"
+
+
+def _digest_turning_point_motif_enum() -> List[str]:
+    vals = {m.value for m in TacticalMotif} | {m.value for m in StrategicMotif}
+    vals.add("none")
+    return sorted(vals)
+
+
+def _composer_forcing_pv_bracket(move_event: MoveEvent) -> Optional[str]:
+    """Bracket snippet for prompts / post-check when captures or checks need a short PV."""
+    try:
+        b = chess.Board(move_event.fen_before)
+        m = chess.Move.from_uci(move_event.uci)
+        is_cap = b.is_capture(m)
+        b.push(m)
+        is_chk = b.is_check()
+    except Exception:
+        is_cap = False
+        is_chk = False
+    km = move_event.key_moment_type or ""
+    if not (is_cap or is_chk or km in ("blunder", "critical_decision", "brilliant")):
+        return None
+    for pv in move_event.pv_lines[:1]:
+        line = pv.get("line_san") or []
+        if len(line) >= 2:
+            frag = " ".join(line[:3])
+            return f"[pv:{frag}]"
+    return None
 
 
 def compute_rag_top_k(detail: str, phase: Optional[str]) -> int:
     """Per-phase Top-K defaults; overridden by RAG_TOP_K_PHASE or global RAG_TOP_K."""
+    if detail == "book":
+        return 0
     ph_raw = (phase or "middlegame").strip().lower()
     if ph_raw in ("end", "endgame"):
         env_key = "RAG_TOP_K_ENDGAME"
@@ -231,7 +283,89 @@ def cap_motifs_for_prompt(move_event: MoveEvent, primary_motif: str = "") -> Lis
 def format_motif_digest_lines(keys: List[str]) -> str:
     if not keys:
         return "(none)"
-    return "\n".join(f"- {k} — {glossary_phrase_for(k)}" for k in keys)
+    return "\n".join(f"- {k}: {glossary_phrase_for(k)}" for k in keys)
+
+
+def _non_ascii_letter_ratio(s: str) -> float:
+    letters = [c for c in s if unicodedata.category(c).startswith("L")]
+    if not letters:
+        return 0.0
+    return sum(1 for c in letters if ord(c) > 127) / len(letters)
+
+
+_SPANISH_HINT_RE = re.compile(
+    r"\b(que|las|los|del|por|para|una|unos|muy|como|esta|está|fueron|decidieron|fin)\b",
+    re.I,
+)
+
+
+def _looks_like_section_header_line(line: str) -> bool:
+    t = line.strip()
+    if not t:
+        return False
+    if re.match(r"^[AB]\)\s*\d", t):
+        return True
+    low = t.lower()
+    if low.startswith("now we will look") or low.startswith("here are two"):
+        return True
+    return False
+
+
+def _rag_annotation_passes_filters(text: str) -> bool:
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    words = raw.split()
+    if len(words) < 20:
+        return False
+    lines = raw.splitlines()
+    if lines and _looks_like_section_header_line(lines[0]):
+        return False
+    if _non_ascii_letter_ratio(raw) > 0.03:
+        return False
+    if len(_SPANISH_HINT_RE.findall(raw)) >= 3:
+        return False
+    san_like = sum(
+        1
+        for w in words
+        if re.match(r"^[NBRQK]?[a-h]?x?[a-h][1-8](?:=[NBRQ])?[+#]?$", w)
+        or re.match(r"^[1-9]\d*\.\.\.?$", w)
+    )
+    if san_like >= len(words) * 0.6:
+        return False
+    return True
+
+
+def _truncate_annotation_at_sentence(raw: str, cap: int) -> str:
+    if len(raw) <= cap:
+        return raw
+    chunk = raw[:cap]
+    for sep in ("\n", ". ", "! ", "? "):
+        idx = chunk.rfind(sep)
+        if idx > cap // 4:
+            if sep == "\n":
+                return chunk[:idx].rstrip()
+            return chunk[: idx + 1].rstrip()
+    return chunk.rstrip()
+
+
+def _rag_min_score() -> float:
+    raw = os.environ.get("RAG_MIN_SCORE", "").strip()
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+    return 0.62
+
+
+def _rag_idea_overlap_tokens(idea: str, snippets: List[str]) -> bool:
+    blob = " ".join(snippets).lower()
+    idea_tokens = {t for t in re.findall(r"[a-zA-Z0-9]+", (idea or "").lower()) if len(t) >= 3}
+    if len(idea_tokens) < 3:
+        return False
+    blob_tokens = {t for t in re.findall(r"[a-zA-Z0-9]+", blob) if len(t) >= 3}
+    return len(idea_tokens & blob_tokens) >= 3
 
 
 def composer_role_key(category_value: Optional[str]) -> str:
@@ -252,8 +386,14 @@ def composer_role_key(category_value: Optional[str]) -> str:
 
 EPISODE_NARRATIVE_PROMPT = (
     "You are a grandmaster chess commentator narrating the story of a game phase.\n"
-    "Input lists each move as: SAN | eval | move_quality | key_moment | tactical_motifs | strategic_motifs.\n"
-    "Write 2-4 sentences on plans, how the phase evolved, and the critical idea. Name motifs when relevant.\n"
+    "Input begins with STRATEGIC THEMES aggregated for the episode; then each move line is:\n"
+    "SAN | eval | move_quality | key_moment | tactical_motifs (strategic motifs are omitted per-move).\n"
+    "Write 2-4 sentences on plans, how the phase evolved, and the critical idea. Name motifs only when "
+    "they change the story.\n"
+    "Open with a concrete board observation (a piece, square, file, or pawn break)—do NOT begin with "
+    "\"In this phase\", \"During this\", \"This phase is marked by\", or \"In this complex\".\n"
+    "Cite only squares and pieces verifiable from the move list. Do NOT invent specific diagonals, "
+    "files, pins, or piece placements not implied by the SAN sequence.\n"
     "Output strictly valid JSON: {\"commentary\": \"2-4 sentences\"}"
 )
 
@@ -269,7 +409,8 @@ GAME_DIGEST_PROMPT = (
     "structured digest of the whole game. Output strict JSON; no markdown. Be specific but compact.\n"
     "Pick strategic_archetype from the enum that best fits the game.\n"
     "For each turning point, motif must echo the strongest tactical/strategic tag from the move line "
-    "(or \"none\" if absent).\n"
+    '(or "none" if absent). Use only enum values for motif — never move-quality words '
+    '(inaccuracy, mistake, blunder, excellent, best).\n'
 )
 
 GAME_DIGEST_SCHEMA: Dict[str, Any] = {
@@ -313,7 +454,7 @@ GAME_DIGEST_SCHEMA: Dict[str, Any] = {
                     "ply": {"type": "integer"},
                     "san": {"type": "string"},
                     "why": {"type": "string"},
-                    "motif": {"type": "string"},
+                    "motif": {"type": "string", "enum": _digest_turning_point_motif_enum()},
                 },
                 "required": ["ply", "san", "why", "motif"],
                 "additionalProperties": False,
@@ -363,10 +504,22 @@ def build_game_digest_input(context: GameAnalysisContext) -> str:
     return "\n".join(lines)
 
 
-def compact_game_context_for_move(digest: Dict[str, Any], current_ply: int) -> Dict[str, Any]:
-    """Subset of digest for per-move prompt: nearby turning points only."""
+def compact_game_context_for_move(
+    digest: Dict[str, Any],
+    current_ply: int,
+    *,
+    current_phase: str = "",
+) -> Dict[str, Any]:
+    """Subset of digest for per-move prompts: no spoilers, prior turning points only."""
+    arch = digest.get("strategic_archetype", "")
+    out: Dict[str, Any] = {"strategic_archetype": arch}
+    if current_ply <= 20:
+        oc = digest.get("opening_character", "")
+        if isinstance(oc, str) and oc.strip():
+            out["opening_character"] = oc.strip()
+
     tps = digest.get("turning_points") or []
-    scored: List[Tuple[float, Dict[str, Any]]] = []
+    past: List[Dict[str, Any]] = []
     for tp in tps:
         if not isinstance(tp, dict):
             continue
@@ -374,28 +527,40 @@ def compact_game_context_for_move(digest: Dict[str, Any], current_ply: int) -> D
             p = int(tp.get("ply", 0))
         except (TypeError, ValueError):
             continue
-        scored.append((abs(float(p - current_ply)), tp))
-    scored.sort(key=lambda x: x[0])
-    near = [x[1] for x in scored[:2]]
-    return {
-        "overall_story": digest.get("overall_story", ""),
-        "opening_character": digest.get("opening_character", ""),
-        "strategic_archetype": digest.get("strategic_archetype", ""),
-        "turning_points_nearby": near,
-        "phase_story": digest.get("phase_story", []),
-        "winning_side_plan": digest.get("winning_side_plan", ""),
-        "losing_side_mistakes": digest.get("losing_side_mistakes", ""),
-    }
+        if p < current_ply:
+            past.append(tp)
+    out["turning_points"] = past[:8]
+
+    phase_story_full = digest.get("phase_story") or []
+    ph_norm = (current_phase or "").strip().lower()
+    phase_rows: List[Dict[str, Any]] = []
+    for row in phase_story_full:
+        if not isinstance(row, dict):
+            continue
+        ph = str(row.get("phase") or "").strip().lower()
+        if ph_norm and ph == ph_norm:
+            phase_rows.append(row)
+    out["phase_story"] = phase_rows[:2]
+
+    def approx_tokens(d: Dict[str, Any]) -> int:
+        return max(1, len(json.dumps(d, ensure_ascii=False)) // 4)
+
+    while approx_tokens(out) > 250 and len(out.get("turning_points") or []) > 2:
+        out["turning_points"] = out["turning_points"][1:]
+    while approx_tokens(out) > 250 and out.get("phase_story"):
+        out["phase_story"] = []
+    return out
 
 
 STYLE_GUIDE_BLOCK = (
     "AUDIENCE ~1500–2000: explain WHY in plain chess language, not motif laundry lists.\n"
     "VOICE — coach, not engine dump.\n"
     "- Prefer at most one explicit eval number in the whole comment; otherwise use words (~\"about a pawn\").\n"
-    "- Name at most ONE motif key from MOTIF HINTS, and only if it is concretely visible; otherwise describe in English.\n"
-    "- Forbidden phrases (never write): \"engine confirms\", \"engine preference\", \"engine's top choice\", "
-    "\"settles near\", \"settling near\", \"holds the balance\", \"preserves the rhythm\", \"drives the rhythm\", "
-    "\"stalls the initiative\", \"flows through\", \"keeps matters level\", \"king tuck\".\n"
+    "- Motifs: only name a motif key from MOTIF HINTS if you can state the exact attacker square, target square, "
+    "and (for pin/skewer) the piece behind; otherwise use named_motifs=[] and plain English.\n"
+    "- For captures, lead with what was captured (piece + square). Do NOT frame your own capture as "
+    "\"eliminating a threat\" unless the POSITION block explicitly states the captured piece was attacking "
+    "one of your pieces.\n"
     "- On captures or checks, include a short forcing line as [pv:san1 san2 ...] (2-3 plies).\n"
     "- Opponent-aware phrasing (\"Black can now ...\").\n"
     "- In openings still in theory, cite opening name/code and typical plans when known.\n"
@@ -411,7 +576,8 @@ EXPLAIN_WHY_BLOCK = (
     "2) Say why this is desirable or costly for side to move AFTER the ply, referencing alternatives when useful.\n"
     "   For mistakes: name the refutation idea IN WORDS before the [pv:...] snippet.\n"
     "3) Compare briefly to engine best-move when PLAYED differs from BEST (POSITION block), unless BOOK tier.\n"
-    "4) Only after (1)-(3): optionally attach ONE motif hint from MOTIF HINTS if genuinely expressed.\n\n"
+    "4) Only after (1)-(3): optionally attach ONE motif hint from MOTIF HINTS if genuinely expressed with the "
+    "attacker/target/(piece behind) squares named in prose.\n\n"
     "RAG MASTER ANNOTATIONS block (when present):\n"
     "- If one idea obviously applies here, summarize it once in prose (do NOT quote verbatim).\n"
     "- Populate rag_applied=true and rag_idea_used with ONE sentence naming that idea.\n"
@@ -422,6 +588,8 @@ PLAIN_OUTPUT_INSTRUCTIONS = (
     "\nOUTPUT: JSON only (no markdown).\n"
     "- \"named_motifs\": array of 0–1 motif keys you anchored in prose (subset of MOTIF HINTS).\n"
     "- \"text\": plain prose paragraph (SAN tokens plain; forcing lines as [pv:san san ...]).\n"
+    "  When the user message includes \"Forcing line ready:\" with a [pv:...] token, copy that "
+    "[pv:...] snippet verbatim into \"text\".\n"
     "- \"better_alternative\": one sentence-ready clause (Better was … / Instead … with reason), or \"\" if irrelevant.\n"
     "  REQUIRED for inaccuracies/mistakes/blunders/critical classifications; optional otherwise.\n"
     "- \"rag_idea_used\": one sentence naming the reused master-note idea (or \"\").\n"
@@ -429,41 +597,59 @@ PLAIN_OUTPUT_INSTRUCTIONS = (
 )
 
 
-def _composer_system_with_role(role: str) -> str:
+def _archetype_texture_system_block(archetype: str) -> str:
+    arch = (archetype or "other").strip() or "other"
+    ideas = ARCHETYPE_IDEAS.get(arch, ARCHETYPE_IDEAS["other"])
+    return (
+        "STRATEGIC ARCHETYPE TEXTURE (background only; do not quote verbatim; "
+        "ground plans in these ideas):\n"
+        f"Archetype: {arch}\n" + "\n".join(f"- {line}" for line in ideas)
+    )
+
+
+COMPOSER_ROLE_BODIES: Dict[str, str] = {
+    "book": (
+        "ROLE: BOOK / theory — openings where development and tabiya still matter.\n"
+        "- 1 crisp sentence tying the SAN to typical plans.\n"
+        "- Reference opening name/code when MOTIF hints or POSITION mention them.\n"
+        "- better_alternative \"\" unless theory clearly rejects the move.\n"
+    ),
+    "tactical_forcing": (
+        "ROLE: TACTICAL / FORCING / DEFENCE — captures, checks, tactical shots, tactical defence.\n"
+        "- Lead with forcing consequences and concrete squares.\n"
+        "- Mention defence only when STOPPING a direct threat matters.\n"
+    ),
+    "positional_plan": (
+        "ROLE: POSITIONAL PLAN / PROPHYLAXIS — structure, slow manoeuvres, quiet improvements.\n"
+        "- Name files, pawn breaks, weaknesses, timing — not jargon stacks.\n"
+    ),
+    "mistake_explainer": (
+        "ROLE: MISTAKE & CRITICAL MOMENTS — eval swings, dubious choices, decisive branches.\n"
+        "- Mandatory better_alternative whenever BEST_MOVE differs materially from PLAYED and quality is dubious.\n"
+        "- Tie alternatives to measurable plans (outposts, breaks, king safety).\n"
+    ),
+}
+
+
+def _composer_system_prompt(role_key: str, *, archetype: Optional[str] = None) -> str:
+    role_body = COMPOSER_ROLE_BODIES.get(role_key, COMPOSER_ROLE_BODIES["positional_plan"])
+    mid = role_body.strip() + "\n"
+    if archetype is not None:
+        mid += "\n" + _archetype_texture_system_block(archetype) + "\n"
     return (
         STYLE_GUIDE_BLOCK
         + "\n\n"
         + EXPLAIN_WHY_BLOCK
         + "\n\n"
-        + role.strip()
-        + "\n"
+        + mid
         + PLAIN_OUTPUT_INSTRUCTIONS
     )
 
 
-BOOK_COMPOSER_PROMPT = _composer_system_with_role(
-    "ROLE: BOOK / theory — openings where development and tabiya still matter.\n"
-    "- 1 crisp sentence tying the SAN to typical plans.\n"
-    "- Reference opening name/code when MOTIF hints or POSITION mention them.\n"
-    "- better_alternative \"\" unless theory clearly rejects the move.\n"
-)
-
-TACTICAL_FORCING_COMPOSER_PROMPT = _composer_system_with_role(
-    "ROLE: TACTICAL / FORCING / DEFENCE — captures, checks, tactical shots, tactical defence.\n"
-    "- Lead with forcing consequences and concrete squares.\n"
-    "- Mention defence only when STOPPING a direct threat matters.\n"
-)
-
-POSITIONAL_PLAN_COMPOSER_PROMPT = _composer_system_with_role(
-    "ROLE: POSITIONAL PLAN / PROPHYLAXIS — structure, slow manoeuvres, quiet improvements.\n"
-    "- Name files, pawn breaks, weaknesses, timing — not jargon stacks.\n"
-)
-
-MISTAKE_EXPLAINER_COMPOSER_PROMPT = _composer_system_with_role(
-    "ROLE: MISTAKE & CRITICAL MOMENTS — eval swings, dubious choices, decisive branches.\n"
-    "- Mandatory better_alternative whenever BEST_MOVE differs materially from PLAYED and quality is dubious.\n"
-    "- Tie alternatives to measurable plans (outposts, breaks, king safety).\n"
-)
+BOOK_COMPOSER_PROMPT = _composer_system_prompt("book")
+TACTICAL_FORCING_COMPOSER_PROMPT = _composer_system_prompt("tactical_forcing")
+POSITIONAL_PLAN_COMPOSER_PROMPT = _composer_system_prompt("positional_plan")
+MISTAKE_EXPLAINER_COMPOSER_PROMPT = _composer_system_prompt("mistake_explainer")
 
 COMPOSER_ROLE_PROMPTS: Dict[str, str] = {
     "book": BOOK_COMPOSER_PROMPT,
@@ -497,13 +683,19 @@ COMPOSER_OUTPUT_SCHEMA: Dict[str, Any] = {
     "additionalProperties": False,
 }
 
+EPISODE_COMMENTARY_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {"commentary": {"type": "string"}},
+    "required": ["commentary"],
+    "additionalProperties": False,
+}
 
-FORBIDDEN_PHRASES_RE = re.compile(
-    r"engine confirms|engine preference|engine's top choice|settles near|settling near|"
-    r"holds the balance|preserves the rhythm|drives the rhythm|stalls the initiative|"
-    r"flows through|keeps matters level|king tuck",
-    re.I,
-)
+GAME_NARRATIVE_COMMENT_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {"commentary": {"type": "string"}},
+    "required": ["commentary"],
+    "additionalProperties": False,
+}
 
 
 def compute_commentary_audit(
@@ -514,7 +706,7 @@ def compute_commentary_audit(
     rag_applied: Optional[bool] = None,
 ) -> Dict[str, Any]:
     eval_tokens = len(re.findall(r"\[eval:[^\]]+\]", text))
-    forbidden = len(FORBIDDEN_PHRASES_RE.findall(text))
+    forbidden = forbidden_hit_count(text)
     if detected_motifs:
         lowered = text.lower()
         covered = sum(
@@ -542,13 +734,20 @@ def build_planned_llm_passes_and_system_prompts(
     key_moment_type: Optional[str],
     move_category: Optional[str],
     tier_effort: str,
+    *,
+    detail_level: str = "minimal",
+    strategic_archetype: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
     """Planned passes and system prompts for WS debug (mirrors analyze_and_compose_raw_text)."""
     km = key_moment_type or ""
     tier = KEY_MOMENT_TIERS.get(km, TIER_SINGLE)
     cat_key = move_category or MoveCategory.POSITIONAL.value
     role = composer_role_key(cat_key)
-    composer_prompt = COMPOSER_ROLE_PROMPTS.get(role, POSITIONAL_PLAN_COMPOSER_PROMPT)
+    if detail_level == "book":
+        composer_prompt = COMPOSER_ROLE_PROMPTS.get(role, POSITIONAL_PLAN_COMPOSER_PROMPT)
+    else:
+        arch = (strategic_archetype or "other").strip() or "other"
+        composer_prompt = _composer_system_prompt(role, archetype=arch)
     composer_name = f"composer_{role}"
     passes: List[Dict[str, Any]] = [
         {
@@ -584,6 +783,7 @@ class AdvancedCommentService:
         self._provider: LlmProvider = provider or make_llm_provider(provider_key)
         self._rag: RAGRetriever = rag_retriever or get_default_retriever()
         self._last_token_usage: int = 0
+        self._last_llm_log_seq: Optional[int] = None
 
     @property
     def provider_name(self) -> str:
@@ -635,11 +835,6 @@ class AdvancedCommentService:
         parts.append(f"Event type: {fe.event_type.value}")
         if fe.move_category:
             parts.append(f"Move category: {fe.move_category.value}")
-        if motif_hint_keys:
-            parts.append(
-                "MOTIF HINTS (describe in English; max one label in prose):\n"
-                + format_motif_digest_lines(motif_hint_keys)
-            )
         if fe.pawn_structure_type:
             parts.append(f"Pawn structure (center): {fe.pawn_structure_type}")
         if fe.opening_name or fe.opening_eco:
@@ -720,37 +915,50 @@ class AdvancedCommentService:
         return "\n".join(parts)
 
     @staticmethod
-    def _format_rag_block(results: List[RAGResult], *, max_chars: int = 1600) -> str:
+    def _format_rag_block(results: List[RAGResult], *, max_chars: int = 1600) -> Tuple[str, List[str]]:
         if not results:
-            return ""
+            return "", []
         cap = max(80, int(max_chars))
+        min_sc = _rag_min_score()
         lines = [
             "MASTER ANNOTATIONS — these excerpts come from strongly annotated GM/IM games "
             "in tactically or structurally similar positions.",
             "If an idea plainly applies here, weave it into your prose (ONE short paraphrase). "
             "Do NOT quote verbatim.",
         ]
-        for i, r in enumerate(results, 1):
+        kept_snippets: List[str] = []
+        shown = 0
+        for r in results:
+            sc = r.similarity_score
+            if sc is not None and sc < min_sc:
+                continue
+            ann_raw = (r.annotation_text or "").strip()
+            if not _rag_annotation_passes_filters(ann_raw):
+                continue
+            ann = _truncate_annotation_at_sentence(ann_raw, cap)
+            if len(ann.split()) < 12:
+                continue
+            shown += 1
             tags = r.relevance_tags or {}
             ph = (tags.get("phase") or "").strip()
             on = (tags.get("opening_name") or tags.get("opening") or "").strip()
             eco = (tags.get("opening_eco") or tags.get("eco") or "").strip()
             mats = (tags.get("material_signature") or "").strip()
-            sc = r.similarity_score
             score_txt = f"score={sc:.3f}" if sc is not None else "score=?"
             head_bits = [
-                f"[{i}]",
+                f"[{shown}]",
                 score_txt,
                 f"phase={ph}" if ph else "",
                 f"opening={on}" if on else "",
                 f"eco={eco}" if eco else "",
                 f"material={mats}" if mats else "",
-                f"source={r.source}",
             ]
             lines.append(" ".join(b for b in head_bits if b))
-            ann = r.annotation_text or ""
-            lines.append(f"    {ann[:cap]}")
-        return "\n".join(lines)
+            lines.append(f"    {ann}")
+            kept_snippets.append(ann)
+        if not kept_snippets:
+            return "", []
+        return "\n".join(lines), kept_snippets
 
     @staticmethod
     def _format_move_event_minimal(move_event: MoveEvent, motif_hint_keys: List[str]) -> str:
@@ -783,11 +991,6 @@ class AdvancedCommentService:
         parts.append(f"Move quality: {fe.move_quality.value}")
         if fe.move_category:
             parts.append(f"Move category: {fe.move_category.value}")
-        if motif_hint_keys:
-            parts.append(
-                "MOTIF HINTS (describe in English; max one label in prose):\n"
-                + format_motif_digest_lines(motif_hint_keys)
-            )
         if fe.pawn_structure_type:
             parts.append(f"Pawn structure (center): {fe.pawn_structure_type}")
         if fe.opening_name or fe.opening_eco:
@@ -795,6 +998,9 @@ class AdvancedCommentService:
                 f"Opening: {fe.opening_name or ''} ({fe.opening_eco or ''})".strip()
             )
         parts.append(f"FEN after: {fe.fen_after}")
+        br = _composer_forcing_pv_bracket(fe)
+        if br:
+            parts.append(f"Forcing line ready: {br}")
         return "\n".join(parts)
 
     async def build_event_llm_input(
@@ -809,8 +1015,8 @@ class AdvancedCommentService:
         rationale_override: Optional[MoveRationale] = None,
     ) -> Tuple[str, List[RAGResult], Dict[str, Any]]:
         query = build_rag_query(move_event, episode)
-        detail_pre = _detail_level_for_key_moment(move_event.key_moment_type)
-        rag_top_k = compute_rag_top_k(detail_pre, query.phase)
+        detail = _detail_level_for_key_moment(move_event)
+        rag_top_k = compute_rag_top_k(detail, query.phase)
 
         rationale_pre = (
             rationale_override
@@ -820,9 +1026,12 @@ class AdvancedCommentService:
         motif_hint_keys = cap_motifs_for_prompt(move_event, rationale_pre.primary_motif_label)
 
         rag_retrieval_debug: Dict[str, Any] = {}
-        if rag_results is None:
+        if detail == "book":
+            if rag_results is None:
+                rag_results = []
+        elif rag_results is None:
             rag_results = await self._rag.retrieve(
-                query, top_k=rag_top_k, retrieval_debug=rag_retrieval_debug
+                query, top_k=max(1, rag_top_k), retrieval_debug=rag_retrieval_debug
             )
             logger.info(
                 "RAG query: phase=%s pawn_structure=%s motifs=%s theme=%s fen=%s pv_san=%s",
@@ -853,14 +1062,14 @@ class AdvancedCommentService:
                         rag_retrieval_debug,
                     )
 
-        detail = detail_pre
         if detail == "full":
             rag_max_chars = 1600
-        elif detail == "minimal":
+        elif detail in ("minimal", "book"):
             rag_max_chars = 500
         else:
             rag_max_chars = 800
         gd = getattr(game_context, "game_digest", None) or {}
+        digest_archetype = str(gd.get("strategic_archetype") or "other").strip() or "other"
 
         try:
             _b_pre = chess.Board(move_event.fen_before)
@@ -871,35 +1080,11 @@ class AdvancedCommentService:
             next_side = "?"
         move_label = f"{(move_event.ply + 1) // 2}{'.' if mover_side == 'White' else '...'} {move_event.san}"
 
-        static_blocks: List[str] = []
-        if gd:
-            compact_ctx = compact_game_context_for_move(gd, move_event.ply)
-            static_blocks.append(
-                "GAME CONTEXT (whole-game digest; use for tone and continuity, do not re-quote):\n"
-                + json.dumps(compact_ctx, indent=2)
-            )
+        rationale = rationale_pre
+        proj_detail = "full" if detail == "full" else ("compact" if detail == "compact" else "minimal")
+        rationale_blob = json.dumps(prompt_projection(rationale, detail=proj_detail), indent=2)
 
-        arch = str(gd.get("strategic_archetype") or "other").strip() or "other"
-        ideas = ARCHETYPE_IDEAS.get(arch, ARCHETYPE_IDEAS["other"])
-        static_blocks.append(
-            "STRATEGIC ARCHETYPE TEXTURE (do not quote verbatim; ground plans in these ideas):\n"
-            f"Archetype: {arch}\n" + "\n".join(f"- {line}" for line in ideas)
-        )
-
-        pri = getattr(game_context, "prior_context_snippets", None) or []
-        if pri:
-            static_blocks.append(
-                "PRIOR_CONTEXT (continuity only; do not restate):\n" + "\n".join(pri[-2:])
-            )
-
-        static_blocks.append(
-            "MOTIF HINTS (cap 3 tactical + 2 strategic; prose may name at most ONE motif key):\n"
-            + (format_motif_digest_lines(motif_hint_keys) if motif_hint_keys else "(none)")
-        )
-        static_blocks.append(motif_glossary_prompt_block_for(motif_hint_keys))
-
-        dynamic_blocks: List[str] = []
-        dynamic_blocks.append(
+        played_move_block = (
             "PLAYED_MOVE (this is the ONLY move to describe):\n"
             f"- SAN: {move_event.san}\n"
             f"- Numbered: {move_label}\n"
@@ -916,46 +1101,90 @@ class AdvancedCommentService:
             "say so plainly — do not describe the opponent's upcoming threat as if it were this move."
         )
 
-        rationale = rationale_pre
-        if detail == "minimal":
-            rdict = rationale.model_dump()
-            rdict.pop("counterfactual", None)
-            rdict.pop("future_effect", None)
-            rationale_blob = json.dumps(rdict, indent=2)
-        else:
-            rationale_blob = rationale.model_dump_json(indent=2)
-        dynamic_blocks.append(
-            "MOVE_RATIONALE_JSON (internal evidence; weave into prose, never quote field names or bullet them):\n"
-            + rationale_blob
-        )
+        rag_snippets_used: List[str] = []
 
-        if detail == "full":
-            dynamic_blocks.append(
-                "POSITION AND ENGINE DATA (anchor commentary to this; do not invent lines):\n"
-                + self._format_move_event_block(move_event, motif_hint_keys)
-            )
-            pv_block = self._format_pv_position_comparison(move_event, analyzed_row)
-            if pv_block:
-                dynamic_blocks.append(pv_block)
-            fl_block = self._format_future_line_block(move_event)
-            if fl_block:
-                dynamic_blocks.append(fl_block)
-        else:
-            dynamic_blocks.append(
+        if detail == "book":
+            opening_lines: List[str] = []
+            if move_event.opening_name or move_event.opening_eco:
+                opening_lines.append(
+                    f"Opening: {move_event.opening_name or ''} ({move_event.opening_eco or ''})".strip()
+                )
+            opening_hdr = ("\n\n".join(opening_lines) + "\n\n") if opening_lines else ""
+            show_motifs = bool(move_event.tactical_motifs) and (move_event.eval_swing_cp or 0) != 0
+            mot_block = ""
+            if show_motifs and motif_hint_keys:
+                mot_block = (
+                    "MOTIF HINTS (cap 3 tactical + 2 strategic; prose may name at most ONE motif key):\n"
+                    + format_motif_digest_lines(motif_hint_keys)
+                    + "\n\n"
+                )
+            dynamic_blocks = [
+                opening_hdr + mot_block + played_move_block,
                 "POSITION SUMMARY (anchor to this; do not invent lines):\n"
-                + self._format_move_event_minimal(move_event, motif_hint_keys)
+                + self._format_move_event_minimal(move_event, []),
+            ]
+            structured_text = "\n\n".join(dynamic_blocks)
+            rag_hit_ct = 0
+            compact_injected = None
+        else:
+            static_blocks: List[str] = []
+            if gd:
+                compact_ctx = compact_game_context_for_move(
+                    gd, move_event.ply, current_phase=move_event.phase or ""
+                )
+                static_blocks.append(
+                    "GAME CONTEXT (whole-game digest; use for tone and continuity, do not re-quote):\n"
+                    + json.dumps(compact_ctx, indent=2)
+                )
+
+            pri = getattr(game_context, "prior_context_snippets", None) or []
+            if pri:
+                static_blocks.append(
+                    "PRIOR_CONTEXT (continuity only; do not restate):\n" + "\n".join(pri[-2:])
+                )
+
+            static_blocks.append(
+                "MOTIF HINTS (cap 3 tactical + 2 strategic; prose may name at most ONE motif key):\n"
+                + (format_motif_digest_lines(motif_hint_keys) if motif_hint_keys else "(none)")
             )
 
-        rb = self._format_rag_block(rag_results, max_chars=rag_max_chars)
-        if rb:
-            dynamic_blocks.append(rb)
+            dynamic_blocks: List[str] = [played_move_block]
+            dynamic_blocks.append(
+                "MOVE_RATIONALE_JSON (internal evidence; weave meaning into prose—never quote JSON keys verbatim):\n"
+                + rationale_blob
+            )
 
-        if static_blocks:
+            if detail == "full":
+                dynamic_blocks.append(
+                    "POSITION AND ENGINE DATA (anchor commentary to this; do not invent lines):\n"
+                    + self._format_move_event_block(move_event, motif_hint_keys)
+                )
+                pv_block = self._format_pv_position_comparison(move_event, analyzed_row)
+                if pv_block:
+                    dynamic_blocks.append(pv_block)
+                fl_block = self._format_future_line_block(move_event)
+                if fl_block:
+                    dynamic_blocks.append(fl_block)
+            else:
+                dynamic_blocks.append(
+                    "POSITION SUMMARY (anchor to this; do not invent lines):\n"
+                    + self._format_move_event_minimal(move_event, motif_hint_keys)
+                )
+
+            rb, rag_snippets_used = self._format_rag_block(rag_results or [], max_chars=rag_max_chars)
+            if rb:
+                dynamic_blocks.append(rb)
+
             structured_text = (
                 "\n\n".join(static_blocks) + DYNAMIC_SECTION_SENTINEL + "\n\n".join(dynamic_blocks)
             )
-        else:
-            structured_text = "\n\n".join(dynamic_blocks)
+            rag_hit_ct = len(rag_results or [])
+            compact_injected = (
+                compact_game_context_for_move(gd, move_event.ply, current_phase=move_event.phase or "")
+                if gd
+                else None
+            )
+
         km = move_event.key_moment_type
         cat = move_event.move_category.value if move_event.move_category else None
         tier_base = dict(KEY_MOMENT_TIERS.get(move_event.key_moment_type or "", TIER_SINGLE))
@@ -963,9 +1192,12 @@ class AdvancedCommentService:
             tier_base["effort"] = composer_effort
         tier_effort = str(tier_base.get("effort", TIER_SINGLE["effort"]))
         passes, system_prompts = build_planned_llm_passes_and_system_prompts(
-            km, cat, tier_effort
+            km,
+            cat,
+            tier_effort,
+            detail_level=detail,
+            strategic_archetype=digest_archetype if detail != "book" else None,
         )
-        rag_hit_ct = len(rag_results or [])
         debug_dict: Dict[str, Any] = {
             "move_category": cat,
             "key_moment_type": km,
@@ -987,15 +1219,18 @@ class AdvancedCommentService:
             "composer_named_motifs": [],
             "commentary_audit": None,
             "game_digest": gd if gd else None,
-            "game_context_injected": compact_game_context_for_move(gd, move_event.ply) if gd else None,
+            "game_context_injected": compact_injected,
+            "rag_snippets_used": rag_snippets_used,
+            "composer_forcing_pv_bracket": _composer_forcing_pv_bracket(move_event),
         }
         logger.info(
-            "build_event_llm_input: move_category=%s key_moment_type=%s",
+            "build_event_llm_input: move_category=%s key_moment_type=%s detail=%s",
             cat,
             km,
+            detail,
         )
         _debug_log_prompt("build_event_input", "", structured_text)
-        return structured_text, rag_results, debug_dict
+        return structured_text, rag_results or [], debug_dict
 
     async def analyze_and_compose_event(
         self,
@@ -1053,7 +1288,13 @@ class AdvancedCommentService:
         tier_max_tokens = int(tier.get("max_tokens", TIER_SINGLE["max_tokens"]))
         cat_key = move_category or MoveCategory.POSITIONAL.value
         role = composer_role_key(cat_key)
-        composer_prompt = COMPOSER_ROLE_PROMPTS.get(role, POSITIONAL_PLAN_COMPOSER_PROMPT)
+        detail_lvl = (llm_debug or {}).get("detail_level") or ""
+        gd_ctx = (llm_debug or {}).get("game_digest") or {}
+        digest_arch = str(gd_ctx.get("strategic_archetype") or "other").strip() or "other"
+        if detail_lvl == "book":
+            composer_prompt = COMPOSER_ROLE_PROMPTS.get(role, POSITIONAL_PLAN_COMPOSER_PROMPT)
+        else:
+            composer_prompt = _composer_system_prompt(role, archetype=digest_arch)
         if _log_llm_prompts_enabled():
             logger.info(
                 "analyze_and_compose_raw_text: branch=single move_category=%s key_moment_type=%s composer_role=%s",
@@ -1067,6 +1308,9 @@ class AdvancedCommentService:
         composer_named: List[str] = []
 
         mdl = model or resolve_model(self.provider_name, "composer")
+        rag_snip = list((llm_debug or {}).get("rag_snippets_used") or [])
+        allow = [str(x) for x in (llm_debug or {}).get("motif_hint_keys") or [] if str(x).strip()]
+        forcing_bracket = (llm_debug or {}).get("composer_forcing_pv_bracket")
         prose, composer_named, composer_extra = await self._run_composer_segments(
             composer_prompt,
             structured_text,
@@ -1076,7 +1320,31 @@ class AdvancedCommentService:
             max_output_tokens=tier_max_tokens,
             fen_before=fen_before,
             fen_after=fen_after,
+            rag_snippets=rag_snip,
+            motif_hint_allowlist=allow,
+            forcing_pv_bracket=forcing_bracket if isinstance(forcing_bracket, str) else None,
         )
+        retry_forbidden = os.environ.get("FORBIDDEN_PHRASE_RETRY", "").strip().lower() in ("1", "true")
+        if retry_forbidden and prose.strip():
+            hits = forbidden_hit_strings(prose)
+            if hits:
+                prose2, named2, extra2 = await self._run_composer_segments(
+                    composer_prompt,
+                    structured_text
+                    + "\n\nRevise your commentary JSON: remove these banned phrases entirely: "
+                    + "; ".join(hits),
+                    model=mdl,
+                    effort=tier_effort,
+                    prompt_name="composer_single_forbidden_retry",
+                    max_output_tokens=tier_max_tokens,
+                    fen_before=fen_before,
+                    fen_after=fen_after,
+                    rag_snippets=rag_snip,
+                    motif_hint_allowlist=allow,
+                    forcing_pv_bracket=forcing_bracket if isinstance(forcing_bracket, str) else None,
+                )
+                if prose2.strip() and forbidden_hit_count(prose2) < forbidden_hit_count(prose):
+                    prose, composer_named, composer_extra = prose2, named2, extra2
         tokens_by_pass["composer"] = self._last_token_usage
 
         total_tokens = sum(tokens_by_pass.values())
@@ -1144,6 +1412,13 @@ class AdvancedCommentService:
     ) -> str:
         if not self._provider.is_configured():
             return ""
+        strat_union = sorted(
+            {m.value for ev in episode.move_events for m in ev.strategic_motifs}
+        )
+        if len(strat_union) > 6:
+            strat_line = ", ".join(strat_union[:6]) + " (additional themes omitted)"
+        else:
+            strat_line = ", ".join(strat_union) if strat_union else "(none)"
         moves_summary: List[str] = []
         for e in episode.move_events:
             eva = e.eval_after_cp / 100.0 if e.eval_after_cp is not None else None
@@ -1151,9 +1426,8 @@ class AdvancedCommentService:
             mq = e.move_quality.value if e.move_quality else ""
             km = e.key_moment_type or ""
             tact = ",".join(m.value for m in e.tactical_motifs[:5])
-            strat = ",".join(m.value for m in e.strategic_motifs[:5])
             moves_summary.append(
-                f"{e.san} | eval {evs} | mq={mq} | km={km} | tact={tact} | strat={strat}"
+                f"{e.san} | eval {evs} | mq={mq} | km={km} | tact={tact}"
             )
         text = (
             f"Episode: {episode.title}\n"
@@ -1161,16 +1435,19 @@ class AdvancedCommentService:
             f"Phase: {episode.phase}\n"
             f"Eval trend (White POV pawns): "
             f"{[x/100.0 for x in episode.eval_trend]}\n"
-            f"Moves (SAN | eval | move_quality | key_moment | tactical | strategic):\n"
+            f"STRATEGIC THEMES (episode-wide): {strat_line}\n"
+            f"Moves (SAN | eval | move_quality | key_moment | tactical):\n"
             + "\n".join(moves_summary)
             + "\n"
         )
         mdl = model or resolve_model(self.provider_name, "episode")
-        raw = await self._llm_call(
+        raw = await self._llm_call_json_schema(
             EPISODE_NARRATIVE_PROMPT,
             text,
             model=mdl,
             effort=effort,
+            schema=EPISODE_COMMENTARY_SCHEMA,
+            schema_name="episode_commentary",
             max_output_tokens=512,
         )
         if raw:
@@ -1207,11 +1484,13 @@ class AdvancedCommentService:
                 f"narrative={ep.narrative_summary or ''}"
             )
         mdl = model or resolve_model(self.provider_name, "narrative")
-        raw = await self._llm_call(
+        raw = await self._llm_call_json_schema(
             GAME_NARRATIVE_PROMPT,
             "\n".join(parts),
             model=mdl,
             effort=effort,
+            schema=GAME_NARRATIVE_COMMENT_SCHEMA,
+            schema_name="game_narrative",
             max_output_tokens=512,
         )
         if raw:
@@ -1237,10 +1516,14 @@ class AdvancedCommentService:
         max_output_tokens: Optional[int] = None,
         fen_before: Optional[str] = None,
         fen_after: Optional[str] = None,
+        rag_snippets: Optional[List[str]] = None,
+        motif_hint_allowlist: Optional[List[str]] = None,
+        forcing_pv_bracket: Optional[str] = None,
     ) -> Tuple[str, List[str], Dict[str, Any]]:
         """Structured composer JSON; tokenize prose; one retry on empty/failure."""
         fb = fen_before or chess.Board().fen()
         fa = fen_after or chess.Board().fen()
+        rag_list = list(rag_snippets or [])
         last_raw: Optional[str] = None
         last_plain_len: Optional[int] = None
         empty_extras: Dict[str, Any] = {
@@ -1268,6 +1551,9 @@ class AdvancedCommentService:
                     obj = json.loads(text)
                     named_raw = obj.get("named_motifs") or []
                     named = [str(x) for x in named_raw if isinstance(x, str) and x.strip()]
+                    allow_set = {str(x) for x in (motif_hint_allowlist or []) if str(x).strip()}
+                    if allow_set:
+                        named = [x for x in named if x in allow_set][:1]
                     plain = str(obj.get("text") or "").strip()
                     ba = str(obj.get("better_alternative") or "").strip()
                     riu = str(obj.get("rag_idea_used") or "").strip()
@@ -1277,13 +1563,32 @@ class AdvancedCommentService:
                         "rag_idea_used": riu,
                         "rag_applied": rap,
                     }
+                    if not rag_list and extras.get("rag_applied"):
+                        extras["rag_applied"] = False
+                        extras["rag_idea_used"] = ""
+                    if rag_list and extras.get("rag_applied"):
+                        if not _rag_idea_overlap_tokens(extras.get("rag_idea_used", ""), rag_list):
+                            extras["rag_applied"] = False
+                            extras["rag_idea_used"] = ""
                     last_plain_len = len(plain)
                     base = sanitize_text(auto_tokenize(plain, fb, fa)) if plain else ""
                     if base.strip():
                         out = base.rstrip()
                         if ba and ba.lower() not in out.lower():
                             out = f"{out} {ba}".strip()
+                        if forcing_pv_bracket and not re.search(r"\[pv\s*:", out.lower()):
+                            out = f"{out} {forcing_pv_bracket}".strip()
                         if out.strip():
+                            ref = self._last_llm_log_seq
+                            if ref is not None:
+                                append_postcheck(
+                                    ref_seq=ref,
+                                    payload={
+                                        "rag_applied": extras.get("rag_applied"),
+                                        "rag_idea_used": extras.get("rag_idea_used"),
+                                        "named_motifs": named,
+                                    },
+                                )
                             return out, named, extras
                     logger.warning(
                         "Structured composer empty prose after parse (attempt %s): "
@@ -1325,27 +1630,65 @@ class AdvancedCommentService:
         if _log_llm_prompts_enabled() and prompt_name:
             _debug_log_prompt(prompt_name, system_prompt, user_text)
         resolved_model = model or resolve_model(self.provider_name, "composer")
-        if use_structured_composer:
-            raw, usage = await self._provider.json_schema_call(
+        pass_name = prompt_name or (
+            "composer_structured" if use_structured_composer else "text_call"
+        )
+        schema_for_log = "chess_commentary_composer" if use_structured_composer else None
+        t0 = time.perf_counter()
+        raw: Optional[str] = None
+        usage: Optional[int] = None
+        err: Optional[str] = None
+        ok = False
+        try:
+            if use_structured_composer:
+                raw, usage = await self._provider.json_schema_call(
+                    system_prompt,
+                    user_text,
+                    model=resolved_model,
+                    effort=effort or "low",
+                    schema=COMPOSER_OUTPUT_SCHEMA,
+                    schema_name="chess_commentary_composer",
+                    max_output_tokens=max_output_tokens,
+                )
+                self._last_token_usage = usage
+                ok = True
+                return raw or None
+            raw, usage = await self._provider.text_call(
                 system_prompt,
                 user_text,
                 model=resolved_model,
                 effort=effort or "low",
-                schema=COMPOSER_OUTPUT_SCHEMA,
-                schema_name="chess_commentary_composer",
                 max_output_tokens=max_output_tokens,
             )
             self._last_token_usage = usage
+            ok = True
             return raw or None
-        raw, usage = await self._provider.text_call(
-            system_prompt,
-            user_text,
-            model=resolved_model,
-            effort=effort or "low",
-            max_output_tokens=max_output_tokens,
-        )
-        self._last_token_usage = usage
-        return raw or None
+        except Exception as e:
+            err = repr(e)
+            raise
+        finally:
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            if ok and usage is None:
+                logger.warning(
+                    "LLM call completed without usage metadata (pass_name=%s model=%s)",
+                    pass_name,
+                    resolved_model,
+                )
+            seq = log_llm_call(
+                pass_name=pass_name,
+                system=system_prompt,
+                user=user_text,
+                response=raw if raw is not None else "",
+                model=resolved_model,
+                effort=effort or "low",
+                schema_name=schema_for_log,
+                token_usage=usage,
+                elapsed_ms=elapsed_ms,
+                ok=ok,
+                error=err,
+            )
+            if use_structured_composer:
+                self._last_llm_log_seq = seq
 
     async def _llm_call_json_schema(
         self,
@@ -1362,20 +1705,53 @@ class AdvancedCommentService:
         if _log_llm_prompts_enabled():
             _debug_log_prompt(f"json_schema:{schema_name}", system_prompt, user_text)
         resolved_model = model or resolve_model(self.provider_name, "digest")
-        raw, usage = await self._provider.json_schema_call(
-            system_prompt,
-            user_text,
-            model=resolved_model,
-            effort=effort,
-            schema=schema,
-            schema_name=schema_name,
-            max_output_tokens=max_output_tokens,
-        )
-        self._last_token_usage = usage
-        logger.info(
-            "LLM JSON pass %s token_usage≈%s",
-            schema_name,
-            self._last_token_usage,
-        )
-        return (raw or "").strip()
+        pass_name = f"json_schema:{schema_name}"
+        t0 = time.perf_counter()
+        raw: Optional[str] = None
+        usage: Optional[int] = None
+        err: Optional[str] = None
+        ok = False
+        try:
+            raw, usage = await self._provider.json_schema_call(
+                system_prompt,
+                user_text,
+                model=resolved_model,
+                effort=effort,
+                schema=schema,
+                schema_name=schema_name,
+                max_output_tokens=max_output_tokens,
+            )
+            self._last_token_usage = usage
+            logger.info(
+                "LLM JSON pass %s token_usage≈%s",
+                schema_name,
+                self._last_token_usage,
+            )
+            ok = True
+            return (raw or "").strip()
+        except Exception as e:
+            err = repr(e)
+            raise
+        finally:
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            if ok and usage is None:
+                logger.warning(
+                    "LLM json_schema call completed without usage metadata "
+                    "(schema_name=%s model=%s)",
+                    schema_name,
+                    resolved_model,
+                )
+            log_llm_call(
+                pass_name=pass_name,
+                system=system_prompt,
+                user=user_text,
+                response=(raw or "") if raw is not None else "",
+                model=resolved_model,
+                effort=effort,
+                schema_name=schema_name,
+                token_usage=usage,
+                elapsed_ms=elapsed_ms,
+                ok=ok,
+                error=err,
+            )
 

@@ -70,6 +70,15 @@ def _leaf_eval_after_line(
 def _flatten_numeric_features(feat: Dict[str, Any]) -> Dict[str, float]:
     """Extract comparable numeric scalars for delta (both sides + pawn center)."""
     out: Dict[str, float] = {}
+
+    def _coerce_numeric(side: Dict[str, Any], k: str) -> Optional[float]:
+        v = side.get(k)
+        if isinstance(v, (int, float)):
+            return float(v)
+        if isinstance(v, list):
+            return float(len(v))
+        return None
+
     for side in ("white", "black"):
         d = feat.get(side)
         if not isinstance(d, dict):
@@ -83,14 +92,15 @@ def _flatten_numeric_features(feat: Dict[str, Any]) -> Dict[str, float]:
             "passedPawns",
             "isolatedPawns",
             "doubledPawns",
+            "backwardPawns",
             "attackingPieces",
             "attackedPieces",
             "centralization",
             "space",
         ):
-            v = d.get(k)
-            if isinstance(v, (int, float)):
-                out[f"{side}.{k}"] = float(v)
+            num = _coerce_numeric(d, k)
+            if num is not None:
+                out[f"{side}.{k}"] = num
     return out
 
 

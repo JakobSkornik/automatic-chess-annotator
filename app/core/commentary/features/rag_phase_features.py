@@ -28,13 +28,42 @@ def _minor_major_count(board: chess.Board) -> int:
     return s
 
 
-def _engine_raw_phase(board: chess.Board) -> str:
-    """Mirror app.core.engine.analysis_retriever._determine_game_phase values."""
-    if board.fullmove_number <= _EARLY_FULLMOVE_CUTOFF:
+def _engine_raw_phase(
+    board: chess.Board,
+    *,
+    opening_matched_ply: Optional[int] = None,
+    uci_plies_played: Optional[int] = None,
+) -> str:
+    """Mirror engine phase values: early while still in ECO book when known; else legacy cutoff."""
+    book_context = (
+        opening_matched_ply is not None
+        and uci_plies_played is not None
+        and uci_plies_played > 0
+    )
+    if book_context:
+        if opening_matched_ply >= uci_plies_played:
+            return "early"
+        # Out of book with explicit counters — do **not** apply fullmove≤10 opening extension.
+    elif board.fullmove_number <= _EARLY_FULLMOVE_CUTOFF:
         return "early"
+
     if _minor_major_count(board) < _MINOR_MAJOR_END_THRESHOLD:
         return "end"
     return "mid"
+
+
+def in_opening_book(
+    uci_prefix: List[str], eco_book: Optional[ECOBook] = None
+) -> Tuple[bool, int]:
+    """
+    True when the full UCI prefix is covered by a book hit (longest match length >= len(prefix)).
+    Returns (in_book, matched_ply_count_of_longest_hit).
+    """
+    b = eco_book or ECOBook()
+    info, matched_ply = b.match(uci_prefix)
+    if not uci_prefix:
+        return False, matched_ply
+    return (info is not None and matched_ply >= len(uci_prefix)), matched_ply
 
 
 def map_engine_phase_to_rag(raw: str) -> RagPhase:
@@ -45,12 +74,24 @@ def map_engine_phase_to_rag(raw: str) -> RagPhase:
     return "middlegame"
 
 
-def classify_rag_phase(board: chess.Board) -> RagPhase:
+def classify_rag_phase(
+    board: chess.Board,
+    *,
+    opening_matched_ply: Optional[int] = None,
+    uci_plies_played: Optional[int] = None,
+) -> RagPhase:
     """
     Classify the position into opening / middlegame / endgame.
-    Uses fullmove number and material (same heuristics as live engine analysis).
+    When ``opening_matched_ply`` and ``uci_plies_played`` are set, opening lasts while the
+    full UCI prefix matches the ECO book (same as engine phase).
     """
-    return map_engine_phase_to_rag(_engine_raw_phase(board))
+    return map_engine_phase_to_rag(
+        _engine_raw_phase(
+            board,
+            opening_matched_ply=opening_matched_ply,
+            uci_plies_played=uci_plies_played,
+        )
+    )
 
 
 def opening_ply_bucket(ply: int) -> str:

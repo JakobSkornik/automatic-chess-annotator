@@ -256,7 +256,7 @@ class KeyMomentDetector:
         curr_cent = (curr_hf.get(side) or {}).get("centralization")
         prev_cent = (prev_hf.get(side) or {}).get("centralization")
         if curr_cent is not None and prev_cent is not None:
-            if curr_cent - prev_cent >= 3 and prev_cent <= 35:
+            if curr_cent - prev_cent >= 1.0 and prev_cent <= 1.5:
                 results.append("piece_activation")
 
         # -- Opening transition: first move out of book --
