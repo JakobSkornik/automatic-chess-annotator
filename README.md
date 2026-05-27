@@ -22,7 +22,8 @@ pip install -r requirements.txt
 | -------- | ------- |
 | `OPENAI_API_KEY` | Required when using provider `openai` |
 | `ANTHROPIC_API_KEY` | Required when using provider `anthropic` |
-| `LLM_DEFAULT_PROVIDER` | `openai` or `anthropic` (default `openai`) when a job omits `llm_provider` |
+| `LLM_DEFAULT_PROVIDER` | `openai`, `anthropic`, or `cursor` (default `openai`) when a job omits `llm_provider` |
+| `CURSOR_API_KEY` | Required when `LLM_DEFAULT_PROVIDER=cursor` (Cursor Dashboard → Integrations) |
 | `RAG_BM25_PATH` | Directory of the Tantivy BM25 index. **v2** phase-aware index default build: `data/bm25_positions_v2` (see below). Legacy: `data/bm25_positions`. If unset or invalid, commentary runs without reference examples |
 | `RAG_BM25_STOCKFISH_DEPTH` | Depth for runtime PV used in BM25 queries (default `14`) |
 | `RAG_MIN_SCORE_OPENING` | Minimum combined BM25+board score to inject opening examples (default `0.45`; below → no RAG) |

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import sys
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.core.commentary.llm_providers import (
     AnthropicProvider,
+    CursorProvider,
     DYNAMIC_SECTION_SENTINEL,
     OpenAIProvider,
     make_llm_provider,
@@ -23,6 +26,70 @@ class TestMakeLlmProvider(unittest.TestCase):
     def test_anthropic_name(self) -> None:
         p = make_llm_provider("anthropic")
         self.assertEqual(p.name, "anthropic")
+
+    def test_cursor_name(self) -> None:
+        p = make_llm_provider("cursor")
+        self.assertEqual(p.name, "cursor")
+
+
+class TestCursorProvider(unittest.TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.env = patch.dict(
+            "os.environ",
+            {"CURSOR_API_KEY": "cursor_test_key"},
+            clear=False,
+        )
+        self.env.start()
+        self.mock_agent = MagicMock()
+        self.mock_opts = MagicMock(side_effect=lambda **kw: kw)
+        self.mock_local = MagicMock(side_effect=lambda **kw: kw)
+        self.mock_sdk = MagicMock(
+            Agent=self.mock_agent,
+            AgentOptions=self.mock_opts,
+            LocalAgentOptions=self.mock_local,
+            CursorAgentError=Exception,
+        )
+        self.sdk_mod = patch.dict(sys.modules, {"cursor_sdk": self.mock_sdk})
+        self.sdk_mod.start()
+
+    def tearDown(self) -> None:
+        self.sdk_mod.stop()
+        self.env.stop()
+        super().tearDown()
+
+    def test_json_schema_call_strips_sentinel_and_returns_json(self) -> None:
+        payload = (
+            '{"named_motifs":[],"text":"ok","better_alternative":"",'
+            '"rag_idea_used":"","rag_applied":false}'
+        )
+        self.mock_agent.prompt.return_value = SimpleNamespace(
+            status="finished",
+            result=payload,
+            usage=None,
+        )
+        p = CursorProvider()
+
+        import asyncio
+
+        async def _run() -> None:
+            raw, n = await p.json_schema_call(
+                "sys",
+                "static" + DYNAMIC_SECTION_SENTINEL + "dynamic",
+                model="composer-2.5",
+                effort="low",
+                schema=COMPOSER_OUTPUT_SCHEMA,
+                schema_name="chess_commentary_composer",
+                max_output_tokens=100,
+            )
+            self.assertIn("named_motifs", raw)
+            self.assertEqual(n, 0)
+            prompt_arg = self.mock_agent.prompt.call_args[0][0]
+            self.assertIn("chess_commentary_composer", prompt_arg)
+            self.assertNotIn("===DYNAMIC===", prompt_arg)
+            self.assertIn("dynamic", prompt_arg)
+
+        asyncio.run(_run())
 
 
 class TestOpenAIProvider(unittest.TestCase):

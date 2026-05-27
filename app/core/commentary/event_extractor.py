@@ -6,8 +6,15 @@ import chess
 import chess.pgn
 from typing import Any, Dict, List, Optional
 
+from app.core.commentary.features.delta_to_motif import infer_motifs_from_deltas
 from app.core.commentary.features.move_category import classify_move_event
+from app.core.commentary.features.opponent_threats import detect_opponent_threats
 from app.core.commentary.features.plan_extractor import build_plan_comparison
+from app.core.commentary.features.pv_motif_scan import (
+    merge_pv_motifs_into_strategic,
+    merge_pv_motifs_into_tactical,
+    scan_pv_motifs,
+)
 from app.core.commentary.features.strategic_motifs import detect_strategic_motifs
 from app.core.commentary.features.tactical_motifs import detect_tactical_motifs
 from app.core.commentary.key_moment_detector import KeyMomentDetector
@@ -203,7 +210,9 @@ class ChessEventExtractor:
                     if u:
                         pv_ucis.append(str(u))
 
-            pt, bt, ps, bs, pchain, bchain = build_plan_comparison(row.fen_before, pvs, uci)
+            pt, bt, ps, bs, pchain, bchain, ptags, btags = build_plan_comparison(
+                row.fen_before, pvs, uci
+            )
             plan_cmp = PlanComparison(
                 played_target_squares=pt,
                 best_target_squares=bt,
@@ -211,6 +220,8 @@ class ChessEventExtractor:
                 best_plan_seed=bs,
                 played_recurring_destinations=pchain,
                 best_recurring_destinations=bchain,
+                played_plan_tags=ptags,
+                best_plan_tags=btags,
             )
 
             strat_motifs = detect_strategic_motifs(
@@ -224,6 +235,37 @@ class ChessEventExtractor:
                 phase=phase,
                 best_pv_ucis=pv_ucis or None,
                 plan_comparison=plan_cmp,
+            )
+
+            # PV motif scan along engine PV1 from root
+            pv_motif_scans = scan_pv_motifs(
+                board_before,
+                pv_ucis,
+                max_plies=4,
+                phase=phase,
+            )
+            motifs = merge_pv_motifs_into_tactical(motifs, pv_motif_scans)
+            strat_motifs = merge_pv_motifs_into_strategic(strat_motifs, pv_motif_scans)
+
+            # Map PV horizon feature deltas to strategic motifs
+            if row.pv_horizon_diff is not None:
+                mover_color = board_before.turn
+                delta_motifs = infer_motifs_from_deltas(
+                    row.pv_horizon_diff,
+                    mover=mover_color,
+                    phase=phase,
+                )
+                seen_strat = set(strat_motifs)
+                for dm in delta_motifs:
+                    if dm not in seen_strat:
+                        seen_strat.add(dm)
+                        strat_motifs.append(dm)
+
+            # Opponent threat scan from fen_after
+            opp_threats = detect_opponent_threats(
+                board_after,
+                best_pv_ucis=pv_ucis or None,
+                played_matches_best=played_is_best,
             )
 
             event_type = MoveEventType.QUIET
@@ -290,6 +332,8 @@ class ChessEventExtractor:
                 key_moment_type=km,
                 eval_instability_cp=eval_instability_cp,
                 pv_horizon_diff=row.pv_horizon_diff,
+                pv_motifs=pv_motif_scans,
+                opponent_threats=opp_threats,
             )
             ev = ev.model_copy(
                 update={"move_category": classify_move_event(ev, future_delta=None)}

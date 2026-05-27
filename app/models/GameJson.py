@@ -47,6 +47,9 @@ class GameMove(BaseModel):
     named_motifs: List[str] = []
     primary_motif_label: Optional[str] = None
     rag_refs: List[RagRef] = []
+    opponent_threats: List[str] = []
+    pv_motif_summary: List[str] = []
+    motif_trajectory: Optional[str] = None
 
 class GameMetadata(BaseModel):
     id: str
@@ -74,6 +77,7 @@ class EpisodeSummary(BaseModel):
     end_move: int
     narrative: Optional[str] = None
     dominant_theme: str = ""
+    motif_trajectory: Optional[str] = None
 
 class GameJson(BaseModel):
     metadata: GameMetadata

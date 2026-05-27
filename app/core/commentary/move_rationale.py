@@ -104,6 +104,16 @@ def build_rationale(
     else:
         future_eff = "Future line not deep-analysed for this move."
 
+    from app.core.commentary.features.pv_motif_scan import collect_pv_motif_summary
+
+    pv_summary = collect_pv_motif_summary(me.pv_motifs or [])
+    if pv_summary:
+        future_eff = (future_eff + " | PV motifs: " + "; ".join(pv_summary[:3])).strip(" |")
+
+    if me.opponent_threats:
+        threat_labels = ", ".join(t.value for t in me.opponent_threats[:3])
+        future_eff = (future_eff + f" | Opponent threatens: {threat_labels}").strip(" |")
+
     motif: str | None = None
     if me.tactical_motifs:
         motif = me.tactical_motifs[0].value
@@ -129,6 +139,17 @@ def build_rationale(
             played_plan = pc.played_plan_seed
         if pc.best_plan_seed:
             best_plan = pc.best_plan_seed
+        if pc.played_plan_tags:
+            tag_str = ", ".join(pc.played_plan_tags[:3])
+            played_plan = f"{played_plan or 'n/a'} ({tag_str})" if played_plan else tag_str
+        if pc.best_plan_tags:
+            tag_str = ", ".join(pc.best_plan_tags[:3])
+            best_plan = f"{best_plan or 'n/a'} ({tag_str})" if best_plan else tag_str
+
+    if me.motif_trajectory:
+        coach_scratchpad_extra = f"Trajectory: {me.motif_trajectory}"
+    else:
+        coach_scratchpad_extra = ""
 
     stakes = None
     km_type = me.key_moment_type or ""
@@ -149,6 +170,8 @@ def build_rationale(
         "plan": f"Played: {played_plan or 'n/a'} | Engine lean: {best_plan or 'n/a'}".strip(),
         "counterplay": (counterfactual or "").strip(),
     }
+    if coach_scratchpad_extra:
+        coach_scratchpad["trajectory"] = coach_scratchpad_extra
 
     return MoveRationale(
         eval_change_cp=swing,

@@ -17,6 +17,12 @@ _POLICY: Dict[str, Dict[str, str]] = {
         "episode": "claude-haiku-4-5",
         "narrative": "claude-sonnet-4-5",
     },
+    "cursor": {
+        "digest": "composer-2.5",
+        "composer": "composer-2.5",
+        "episode": "composer-2.5",
+        "narrative": "composer-2.5",
+    },
 }
 
 # When ``pass_label`` is passed for composer, override base composer model (optional per provider).

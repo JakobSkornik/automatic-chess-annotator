@@ -122,6 +122,19 @@ class PlanComparison(BaseModel):
     best_plan_seed: str = ""
     played_recurring_destinations: List[str] = Field(default_factory=list)
     best_recurring_destinations: List[str] = Field(default_factory=list)
+    played_plan_tags: List[str] = Field(default_factory=list)
+    best_plan_tags: List[str] = Field(default_factory=list)
+
+
+class PlyMotifScan(BaseModel):
+    """Motifs detected at one ply along an engine PV line."""
+
+    ply: int
+    san: str = ""
+    uci: str = ""
+    mover: str = ""
+    tactical_motifs: List[TacticalMotif] = Field(default_factory=list)
+    strategic_motifs: List[StrategicMotif] = Field(default_factory=list)
 
 
 class MoveRationale(BaseModel):
@@ -208,6 +221,12 @@ class MoveEvent(BaseModel):
     pv_horizon_diff: Optional[PvHorizonDiff] = None
     # max(eval@depth) - min(eval@depth) across depths 8/12/16 on after-move position
     eval_instability_cp: Optional[int] = None
+    # Motifs detected along engine PV1 (future plies)
+    pv_motifs: List[PlyMotifScan] = Field(default_factory=list)
+    # Tactical threats available to the opponent from fen_after
+    opponent_threats: List[TacticalMotif] = Field(default_factory=list)
+    # Sustained motif pattern label when a motif persists >=3 consecutive plies
+    motif_trajectory: Optional[str] = None
 
 
 class Episode(BaseModel):
@@ -225,6 +244,7 @@ class Episode(BaseModel):
     tactical_motifs_in_episode: List[TacticalMotif] = Field(default_factory=list)
     phase: str = ""
     narrative_summary: Optional[str] = None
+    motif_trajectory: Optional[str] = None
 
 
 class GameAnalysisContext(BaseModel):

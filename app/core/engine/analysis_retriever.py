@@ -737,6 +737,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 end_move=end_mn,
                 narrative=ep.narrative_summary,
                 dominant_theme=ep.dominant_theme,
+                motif_trajectory=ep.motif_trajectory,
             )
         )
 
@@ -840,6 +841,12 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
 
         ep_idx = ply_to_episode.get(move_obj.depth)
 
+        pv_motif_summary: List[str] = []
+        if me and me.pv_motifs:
+            from app.core.commentary.features.pv_motif_scan import collect_pv_motif_summary
+
+            pv_motif_summary = collect_pv_motif_summary(me.pv_motifs)
+
         game_moves.append(
             GameMove(
                 mn=board_before.fullmove_number,
@@ -862,6 +869,9 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 named_motifs=named_motifs,
                 primary_motif_label=primary_motif_label,
                 rag_refs=rag_refs,
+                opponent_threats=[t.value for t in (me.opponent_threats if me else [])],
+                pv_motif_summary=pv_motif_summary,
+                motif_trajectory=me.motif_trajectory if me else None,
             )
         )
 
@@ -991,8 +1001,15 @@ async def run_engine_analysis_to_json(
         key_moment_detector=retriever.key_moment_detector,
     )
     move_events = extractor.extract_events(game, analyzed_rows)
+    from app.core.commentary.features.motif_trajectory import (
+        compute_episode_trajectories,
+        compute_move_trajectories,
+    )
+
+    compute_move_trajectories(move_events)
     segmenter = EpisodeSegmenter()
     episodes = segmenter.segment(move_events)
+    compute_episode_trajectories(episodes)
 
     ply_to_episode: Dict[int, int] = {}
     for ep in episodes:
