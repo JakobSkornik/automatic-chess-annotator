@@ -28,6 +28,11 @@ class Variation(BaseModel):
     # Position after each ply of `line` — lets the PV popup slide/autoplay
     # without replaying SAN on the frontend.
     fens: List[str] = []
+    # Search depth behind `score` (shown after the eval at the end of the line).
+    depth: Optional[int] = None
+    # Key factors of the final position vs the base position: claims fired on
+    # the root->leaf feature diff. [{text, text_state, features, delta_cp, flag_note}]
+    key_factors: List[Dict[str, Any]] = []
 
 
 class FeatureRef(BaseModel):
@@ -73,6 +78,10 @@ class GameMove(BaseModel):
     # Trimmed CommentFacts for the structured comment renderer (assessment /
     # reasons / better alternative, each with its own line).
     comment_facts: Optional[Dict[str, Any]] = None
+    # Academic reasoning trace: how this move's conclusions were reached
+    # (engine numbers, key moment, envisioned-line stats, fired/muted rules,
+    # per-level rendering outcomes).
+    debug: Optional[Dict[str, Any]] = None
 
 class GameMetadata(BaseModel):
     id: str
@@ -115,6 +124,8 @@ class GameJson(BaseModel):
     episodes: List[EpisodeSummary] = []
     game_narrative: Optional[str] = None
     feature_series: Optional[FeatureSeries] = None
+    # Pipeline parameters behind the per-move debug traces (rule thresholds etc.)
+    debug_info: Optional[Dict[str, Any]] = None
     analysis_info: AnalysisInfo
 
 

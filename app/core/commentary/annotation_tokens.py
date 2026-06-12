@@ -173,9 +173,18 @@ def resolve_tokens(
         data: Optional[Dict[str, Any]] = None
         try:
             if t == "pv":
-                line = _resolve_pv_line(content, fa)
-                if line:
-                    data = {"line": line}
+                # Guid display lines start WITH the played move (replay from
+                # fen_before); plain continuations start after it (fen_after).
+                # Try both and keep the resolution that covers more plies.
+                best_fen: Optional[str] = None
+                best_line: Optional[List[Dict[str, str]]] = None
+                for candidate_fen in (fb, fa):
+                    line = _resolve_pv_line(content, candidate_fen)
+                    if line and (best_line is None or len(line) > len(best_line)):
+                        best_fen = candidate_fen
+                        best_line = line
+                if best_line:
+                    data = {"line": best_line, "start_fen": best_fen}
             elif t == "move":
                 m = _resolve_single_move(content, fb)
                 if m:

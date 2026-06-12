@@ -88,6 +88,9 @@ class CommentFacts(BaseModel):
     claims: List[Claim] = Field(default_factory=list)
     feature_diff: Optional[FeatureDiff] = None
     better_alternative: Optional[BestAlternative] = None
+    # Claims that fired but were muted by the adjacent-move dedup window
+    # (kept for the academic debug/reasoning view).
+    muted_claims: List[str] = Field(default_factory=list)
 
     def feature_refs(self) -> List[str]:
         seen: List[str] = []

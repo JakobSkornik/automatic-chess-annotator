@@ -778,6 +778,56 @@ def _facts_to_json(facts: Any) -> Dict[str, Any]:
     return out
 
 
+def _build_debug_info() -> Dict[str, Any]:
+    """Pipeline parameters behind the per-move debug traces."""
+    from app.core.commentary.features.envisioned import max_display_plies
+    from app.core.commentary.phase_classifier import endgame_piece_threshold
+    from app.core.commentary.rules.engine import THRESHOLDS
+
+    return {
+        "rule_thresholds": dict(THRESHOLDS),
+        "envisioned_max_plies": max_display_plies(),
+        "claim_dedup_window_plies": int(os.environ.get("CLAIM_DEDUP_WINDOW_PLIES", "6")),
+        "endgame_piece_threshold": endgame_piece_threshold(),
+        "better_alternative_gap_cp": THRESHOLDS.get("better_alternative_gap"),
+    }
+
+
+def _variation_key_factors(
+    start_fen: str,
+    leaf_fen: str,
+    *,
+    phase: str,
+    mover_is_white: bool,
+    max_factors: int = 3,
+) -> List[Dict[str, Any]]:
+    """Claims fired on the root->leaf feature diff of an engine variation
+    (engine-free; same machinery as the comment claims)."""
+    try:
+        from app.core.commentary.features.envisioned import feature_diff
+        from app.core.commentary.rules.engine import run_rules
+
+        diff = feature_diff(start_fen, leaf_fen)
+        claims = run_rules(
+            diff,
+            phase=phase or "mid",
+            mover="WHITE" if mover_is_white else "BLACK",
+        )
+        return [
+            {
+                "text": c.text,
+                "text_state": c.text_state,
+                "features": list(c.features_involved),
+                "delta_cp": c.delta_cp,
+                "flag_note": c.flag_note,
+            }
+            for c in claims[:max_factors]
+        ]
+    except Exception as e:
+        logger.debug("variation key factors failed: %s", e)
+        return []
+
+
 def _build_feature_series(analyzed_rows: List[AnalyzedMoveData]) -> FeatureSeries:
     """Aligned per-ply arrays of the charted Guid features (White-POV cp)."""
     plies: List[int] = []
@@ -926,6 +976,14 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                     fen_line.append("")
 
             score_val = first_move.score
+            key_factors: List[Dict[str, Any]] = []
+            if fen_line and fen_line[-1]:
+                key_factors = _variation_key_factors(
+                    board_pv_start.fen(),
+                    fen_line[-1],
+                    phase=str(row.phase_raw or "mid"),
+                    mover_is_white=board_pv_start.turn == chess.WHITE,
+                )
             variations.append(
                 Variation(
                     rank=rank + 1,
@@ -933,6 +991,8 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                     score=_score_to_move_score(score_val),
                     line=san_line,
                     fens=fen_line,
+                    depth=16,
+                    key_factors=key_factors,
                 )
             )
 
@@ -994,6 +1054,57 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         if comment and facts is not None:
             comment_facts_out = _facts_to_json(facts)
 
+        # Academic reasoning trace ("how did we reach this conclusion")
+        debug_out: Optional[Dict[str, Any]] = None
+        if comment and me and (row.phase_raw or "") != "early":
+            renderings = None
+            contract_ok = None
+            try:
+                hf_dbg = analyzed_move.hiddenFeatures or {}
+                llm_dbg = hf_dbg.get("_llm") if isinstance(hf_dbg, dict) else None
+                if isinstance(llm_dbg, dict):
+                    renderings = llm_dbg.get("facts_renderings")
+                    contract_ok = llm_dbg.get("facts_contract_ok")
+            except Exception:
+                pass
+            envisioned_stats = None
+            fired_rules: List[Dict[str, Any]] = []
+            muted: List[str] = []
+            if facts is not None:
+                dl = facts.display_line
+                if dl is not None:
+                    envisioned_stats = {
+                        "kept_plies": len(dl.line_san),
+                        "trimmed_plies": dl.trimmed_plies,
+                        "start_quiescent": dl.start_quiescent,
+                        "leaf_quiescent": dl.leaf_quiescent,
+                    }
+                fired_rules = [
+                    {
+                        "rule_id": c.rule_id,
+                        "text": c.text,
+                        "delta_cp": c.delta_cp,
+                        "features": list(c.features_involved),
+                        "flag_note": c.flag_note,
+                    }
+                    for c in facts.claims
+                ]
+                muted = list(facts.muted_claims)
+            debug_out = {
+                "eval_before_cp": me.eval_before_cp,
+                "eval_after_cp": me.eval_after_cp,
+                "eval_swing_cp": me.eval_swing_cp,
+                "best_move_san": me.best_move_san,
+                "best_move_eval_cp": me.best_move_eval_cp,
+                "key_moment_type": me.key_moment_type,
+                "move_quality": me.move_quality.value if me.move_quality else None,
+                "envisioned": envisioned_stats,
+                "fired_rules": fired_rules,
+                "muted_claims": muted,
+                "renderings": renderings,
+                "contract_ok": contract_ok,
+            }
+
         game_moves.append(
             GameMove(
                 mn=board_before.fullmove_number,
@@ -1026,6 +1137,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 comments=comments_by_level,
                 resolved_tokens_by_level=resolved_by_level,
                 comment_facts=comment_facts_out,
+                debug=debug_out,
             )
         )
 
@@ -1035,6 +1147,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         episodes=episode_summaries,
         game_narrative=context.game_narrative,
         feature_series=_build_feature_series(analyzed_rows),
+        debug_info=_build_debug_info(),
         analysis_info=AnalysisInfo(
             engine="Stockfish",
             depth=16,
@@ -1210,13 +1323,15 @@ async def run_engine_analysis_to_json(
             # A persistent feature change (e.g. an unsolved bad bishop) fires on
             # every envisioned line; keep the first occurrence, mute repeats.
             kept = []
+            muted: List[str] = []
             for c in facts.claims:
                 prev = last_claim_ply.get(c.text)
                 if prev is not None and (me.ply - prev) <= CLAIM_DEDUP_WINDOW_PLIES:
+                    muted.append(c.text)
                     continue
                 last_claim_ply[c.text] = me.ply
                 kept.append(c)
-            facts = facts.model_copy(update={"claims": kept})
+            facts = facts.model_copy(update={"claims": kept, "muted_claims": muted})
             move_events[mi] = me.model_copy(update={"comment_facts": facts})
 
     from app.core.commentary.features.motif_trajectory import (

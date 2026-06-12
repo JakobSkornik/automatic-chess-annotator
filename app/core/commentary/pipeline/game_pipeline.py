@@ -318,6 +318,10 @@ class GameAnnotationPipeline:
                                         _slot["comment"] = text
                                         if mctx.level_texts:
                                             _slot["comments"] = dict(mctx.level_texts)
+                                        if llm_debug.get("facts_renderings"):
+                                            _slot["facts_renderings"] = llm_debug["facts_renderings"]
+                                        if "facts_contract_ok" in llm_debug:
+                                            _slot["facts_contract_ok"] = llm_debug["facts_contract_ok"]
                                         _slot["named_motifs"] = llm_debug.get("composer_named_motifs", [])
                                         rat = llm_debug.get("rationale") or {}
                                         _slot["primary_motif_label"] = rat.get("primary_motif_label", "")

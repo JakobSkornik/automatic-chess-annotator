@@ -89,6 +89,33 @@ async def get_job_game(job_id: str):
     raise HTTPException(status_code=400, detail="Job not ready yet")
 
 
+@router.get("/export.zip")
+async def export_all_games():
+    """Zip of every finished game JSON (review repository for annotators)."""
+    import io
+    import zipfile
+
+    from fastapi.responses import Response
+
+    games_dir = "data/games"
+    files = (
+        sorted(f for f in os.listdir(games_dir) if f.endswith(".json"))
+        if os.path.isdir(games_dir)
+        else []
+    )
+    if not files:
+        raise HTTPException(status_code=404, detail="No finished games to export")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fn in files:
+            zf.write(os.path.join(games_dir, fn), fn)
+    return Response(
+        buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="annotated-games.zip"'},
+    )
+
+
 @router.get("/{job_id}/pgn")
 async def get_job_pgn(
     job_id: str,
