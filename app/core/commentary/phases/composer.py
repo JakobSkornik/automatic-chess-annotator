@@ -139,11 +139,13 @@ def render_facts_template(facts: CommentFacts) -> str:
             parts.append(" ".join(_claim_text(c, prefer_state=prefer_state) for c in merits))
         if concessions:
             if facts.concession_mode == "consequence":
-                # Claims start with the side's name, so "Now Black ..." reads naturally.
+                # Claims start with the side's name, so "Now Black ..." reads
+                # naturally — but use the change-form to avoid "Now ... is now".
                 prefix = "Now " if variant == 0 else "The drawback: "
+                conc_texts = [c.text for c in concessions]
             else:
                 prefix = "In return, " if variant == 0 else "On the other hand, "
-            conc_texts = [_claim_text(c, prefer_state=prefer_state) for c in concessions]
+                conc_texts = [_claim_text(c, prefer_state=prefer_state) for c in concessions]
             conc_texts[0] = prefix + conc_texts[0]
             parts.append(" ".join(conc_texts))
 
