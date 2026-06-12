@@ -1,20 +1,30 @@
-"""Guid-format comment composition with LLM enrichment.
+"""Guid-format comment composition at three audience levels.
 
-The shape of every mid/end-phase comment follows Fig. 5.2 of the dissertation:
+Every comment follows the dissertation's shape (Fig. 5.2):
 
-    {move} {verdict} after {shortened variation} ({eval}, Stockfish:{depth}).
+    {move} {verdict} after {variation} ({eval}, Stockfish:{depth}).
     {fired-rule claims}. [Better was {best move}: {its claims}.]
 
-``HUMANIZATION_LEVEL`` selects how the facts are rendered:
+The **commentary language level** is an audience register, not a licence to
+invent. Position-specific claims come exclusively from the rule engine at
+every level; what scales with the level is how much general chess knowledge
+is explained around them:
 
-  0  deterministic template join (zero hallucination baseline)
-  1  LLM restates the facts fluently; no additions
-  2  LLM may additionally weave in ONE flavor/context clause from the
-     supplied enrichment (opening lore, game context, foreshadowing)
+  expert        Informant/Chessbase register for strong players. Dry,
+                declarative, no didactics, claims merged into compact
+                compound sentences. Matej's dissertation voice.
+  intermediate  Club player (~1500-2000). Same facts; one brief clause on
+                why the key feature matters in general. Standard terms used,
+                never defined.
+  beginner      Learning player. Each named feature explained in plain words
+                (what a passed pawn IS), jargon avoided or defined inline,
+                one short takeaway tied to a fired claim's concept.
 
-All levels share identical facts. The LLM contract is enforced after the
-call: the eval token and the PV token must survive verbatim, otherwise the
-deterministic rendering is used instead.
+All three texts are produced by ONE LLM call returning a JSON object with
+all levels; each text is validated against the fact contract (eval + PV
+tokens verbatim, alternative named) independently, and any failing level
+falls back to the deterministic template. With no LLM configured (or
+``HUMANIZATION_LEVEL=0``) every level is the template.
 """
 
 from __future__ import annotations
@@ -25,17 +35,25 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-from app.models.comment_facts import BestAlternative, CommentFacts
+from app.models.comment_facts import BestAlternative, Claim, CommentFacts
 
 logger = logging.getLogger(__name__)
 
+LEVELS = ("expert", "intermediate", "beginner")
+DEFAULT_LEVEL = "intermediate"
+
 
 def humanization_level() -> int:
+    """Legacy switch: 0 disables the LLM entirely (template-only output)."""
     try:
         lvl = int(os.environ.get("HUMANIZATION_LEVEL", "2"))
     except ValueError:
         lvl = 2
     return max(0, min(2, lvl))
+
+
+def llm_rendering_enabled() -> bool:
+    return humanization_level() > 0
 
 
 # ---------------------------------------------------------------------------
@@ -69,32 +87,69 @@ def _move_label(facts: CommentFacts) -> str:
     return f"{move_no}{dots}{facts.san}"
 
 
+def _gerundize(verdict: str) -> str:
+    """'leads to equality' -> 'leading to equality' (for 'A better move was X, ...')."""
+    for head, ger in (("leads", "leading"), ("gives", "giving"), ("leaves", "leaving")):
+        if verdict.startswith(head + " "):
+            return ger + verdict[len(head):]
+    return verdict
+
+
 # ---------------------------------------------------------------------------
-# Level 0 — deterministic template
+# Deterministic template (expert fallback / no-LLM rendering)
 # ---------------------------------------------------------------------------
 
+def _claim_text(c: Claim, *, prefer_state: bool) -> str:
+    if prefer_state and c.text_state:
+        return c.text_state
+    return c.text
+
+
 def render_facts_template(facts: CommentFacts) -> str:
-    parts: List[str] = []
-    head = f"{_move_label(facts)} {facts.verdict}"
+    """Guid-format rendering with deterministic phrasing rotation (per ply),
+    so the pattern does not repeat verbatim move after move."""
+    variant = facts.ply % 2
     pv = pv_token(facts)
     ev = eval_token(facts)
-    if pv:
-        head += f" after {pv}"
-    if ev:
-        head += f" {ev}"
+    move = _move_label(facts)
+
+    parts: List[str] = []
+    if variant == 0:
+        head = f"{move} {facts.verdict}"
+        if pv:
+            head += f" after {pv}"
+        if ev:
+            head += f" {ev}"
+    else:
+        head = f"{move} {facts.verdict}"
+        if pv:
+            head += f": {pv}"
+        if ev:
+            head += f" {ev}"
     parts.append(head + ".")
 
     if facts.claims:
-        parts.append(" ".join(c.text for c in facts.claims))
+        # Long quiescent lines describe the envisioned position -> state form.
+        prefer_state = bool(
+            facts.display_line and len(facts.display_line.line_san) >= 6
+        )
+        parts.append(" ".join(_claim_text(c, prefer_state=prefer_state) for c in facts.claims))
 
     alt = facts.better_alternative
     if alt is not None:
         alt_pv = _alt_pv_token(alt)
-        s = f"Better was {alt.san}"
-        if alt.verdict:
-            s += f", which {alt.verdict}"
-        if alt_pv:
-            s += f" after {alt_pv}"
+        if variant == 0:
+            s = f"Better was {alt.san}"
+            if alt.verdict:
+                s += f", which {alt.verdict}"
+            if alt_pv:
+                s += f" after {alt_pv}"
+        else:
+            s = f"A better move was {alt.san}"
+            if alt.verdict:
+                s += f", {_gerundize(alt.verdict)}"
+            if alt_pv:
+                s += f" after {alt_pv}"
         s += "."
         if alt.claims:
             s += " " + " ".join(c.text for c in alt.claims)
@@ -103,64 +158,79 @@ def render_facts_template(facts: CommentFacts) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Levels 1/2 — LLM enrichment under a fact contract
+# LLM rendering — one call, three audience registers
 # ---------------------------------------------------------------------------
 
-FACTS_COMMENT_SCHEMA: Dict[str, Any] = {
+MULTI_LEVEL_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
-        "text": {"type": "string"},
+        "expert": {"type": "string"},
+        "intermediate": {"type": "string"},
+        "beginner": {"type": "string"},
     },
-    "required": ["text"],
+    "required": ["expert", "intermediate", "beginner"],
     "additionalProperties": False,
 }
 
 GUID_COMPOSER_SYSTEM = (
-    "You are a chess annotator writing in the style of classic annotated game "
-    "collections: concrete, declarative, instructive.\n\n"
-    "You are given INVIOLABLE FACTS about one move: a verdict, a variation token, "
-    "an evaluation token, and zero or more positional claims produced by a "
-    "rule-based expert system. Your job is ONLY to phrase them well.\n\n"
-    "HARD RULES:\n"
-    "- Copy the EVAL token and the PV token into the text VERBATIM, unchanged.\n"
-    "- State the verdict and restate EVERY claim (you may rephrase fluently, "
-    "merge related claims into one sentence, and vary word choice).\n"
-    "- NEVER add a positional assertion that is not among the claims: no new "
-    "squares, files, motifs, threats, plans, or piece judgments.\n"
+    "You are a chess annotator. You are given INVIOLABLE FACTS about one move: "
+    "a verdict, a variation token, an evaluation token, and positional claims "
+    "produced by a rule-based expert system (each claim may come in a change-form "
+    "and a state-form — use whichever reads naturally). Write THREE renderings of "
+    "the SAME annotation, one per audience.\n\n"
+    "HARD RULES (all three renderings):\n"
+    "- Copy the EVAL token and every PV token into the text VERBATIM, unchanged.\n"
+    "- State the verdict and convey EVERY claim (rephrase fluently; merging "
+    "related claims into one sentence is encouraged).\n"
+    "- NEVER add a position-specific assertion that is not among the claims: no "
+    "new squares, files, piece placements, threats, plans, tactics, or judgments "
+    "about THIS position. General chess knowledge about a named concept (what a "
+    "doubled pawn is, why the bishop pair usually matters) is allowed only where "
+    "the audience rules below say so — and only about features named in claims.\n"
     "- Express the evaluation ONLY through the verdict words and the eval token; "
     "never convert centipawns into 'pawns up' language.\n"
-    "- If BETTER ALTERNATIVE is present, end with one sentence: 'Better was "
-    "{move}...' using its verdict, claims and PV token under the same rules.\n"
-    "- One paragraph. No lists, no headers, no engine-worship phrasing.\n"
+    "- If BETTER ALTERNATIVE is present, end with one sentence naming it ('Better "
+    "was {move}...' or a varied equivalent) with its verdict, claims and PV token.\n"
+    "- One paragraph per rendering. No lists, no headers, no engine-worship.\n\n"
+    "AUDIENCES:\n"
+    "- expert: register of Chess Informant / grandmaster game collections. Dry, "
+    "terse, declarative; ~25-55 words besides tokens. Do NOT explain features, "
+    "concepts or terms — the reader is a strong player. No flavor, no narrative, "
+    "no rhetorical questions. Merge the claims into compact compound sentences.\n"
+    "- intermediate: club player. ~50-85 words besides tokens. Standard terms "
+    "used, never defined. You MAY add one short clause on why the single most "
+    "important claimed feature generally matters. Plain, practical tone.\n"
+    "- beginner: learning player. ~70-115 words besides tokens. Explain in a "
+    "simple way each targeted positional feature (e.g. what a passed pawn is) "
+    "the first time it is named; avoid jargon or define it inline; friendly "
+    "instructive tone; you MAY close with one short general takeaway tied to a "
+    "claimed concept. Never patronize and never invent new analysis.\n"
 )
 
-_LEVEL_RULES = {
-    1: (
-        "STYLE: terse and factual, ~40-70 words. Connective tissue only — "
-        "no flavor, no context beyond the facts.\n"
-    ),
-    2: (
-        "STYLE: ~60-110 words. You MAY additionally use AT MOST ONE short "
-        "clause or sentence drawn from the ENRICHMENT block (opening "
-        "background, the game's broader arc, or what this leads to later). "
-        "Enrichment may set the scene or foreshadow, but never adds new "
-        "positional analysis of the current move. If the enrichment is "
-        "irrelevant, omit it.\n"
-    ),
-}
+ENRICHMENT_RULES = (
+    "ENRICHMENT block (optional): intermediate and beginner MAY weave in at most "
+    "one element (opening background or what this leads to later in the game) as "
+    "scene-setting; expert must ignore it entirely.\n"
+)
 
 
 def build_facts_user_prompt(
     facts: CommentFacts,
     *,
-    level: int,
     enrichment: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """User message: the fact block plus (level 2) the enrichment block."""
-    claims_lines = [
-        f"- {c.text}" + (f" [{c.flag_note}]" if c.flag_note else "")
-        for c in facts.claims
-    ] or ["- (no positional claims fired; comment on verdict and line only)"]
+    claims_lines: List[str] = []
+    for c in facts.claims:
+        line = f"- {c.text}"
+        if c.text_state:
+            line += f" | state-form: {c.text_state}"
+        if c.flag_note:
+            line += f" [{c.flag_note}]"
+        if c.features_involved:
+            line += f" (features: {', '.join(c.features_involved[:3])})"
+        claims_lines.append(line)
+    if not claims_lines:
+        claims_lines = ["- (no positional claims fired; comment on verdict and line only)"]
 
     blocks: List[str] = [
         "INVIOLABLE FACTS:",
@@ -183,19 +253,15 @@ def build_facts_user_prompt(
             "Claims:",
             *alt_claims,
         ]
-    if level >= 2 and enrichment:
+    if enrichment:
         enr_lines: List[str] = []
-        for key in ("opening", "episode_theme", "game_so_far", "what_happens_later", "master_note"):
+        for key in ("opening", "episode_theme", "what_happens_later", "master_note"):
             val = enrichment.get(key)
             if val:
                 enr_lines.append(f"{key}: {val}")
         if enr_lines:
-            blocks += ["", "ENRICHMENT (use at most one element, optional):", *enr_lines]
+            blocks += ["", "ENRICHMENT (intermediate/beginner only, optional):", *enr_lines]
     return "\n".join(blocks)
-
-
-def build_facts_system_prompt(level: int) -> str:
-    return GUID_COMPOSER_SYSTEM + "\n" + _LEVEL_RULES.get(level, _LEVEL_RULES[1])
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +276,7 @@ def _normalize(s: str) -> str:
 
 
 def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
-    """The fact contract: eval and PV tokens must survive verbatim."""
+    """The fact contract: eval and PV tokens verbatim; alternative named."""
     t = _normalize(text)
     if not t:
         return False
@@ -226,12 +292,14 @@ def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
     return True
 
 
-def parse_facts_response(raw: str) -> str:
+def _parse_levels(raw: str) -> Dict[str, str]:
     try:
         obj = json.loads(raw)
-        return str(obj.get("text") or "").strip()
+        if isinstance(obj, dict):
+            return {lvl: str(obj.get(lvl) or "").strip() for lvl in LEVELS}
     except Exception:
-        return (raw or "").strip()
+        pass
+    return {}
 
 
 async def compose_facts_comment(
@@ -241,45 +309,54 @@ async def compose_facts_comment(
     model: Optional[str],
     effort: str,
     enrichment: Optional[Dict[str, Any]] = None,
-    level: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Render the facts at the configured humanization level.
+    """Render the facts at all three audience levels.
 
-    Returns {"text": ..., "rendering": "template"|"llm", "level": int,
-    "contract_ok": bool}. Falls back to the deterministic template whenever
-    the LLM output violates the fact contract.
+    Returns ``{"texts": {level: text}, "renderings": {level: "llm"|"template"},
+    "contract_ok": bool}``. Levels whose LLM text violates the fact contract
+    fall back to the deterministic template individually.
     """
-    lvl = humanization_level() if level is None else max(0, min(2, int(level)))
     template = render_facts_template(facts)
+    texts: Dict[str, str] = {lvl: template for lvl in LEVELS}
+    renderings: Dict[str, str] = {lvl: "template" for lvl in LEVELS}
+
     configured = True
     try:
         configured = bool(service._provider.is_configured())
     except Exception:
         configured = False
-    if lvl == 0 or not configured:
-        return {"text": template, "rendering": "template", "level": lvl, "contract_ok": True}
+    if not llm_rendering_enabled() or not configured:
+        return {"texts": texts, "renderings": renderings, "contract_ok": True}
 
-    system = build_facts_system_prompt(lvl)
-    user = build_facts_user_prompt(facts, level=lvl, enrichment=enrichment)
+    system = GUID_COMPOSER_SYSTEM + "\n" + ENRICHMENT_RULES
+    user = build_facts_user_prompt(facts, enrichment=enrichment)
+    levels_raw: Dict[str, str] = {}
     try:
         raw = await service._llm_call_json_schema(
             system,
             user,
             model=model,
             effort=effort,
-            schema=FACTS_COMMENT_SCHEMA,
-            schema_name="facts_comment",
-            max_output_tokens=500,
+            schema=MULTI_LEVEL_SCHEMA,
+            schema_name="facts_comment_levels",
+            max_output_tokens=1200,
         )
-        text = parse_facts_response(raw)
+        levels_raw = _parse_levels(raw)
     except Exception as e:
         logger.warning("facts composer LLM call failed (ply %s): %s", facts.ply, e)
-        text = ""
 
-    if text and validate_facts_comment(text, facts):
-        return {"text": text, "rendering": "llm", "level": lvl, "contract_ok": True}
-    if text:
-        logger.info(
-            "facts comment failed contract at ply %s — using template", facts.ply
-        )
-    return {"text": template, "rendering": "template", "level": lvl, "contract_ok": False}
+    all_ok = True
+    for lvl in LEVELS:
+        candidate = levels_raw.get(lvl, "")
+        if candidate and validate_facts_comment(candidate, facts):
+            texts[lvl] = candidate
+            renderings[lvl] = "llm"
+        else:
+            all_ok = False
+            if candidate:
+                logger.info(
+                    "facts comment (%s) failed contract at ply %s — using template",
+                    lvl,
+                    facts.ply,
+                )
+    return {"texts": texts, "renderings": renderings, "contract_ok": all_ok}

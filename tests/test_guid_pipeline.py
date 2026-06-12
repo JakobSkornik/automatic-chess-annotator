@@ -208,3 +208,57 @@ def test_pgn_writer_roundtrip():
     assert g2 is not None and not g2.errors
     assert "[%eval" in pgn
     assert "$2" in pgn  # mistake NAG
+
+
+def test_template_phrasing_variants_rotate():
+    f0 = _facts()
+    f1 = _facts().model_copy(update={"ply": 22})
+    t0 = render_facts_template(f0)  # ply 21 -> variant 1
+    t1 = render_facts_template(f1)  # ply 22 -> variant 0
+    assert ("after [pv:" in t1) and (": [pv:" in t0)
+    assert t0 != t1
+
+
+def test_facts_to_json_shape():
+    from app.core.engine.analysis_retriever import _facts_to_json
+
+    facts = _facts()
+    d = _facts_to_json(facts)
+    assert d["verdict"] == "leads to equality"
+    assert d["display_line"]["san"] == ["Nc3", "Bd6"]
+    assert d["claims"][0]["features"] == ["EVALUATE_PAWNS"]
+    assert "better_alternative" not in d
+
+
+def test_pgn_language_selection():
+    from app.core.io.pgn_writer import _comment_for_language
+    from app.models.GameJson import GameMove
+
+    mv = GameMove(
+        mn=1, color="w", san="e4", uci="e2e4", fen="x", phase="mid",
+        comment="intermediate text",
+        comments={"expert": "dry text", "intermediate": "intermediate text", "beginner": "simple text"},
+    )
+    assert _comment_for_language(mv, "expert") == "dry text"
+    assert _comment_for_language(mv, "beginner") == "simple text"
+    assert _comment_for_language(mv, None) == "intermediate text"
+    assert _comment_for_language(mv, "unknown") == "intermediate text"
+
+
+def test_state_form_claims_in_template():
+    from app.models.comment_facts import EnvisionedLine
+
+    long_line = EnvisionedLine(
+        start_fen=START,
+        line_san=["Nc3", "Bd6", "Be3", "b6", "a4", "a5", "Nb5"],
+        line_uci=["x"] * 7, fens=[START] * 7, leaf_fen=START,
+    )
+    facts = _facts().model_copy(update={
+        "display_line": long_line,
+        "claims": [Claim(rule_id="x", text="White has improved the pawn structure.",
+                         text_state="White's pawn structure is now improved.",
+                         features_involved=["EVALUATE_PAWNS"], delta_cp=15)],
+    })
+    text = render_facts_template(facts)
+    # long quiescent line -> envisioned-state phrasing
+    assert "White's pawn structure is now improved." in text

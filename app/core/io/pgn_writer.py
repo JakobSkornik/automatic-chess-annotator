@@ -115,7 +115,20 @@ def _try_add_line(
         board.push(mv)
 
 
-def game_json_to_pgn(gj: GameJson, *, include_features: bool = False) -> str:
+def _comment_for_language(move: GameMove, language: Optional[str]) -> Optional[str]:
+    if language and move.comments:
+        text = move.comments.get(language)
+        if text:
+            return text
+    return move.comment
+
+
+def game_json_to_pgn(
+    gj: GameJson,
+    *,
+    include_features: bool = False,
+    language: Optional[str] = "expert",
+) -> str:
     game = chess.pgn.Game()
     md = gj.metadata
     game.headers["Event"] = md.eventId or "?"
@@ -159,8 +172,9 @@ def game_json_to_pgn(gj: GameJson, *, include_features: bool = False) -> str:
         if ev:
             comment_bits.append(ev)
 
-        if move.comment:
-            plain, pv_lines = _flatten_tokens(move.comment)
+        move_comment = _comment_for_language(move, language)
+        if move_comment:
+            plain, pv_lines = _flatten_tokens(move_comment)
             if plain:
                 comment_bits.append(plain)
             for sans in pv_lines:
@@ -175,7 +189,7 @@ def game_json_to_pgn(gj: GameJson, *, include_features: bool = False) -> str:
                     # a true variation at the same point.
                     _try_add_line(board_before, parent, sans)
 
-        if include_features and move.comment:
+        if include_features and move_comment:
             fn = _feature_note(move)
             if fn:
                 comment_bits.append(fn)

@@ -316,6 +316,8 @@ class GameAnnotationPipeline:
                                         r.analyzed_move.hiddenFeatures.setdefault("_llm", {})
                                         _slot = r.analyzed_move.hiddenFeatures["_llm"]
                                         _slot["comment"] = text
+                                        if mctx.level_texts:
+                                            _slot["comments"] = dict(mctx.level_texts)
                                         _slot["named_motifs"] = llm_debug.get("composer_named_motifs", [])
                                         rat = llm_debug.get("rationale") or {}
                                         _slot["primary_motif_label"] = rat.get("primary_motif_label", "")

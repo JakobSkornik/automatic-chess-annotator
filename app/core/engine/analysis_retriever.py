@@ -727,6 +727,57 @@ class EnginePipelineState:
     ply_to_episode: Dict[int, int]
 
 
+# Audience levels for comment renderings (kept in sync with phases/composer.py)
+COMMENT_LEVELS = ("expert", "intermediate", "beginner")
+DEFAULT_COMMENT_LEVEL = "intermediate"
+
+
+def _facts_to_json(facts: Any) -> Dict[str, Any]:
+    """Trimmed CommentFacts for the structured comment renderer in the UI."""
+
+    def _line(dl: Any) -> Optional[Dict[str, Any]]:
+        if dl is None or not getattr(dl, "line_san", None):
+            return None
+        return {
+            "start_fen": dl.start_fen,
+            "san": list(dl.line_san),
+            "fens": list(dl.fens),
+        }
+
+    def _claims(claims: Any) -> List[Dict[str, Any]]:
+        return [
+            {
+                "text": c.text,
+                "text_state": c.text_state,
+                "features": list(c.features_involved),
+                "delta_cp": c.delta_cp,
+                "flag_note": c.flag_note,
+            }
+            for c in (claims or [])
+        ]
+
+    out: Dict[str, Any] = {
+        "verdict": facts.verdict,
+        "eval_cp": facts.eval_cp,
+        "eval_mate": facts.eval_mate,
+        "depth": facts.depth,
+        "engine": facts.engine,
+        "display_line": _line(facts.display_line),
+        "claims": _claims(facts.claims),
+    }
+    alt = facts.better_alternative
+    if alt is not None:
+        out["better_alternative"] = {
+            "san": alt.san,
+            "uci": alt.uci,
+            "verdict": alt.verdict,
+            "eval_cp": alt.eval_cp,
+            "display_line": _line(alt.display_line),
+            "claims": _claims(alt.claims),
+        }
+    return out
+
+
 def _build_feature_series(analyzed_rows: List[AnalyzedMoveData]) -> FeatureSeries:
     """Aligned per-ply arrays of the charted Guid features (White-POV cp)."""
     plies: List[int] = []
@@ -800,6 +851,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         except Exception:
             rag_refs = []
 
+        comments_by_level: Dict[str, str] = {}
         if (row.phase_raw or "") == "early":
             try:
                 hf_op = analyzed_move.hiddenFeatures or {}
@@ -815,6 +867,11 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 if isinstance(llm, dict) and llm.get("comment"):
                     comment = str(llm["comment"])
                 if isinstance(llm, dict):
+                    lvl_raw = llm.get("comments")
+                    if isinstance(lvl_raw, dict):
+                        comments_by_level = {
+                            str(k): str(v) for k, v in lvl_raw.items() if v
+                        }
                     nm = llm.get("named_motifs")
                     if isinstance(nm, list):
                         named_motifs = [str(x) for x in nm if x]
@@ -842,6 +899,12 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 )
             else:
                 comment = key_moment.replace("_", " ").capitalize()
+        # Single-source comments (opening lines, stubs, fallbacks) read the
+        # same at every audience level.
+        if comment and not comments_by_level:
+            comments_by_level = {lvl: comment for lvl in COMMENT_LEVELS}
+        if comments_by_level:
+            comment = comments_by_level.get(DEFAULT_COMMENT_LEVEL) or comment
 
         variations: List[Variation] = []
         board_pv_start = _board_before_mainline_move(game, idx)
@@ -907,6 +970,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 }
 
         resolved_tokens: List[Dict[str, Any]] = []
+        resolved_by_level: Dict[str, List[Dict[str, Any]]] = {}
         if comment and me:
             try:
                 from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
@@ -914,8 +978,21 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 resolved_tokens = resolve_tokens_for_comment(
                     comment, me.fen_before, me.fen_after
                 )
+                seen_texts: Dict[str, List[Dict[str, Any]]] = {comment: resolved_tokens}
+                for lvl, lvl_text in comments_by_level.items():
+                    if lvl_text in seen_texts:
+                        resolved_by_level[lvl] = seen_texts[lvl_text]
+                    else:
+                        rt = resolve_tokens_for_comment(lvl_text, me.fen_before, me.fen_after)
+                        seen_texts[lvl_text] = rt
+                        resolved_by_level[lvl] = rt
             except Exception:
                 resolved_tokens = []
+                resolved_by_level = {}
+
+        comment_facts_out: Optional[Dict[str, Any]] = None
+        if comment and facts is not None:
+            comment_facts_out = _facts_to_json(facts)
 
         game_moves.append(
             GameMove(
@@ -946,6 +1023,9 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 feature_refs=feature_refs,
                 feature_diff=feature_diff_out,
                 resolved_tokens=resolved_tokens,
+                comments=comments_by_level,
+                resolved_tokens_by_level=resolved_by_level,
+                comment_facts=comment_facts_out,
             )
         )
 

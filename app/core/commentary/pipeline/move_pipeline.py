@@ -35,6 +35,8 @@ class MoveCommentaryContext:
     composer_pass_label: Optional[str] = None
     # Reverse-order generation: what the game already "knows" about its future
     future_context: Optional[str] = None
+    # Per-audience-level renderings ({"expert": ..., "intermediate": ..., "beginner": ...})
+    level_texts: Dict[str, str] = field(default_factory=dict)
 
 
 class MoveStage(Protocol):
@@ -58,10 +60,10 @@ class RagRetrievalStage:
         if ctx.skip:
             return
         if ctx.move_event.comment_facts is not None:
-            from app.core.commentary.phases.composer import humanization_level
+            from app.core.commentary.phases.composer import llm_rendering_enabled
 
-            if humanization_level() < 2:
-                # Enrichment (and thus RAG) is only used at full humanization.
+            if not llm_rendering_enabled():
+                # Enrichment (and thus RAG) only feeds the LLM renderings.
                 return
         from app.core.commentary.advanced_comment_service import (
             compute_rag_top_k,
@@ -121,14 +123,19 @@ class FactsComposeStage:
             effort=ctx.composer_effort,
             enrichment=enrichment,
         )
-        text, forbidden_hits = scrub_forbidden(str(result.get("text") or ""))
-        ctx.final_text = text
+        texts: Dict[str, str] = dict(result.get("texts") or {})
+        forbidden_total = 0
+        for lvl, raw_text in texts.items():
+            scrubbed, hits = scrub_forbidden(str(raw_text or ""))
+            texts[lvl] = scrubbed
+            forbidden_total += len(hits)
+        ctx.level_texts = texts
+        ctx.final_text = texts.get("intermediate") or texts.get("expert") or ""
         ctx.llm_debug.update(
             {
-                "facts_rendering": result.get("rendering"),
-                "humanization_level": result.get("level"),
+                "facts_renderings": result.get("renderings"),
                 "facts_contract_ok": result.get("contract_ok"),
-                "forbidden_phrase_hits": len(forbidden_hits),
+                "forbidden_phrase_hits": forbidden_total,
                 "claims": [c.text for c in facts.claims],
                 "feature_refs": facts.feature_refs(),
             }

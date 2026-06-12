@@ -51,6 +51,10 @@ class Claim(BaseModel):
 
     rule_id: str
     text: str
+    # Envisioned-state phrasing of the same fact (Guid subproblem 5):
+    # change-form "Black has improved the pawn structure." vs
+    # state-form  "Black's pawn structure is now improved."
+    text_state: Optional[str] = None
     features_involved: List[str] = Field(default_factory=list)
     delta_cp: int = 0  # combined White-POV magnitude behind the claim
     flag_note: Optional[str] = None  # e.g. "2 -> 1"

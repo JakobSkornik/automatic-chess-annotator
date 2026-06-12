@@ -66,6 +66,13 @@ class GameMove(BaseModel):
     feature_refs: List[FeatureRef] = []
     feature_diff: Optional[Dict[str, Any]] = None  # {"positive": [...], "negative": [...]}
     resolved_tokens: List[Dict[str, Any]] = []
+    # Per-audience-level renderings of the same facts; `comment` mirrors the
+    # intermediate level for backward compatibility.
+    comments: Dict[str, str] = {}  # {"expert": ..., "intermediate": ..., "beginner": ...}
+    resolved_tokens_by_level: Dict[str, List[Dict[str, Any]]] = {}
+    # Trimmed CommentFacts for the structured comment renderer (assessment /
+    # reasons / better alternative, each with its own line).
+    comment_facts: Optional[Dict[str, Any]] = None
 
 class GameMetadata(BaseModel):
     id: str

@@ -128,6 +128,7 @@ def rule_pawn_structure(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="pawn_structure_improved",
                 text=f"{_side_label(side)} has improved the pawn structure.",
+                text_state=f"{_side_label(side)}'s pawn structure is now improved.",
                 features_involved=feats + ["EVALUATE_PAWNS"],
                 delta_cp=total,
             ))
@@ -135,6 +136,7 @@ def rule_pawn_structure(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="pawn_structure_weakened",
                 text=f"{_side_label(side)}'s pawn structure has been weakened.",
+                text_state=f"{_side_label(side)}'s pawn structure is now weaker.",
                 features_involved=feats + ["EVALUATE_PAWNS"],
                 delta_cp=-total,
             ))
@@ -150,6 +152,7 @@ def rule_doubled_pawns(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="doubled_pawns_accepted",
                 text=f"{_side_label(side)} is left with doubled pawns.",
+                text_state=f"{_side_label(side)} now has doubled pawns.",
                 features_involved=[name],
                 delta_cp=abs(ctx.delta(name)),
                 flag_note=ctx.flag_change(name),
@@ -158,6 +161,7 @@ def rule_doubled_pawns(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="doubled_pawns_resolved",
                 text=f"{_side_label(side)} gets rid of the doubled pawns.",
+                text_state=f"{_side_label(side)}'s doubled pawns are gone.",
                 features_involved=[name],
                 delta_cp=abs(ctx.delta(name)),
                 flag_note=ctx.flag_change(name),
@@ -191,6 +195,7 @@ def rule_strong_knight(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="strong_knight_established",
                 text=f"{_side_label(side)} establishes a strong knight.",
+                text_state=f"{_side_label(side)} has a strong knight.",
                 features_involved=[name, cent],
                 delta_cp=d,
                 flag_note=ctx.flag_change(name),
@@ -215,6 +220,7 @@ def rule_bad_bishop(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="bad_bishop_created",
                 text=f"{_side_label(side)} is left with a bad bishop.",
+                text_state=f"{_side_label(side)}'s bishop is now bad.",
                 features_involved=[name, f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR", f"{side}_BISHOPS_MOBILITY"],
                 delta_cp=abs(ctx.delta(name)),
                 flag_note=ctx.flag_change(name),
@@ -223,6 +229,7 @@ def rule_bad_bishop(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="bad_bishop_solved",
                 text=f"{_side_label(side)} solves the problem of the bad bishop.",
+                text_state=f"{_side_label(side)}'s bad bishop is no longer a problem.",
                 features_involved=[name, f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR", f"{side}_BISHOPS_MOBILITY"],
                 delta_cp=abs(ctx.delta(name)),
                 flag_note=ctx.flag_change(name),
@@ -239,6 +246,7 @@ def rule_rook_activity(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="rook_reaches_seventh",
                 text=f"{_side_label(side)}'s rook reaches the seventh rank.",
+                text_state=f"{_side_label(side)} has a rook on the seventh rank.",
                 features_involved=[seventh],
                 delta_cp=abs(ctx.delta(seventh)),
                 flag_note=ctx.flag_change(seventh),
@@ -250,6 +258,7 @@ def rule_rook_activity(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="rooks_activated",
                 text=f"{_side_label(side)}'s rooks become more active on the open files.",
+                text_state=f"{_side_label(side)}'s rooks are active on the open files.",
                 features_involved=feats,
                 delta_cp=d,
             ))
@@ -265,6 +274,7 @@ def rule_rook_behind_passer(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="rook_behind_passer",
                 text=f"{_side_label(side)}'s rook gets behind the passed pawn.",
+                text_state=f"{_side_label(side)}'s rook is behind the passed pawn.",
                 features_involved=[name],
                 delta_cp=abs(ctx.delta(name)),
                 flag_note=ctx.flag_change(name),
@@ -282,6 +292,7 @@ def rule_passed_pawn(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="passed_pawn_created",
                 text=f"{_side_label(side)} obtains a passed pawn.",
+                text_state=f"{_side_label(side)} has a passed pawn.",
                 features_involved=[name],
                 delta_cp=max(d, 0),
                 flag_note=ctx.flag_change(name),
@@ -290,6 +301,7 @@ def rule_passed_pawn(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="passed_pawn_advances",
                 text=f"{_side_label(side)}'s passed pawn advances dangerously.",
+                text_state=f"{_side_label(side)}'s passed pawn is far advanced.",
                 features_involved=[name],
                 delta_cp=d,
             ))
@@ -307,6 +319,7 @@ def rule_king_safety(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="king_under_pressure",
                 text=f"{_side_label(side)}'s king comes under pressure.",
+                text_state=f"{_side_label(side)}'s king is under pressure.",
                 features_involved=feats + [f"{opp}_KING_TROPISM"],
                 delta_cp=-d,
             ))
@@ -314,6 +327,7 @@ def rule_king_safety(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="king_safer",
                 text=f"{_side_label(side)}'s king is now safer.",
+                text_state=f"{_side_label(side)}'s king is safe.",
                 features_involved=feats + [f"{opp}_KING_TROPISM"],
                 delta_cp=d,
             ))
@@ -329,6 +343,7 @@ def rule_back_rank(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="back_rank_weakness",
                 text=f"{_side_label(side)}'s back rank becomes vulnerable.",
+                text_state=f"{_side_label(side)}'s back rank is vulnerable.",
                 features_involved=[name],
                 delta_cp=abs(ctx.delta(name)),
                 flag_note=ctx.flag_change(name),
@@ -345,6 +360,7 @@ def rule_piece_activity(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="activity_improved",
                 text=f"{_side_label(side)} has improved the activity of the pieces.",
+                text_state=f"{_side_label(side)}'s pieces are actively placed.",
                 features_involved=[name],
                 delta_cp=d,
             ))
@@ -352,6 +368,7 @@ def rule_piece_activity(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="activity_reduced",
                 text=f"{_side_label(side)}'s pieces become more passive.",
+                text_state=f"{_side_label(side)}'s pieces are passive.",
                 features_involved=[name],
                 delta_cp=-d,
             ))
@@ -367,6 +384,7 @@ def rule_center_and_space(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="center_control",
                 text=f"{_side_label(side)} takes control of the center.",
+                text_state=f"{_side_label(side)} controls the center.",
                 features_involved=[f"{side}_CENTER_CONTROL"],
                 delta_cp=c,
             ))
@@ -374,6 +392,7 @@ def rule_center_and_space(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="space_gained",
                 text=f"{_side_label(side)} gains space.",
+                text_state=f"{_side_label(side)} has a space advantage.",
                 features_involved=[f"{side}_SPACE"],
                 delta_cp=s,
             ))
@@ -393,6 +412,7 @@ def rule_king_activity(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="king_activated",
                 text=f"{_side_label(side)}'s king becomes active.",
+                text_state=f"{_side_label(side)}'s king is active.",
                 features_involved=[name],
                 delta_cp=d,
             ))
@@ -410,6 +430,7 @@ def rule_outside_passer(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="outside_passer",
                 text=f"{_side_label(side)} obtains an outside passed pawn.",
+                text_state=f"{_side_label(side)} has an outside passed pawn.",
                 features_involved=[name],
                 delta_cp=abs(ctx.delta(name)),
                 flag_note=ctx.flag_change(name),
@@ -428,6 +449,7 @@ def rule_passer_escort(ctx: _Ctx) -> List[Claim]:
             out.append(Claim(
                 rule_id="king_escorts_passer",
                 text=f"{_side_label(side)}'s king escorts the passed pawn forward.",
+                text_state=f"{_side_label(side)}'s king supports the passed pawn.",
                 features_involved=[name, f"{side}_KING_ACTIVITY"],
                 delta_cp=d,
             ))
