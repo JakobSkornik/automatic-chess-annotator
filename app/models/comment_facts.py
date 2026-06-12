@@ -88,7 +88,11 @@ class CommentFacts(BaseModel):
     phase: str  # "early" | "mid" | "end"
     verdict: str  # e.g. "leads to equality", "wins a decisive advantage for White"
     eval_cp: Optional[int] = None  # White-POV cp after the move
+    eval_before_cp: Optional[int] = None  # White-POV cp before the move (transition verdicts)
     eval_mate: Optional[int] = None
+    # For dubious moves: the opponent's punishing reply (SAN), straight from
+    # the engine continuation — the "why it is bad" at board level.
+    refutation_san: Optional[str] = None
     depth: Optional[int] = None
     engine: str = "Stockfish"
     display_line: Optional[EnvisionedLine] = None

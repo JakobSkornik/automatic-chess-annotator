@@ -24,6 +24,8 @@ class JobResponse(BaseModel):
     move_count: Optional[int] = None
     llm_provider: Optional[str] = None
     llm_effort: Optional[str] = None
+    commentary_level: Optional[str] = None
+    comment_side: Optional[str] = None
     error: Optional[str] = None
     queued_ahead: Optional[int] = None
     pgn_preview: Optional[str] = None

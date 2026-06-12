@@ -65,6 +65,15 @@ def eval_token(facts: CommentFacts) -> str:
         return f"(#{abs(facts.eval_mate)}, {facts.engine}:{facts.depth})"
     if facts.eval_cp is None:
         return ""
+    # Show the eval STORY when the move moved the needle.
+    if (
+        facts.eval_before_cp is not None
+        and abs(facts.eval_cp - facts.eval_before_cp) >= 50
+    ):
+        return (
+            f"({facts.eval_before_cp / 100:+.2f} → {facts.eval_cp / 100:+.2f}, "
+            f"{facts.engine}:{facts.depth})"
+        )
     return f"({facts.eval_cp / 100:+.2f}, {facts.engine}:{facts.depth})"
 
 
@@ -128,6 +137,9 @@ def render_facts_template(facts: CommentFacts) -> str:
             head += f" {ev}"
     parts.append(head + ".")
 
+    if facts.refutation_san:
+        parts.append(f"The move is punished by {facts.refutation_san}.")
+
     if facts.claims:
         # Long quiescent lines describe the envisioned position -> state form.
         prefer_state = bool(
@@ -142,12 +154,15 @@ def render_facts_template(facts: CommentFacts) -> str:
                 # Claims start with the side's name, so "Now Black ..." reads
                 # naturally — but use the change-form to avoid "Now ... is now".
                 prefix = "Now " if variant == 0 else "The drawback: "
-                conc_texts = [c.text for c in concessions]
+                clauses = [c.text.rstrip(".") for c in concessions]
             else:
                 prefix = "In return, " if variant == 0 else "On the other hand, "
-                conc_texts = [_claim_text(c, prefer_state=prefer_state) for c in concessions]
-            conc_texts[0] = prefix + conc_texts[0]
-            parts.append(" ".join(conc_texts))
+                clauses = [
+                    _claim_text(c, prefer_state=prefer_state).rstrip(".")
+                    for c in concessions
+                ]
+            # One sentence — a second bare concession would read as a merit.
+            parts.append(prefix + " and ".join(clauses) + ".")
 
     alt = facts.better_alternative
     if alt is not None:
@@ -175,14 +190,12 @@ def render_facts_template(facts: CommentFacts) -> str:
 # LLM rendering — one call, three audience registers
 # ---------------------------------------------------------------------------
 
-MULTI_LEVEL_SCHEMA: Dict[str, Any] = {
+SINGLE_LEVEL_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
-        "expert": {"type": "string"},
-        "intermediate": {"type": "string"},
-        "beginner": {"type": "string"},
+        "text": {"type": "string"},
     },
-    "required": ["expert", "intermediate", "beginner"],
+    "required": ["text"],
     "additionalProperties": False,
 }
 
@@ -190,9 +203,9 @@ GUID_COMPOSER_SYSTEM = (
     "You are a chess annotator. You are given INVIOLABLE FACTS about one move: "
     "a verdict, a variation token, an evaluation token, and positional claims "
     "produced by a rule-based expert system (each claim may come in a change-form "
-    "and a state-form — use whichever reads naturally). Write THREE renderings of "
-    "the SAME annotation, one per audience.\n\n"
-    "HARD RULES (all three renderings):\n"
+    "and a state-form — use whichever reads naturally). Write ONE rendering of "
+    "the annotation for the audience specified below.\n\n"
+    "HARD RULES:\n"
     "- Copy the EVAL token and every PV token into the text VERBATIM, unchanged.\n"
     "- State the verdict and convey EVERY claim (rephrase fluently; merging "
     "related claims into one sentence is encouraged).\n"
@@ -209,23 +222,36 @@ GUID_COMPOSER_SYSTEM = (
     "('in return', 'at the cost of') for sound moves, or as the move's drawbacks "
     "('now the opponent ...') when the concession mode says 'consequence'. NEVER "
     "present a concession as an achievement of the move.\n"
+    "- If REFUTATION is present, the text MUST name that move as what punishes "
+    "the played move (it is the board-level reason the move fails).\n"
     "- If BETTER ALTERNATIVE is present, end with one sentence naming it ('Better "
     "was {move}...' or a varied equivalent) with its verdict, claims and PV token.\n"
-    "- One paragraph per rendering. No lists, no headers, no engine-worship.\n\n"
-    "AUDIENCES:\n"
-    "- expert: register of Chess Informant / grandmaster game collections. Dry, "
-    "terse, declarative; ~25-55 words besides tokens. Do NOT explain features, "
-    "concepts or terms — the reader is a strong player. No flavor, no narrative, "
-    "no rhetorical questions. Merge the claims into compact compound sentences.\n"
-    "- intermediate: club player. ~50-85 words besides tokens. Standard terms "
-    "used, never defined. You MAY add one short clause on why the single most "
-    "important claimed feature generally matters. Plain, practical tone.\n"
-    "- beginner: learning player. ~70-115 words besides tokens. Explain in a "
-    "simple way each targeted positional feature (e.g. what a passed pawn is) "
-    "the first time it is named; avoid jargon or define it inline; friendly "
-    "instructive tone; you MAY close with one short general takeaway tied to a "
-    "claimed concept. Never patronize and never invent new analysis.\n"
+    "- One paragraph. No lists, no headers, no engine-worship.\n"
 )
+
+AUDIENCE_BLOCKS: Dict[str, str] = {
+    "expert": (
+        "AUDIENCE — expert: register of Chess Informant / grandmaster game "
+        "collections. Dry, terse, declarative; ~25-55 words besides tokens. Do "
+        "NOT explain features, concepts or terms — the reader is a strong "
+        "player. No flavor, no narrative, no rhetorical questions. Merge the "
+        "claims into compact compound sentences.\n"
+    ),
+    "intermediate": (
+        "AUDIENCE — intermediate: club player. ~50-85 words besides tokens. "
+        "Standard terms used, never defined. You MAY add one short clause on "
+        "why the single most important claimed feature generally matters. "
+        "Plain, practical tone.\n"
+    ),
+    "beginner": (
+        "AUDIENCE — beginner: learning player. ~70-115 words besides tokens. "
+        "Explain in a simple way each targeted positional feature (e.g. what a "
+        "passed pawn is) the first time it is named; avoid jargon or define it "
+        "inline; friendly instructive tone; you MAY close with one short "
+        "general takeaway tied to a claimed concept. Never patronize and never "
+        "invent new analysis.\n"
+    ),
+}
 
 ENRICHMENT_RULES = (
     "ENRICHMENT block (optional): intermediate and beginner MAY weave in at most "
@@ -260,6 +286,10 @@ def build_facts_user_prompt(
         f"Verdict: this move {facts.verdict}",
         f"EVAL token (copy verbatim): {eval_token(facts)}",
         f"PV token (copy verbatim): {pv_token(facts)}",
+    ]
+    if facts.refutation_san:
+        blocks.append(f"REFUTATION (must be named): {facts.refutation_san}")
+    blocks += [
         f"MERITS (what the move achieves for {facts.mover}):",
         *(merit_lines or ["- (none)"]),
     ]
@@ -316,17 +346,19 @@ def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
     alt = facts.better_alternative
     if alt is not None and alt.san and alt.san not in t:
         return False
+    if facts.refutation_san and facts.refutation_san not in t:
+        return False
     return True
 
 
-def _parse_levels(raw: str) -> Dict[str, str]:
+def _parse_text(raw: str) -> str:
     try:
         obj = json.loads(raw)
         if isinstance(obj, dict):
-            return {lvl: str(obj.get(lvl) or "").strip() for lvl in LEVELS}
+            return str(obj.get("text") or "").strip()
     except Exception:
         pass
-    return {}
+    return (raw or "").strip()
 
 
 async def compose_facts_comment(
@@ -336,16 +368,15 @@ async def compose_facts_comment(
     model: Optional[str],
     effort: str,
     enrichment: Optional[Dict[str, Any]] = None,
+    level: str = DEFAULT_LEVEL,
 ) -> Dict[str, Any]:
-    """Render the facts at all three audience levels.
+    """Render the facts at the audience level chosen at submit time.
 
-    Returns ``{"texts": {level: text}, "renderings": {level: "llm"|"template"},
-    "contract_ok": bool}``. Levels whose LLM text violates the fact contract
-    fall back to the deterministic template individually.
+    Returns ``{"text": str, "rendering": "llm"|"template", "contract_ok": bool}``;
+    an LLM text violating the fact contract falls back to the template.
     """
+    lvl = level if level in LEVELS else DEFAULT_LEVEL
     template = render_facts_template(facts)
-    texts: Dict[str, str] = {lvl: template for lvl in LEVELS}
-    renderings: Dict[str, str] = {lvl: "template" for lvl in LEVELS}
 
     configured = True
     try:
@@ -353,37 +384,27 @@ async def compose_facts_comment(
     except Exception:
         configured = False
     if not llm_rendering_enabled() or not configured:
-        return {"texts": texts, "renderings": renderings, "contract_ok": True}
+        return {"text": template, "rendering": "template", "contract_ok": True, "level": lvl}
 
-    system = GUID_COMPOSER_SYSTEM + "\n" + ENRICHMENT_RULES
+    system = GUID_COMPOSER_SYSTEM + "\n" + AUDIENCE_BLOCKS[lvl] + "\n" + ENRICHMENT_RULES
     user = build_facts_user_prompt(facts, enrichment=enrichment)
-    levels_raw: Dict[str, str] = {}
+    candidate = ""
     try:
         raw = await service._llm_call_json_schema(
             system,
             user,
             model=model,
             effort=effort,
-            schema=MULTI_LEVEL_SCHEMA,
-            schema_name="facts_comment_levels",
-            max_output_tokens=1200,
+            schema=SINGLE_LEVEL_SCHEMA,
+            schema_name="facts_comment",
+            max_output_tokens=500,
         )
-        levels_raw = _parse_levels(raw)
+        candidate = _parse_text(raw)
     except Exception as e:
         logger.warning("facts composer LLM call failed (ply %s): %s", facts.ply, e)
 
-    all_ok = True
-    for lvl in LEVELS:
-        candidate = levels_raw.get(lvl, "")
-        if candidate and validate_facts_comment(candidate, facts):
-            texts[lvl] = candidate
-            renderings[lvl] = "llm"
-        else:
-            all_ok = False
-            if candidate:
-                logger.info(
-                    "facts comment (%s) failed contract at ply %s — using template",
-                    lvl,
-                    facts.ply,
-                )
-    return {"texts": texts, "renderings": renderings, "contract_ok": all_ok}
+    if candidate and validate_facts_comment(candidate, facts):
+        return {"text": candidate, "rendering": "llm", "contract_ok": True, "level": lvl}
+    if candidate:
+        logger.info("facts comment failed contract at ply %s — using template", facts.ply)
+    return {"text": template, "rendering": "template", "contract_ok": False, "level": lvl}

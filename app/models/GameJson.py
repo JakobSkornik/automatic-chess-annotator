@@ -95,6 +95,9 @@ class GameMetadata(BaseModel):
     opening: Optional[str] = None
     opening_eco: Optional[str] = None
     strategic_archetype: Optional[str] = None
+    # Pre-analysis options the commentary was generated with
+    commentary_level: Optional[str] = None  # beginner | intermediate | expert
+    comment_side: Optional[str] = None  # white | black | both
 
 class AnalysisInfo(BaseModel):
     engine: str
@@ -126,6 +129,8 @@ class GameJson(BaseModel):
     feature_series: Optional[FeatureSeries] = None
     # Pipeline parameters behind the per-move debug traces (rule thresholds etc.)
     debug_info: Optional[Dict[str, Any]] = None
+    # True once the LLM commentary sweep finished (drives the FE "done" state).
+    commentary_complete: bool = False
     analysis_info: AnalysisInfo
 
 

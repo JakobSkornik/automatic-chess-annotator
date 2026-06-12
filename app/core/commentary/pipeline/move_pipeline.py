@@ -35,7 +35,9 @@ class MoveCommentaryContext:
     composer_pass_label: Optional[str] = None
     # Reverse-order generation: what the game already "knows" about its future
     future_context: Optional[str] = None
-    # Per-audience-level renderings ({"expert": ..., "intermediate": ..., "beginner": ...})
+    # Audience level the comments are generated at (job parameter)
+    commentary_level: str = "intermediate"
+    # Rendered text keyed by that level ({level: text})
     level_texts: Dict[str, str] = field(default_factory=dict)
 
 
@@ -122,20 +124,17 @@ class FactsComposeStage:
             model=model,
             effort=ctx.composer_effort,
             enrichment=enrichment,
+            level=ctx.commentary_level,
         )
-        texts: Dict[str, str] = dict(result.get("texts") or {})
-        forbidden_total = 0
-        for lvl, raw_text in texts.items():
-            scrubbed, hits = scrub_forbidden(str(raw_text or ""))
-            texts[lvl] = scrubbed
-            forbidden_total += len(hits)
-        ctx.level_texts = texts
-        ctx.final_text = texts.get("intermediate") or texts.get("expert") or ""
+        text, forbidden_hits = scrub_forbidden(str(result.get("text") or ""))
+        lvl = str(result.get("level") or ctx.commentary_level)
+        ctx.level_texts = {lvl: text}
+        ctx.final_text = text
         ctx.llm_debug.update(
             {
-                "facts_renderings": result.get("renderings"),
+                "facts_renderings": {lvl: result.get("rendering")},
                 "facts_contract_ok": result.get("contract_ok"),
-                "forbidden_phrase_hits": forbidden_total,
+                "forbidden_phrase_hits": len(forbidden_hits),
                 "claims": [c.text for c in facts.claims],
                 "feature_refs": facts.feature_refs(),
             }

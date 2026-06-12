@@ -90,6 +90,8 @@ async def analysis_worker():
                     progress_callback=llm_progress,
                     commentary_callback=commentary_callback,
                     llm_effort=job_data.get("llm_effort") or os.environ.get("LLM_DEFAULT_EFFORT"),
+                    commentary_level=job_data.get("commentary_level"),
+                    comment_side=job_data.get("comment_side"),
                 )
 
                 final_json = assemble_game_json(state)

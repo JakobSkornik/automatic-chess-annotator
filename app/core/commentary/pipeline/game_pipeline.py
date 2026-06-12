@@ -76,8 +76,19 @@ class GameAnnotationPipeline:
         progress_callback: Optional[Callable[[float, str], Awaitable[None]]] = None,
         commentary_callback: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
         llm_effort: Optional[str] = None,
+        commentary_level: Optional[str] = None,
+        comment_side: Optional[str] = None,
     ) -> None:
         eff = llm_effort or os.environ.get("LLM_DEFAULT_EFFORT", "medium")
+        level = (commentary_level or "intermediate").strip().lower()
+        if level not in ("beginner", "intermediate", "expert"):
+            level = "intermediate"
+        side = (comment_side or "both").strip().lower()
+        if side not in ("white", "black", "both"):
+            side = "both"
+        state.metadata = state.metadata.model_copy(
+            update={"commentary_level": level, "comment_side": side}
+        )
         analyzed_rows = state.analyzed_rows
         move_events = state.move_events
         episodes = state.episodes
@@ -149,10 +160,16 @@ class GameAnnotationPipeline:
                 parts.extend(future_episode_notes[:2])
                 return "\n".join(parts)[:1200]
 
+            def _mover_matches_side(ply: int) -> bool:
+                if side == "both":
+                    return True
+                is_white_move = ply % 2 == 1
+                return (side == "white") == is_white_move
+
             episodes_desc = sorted(episodes, key=lambda e: -e.episode_index)
             commented_mis = [
                 mi for mi, me in enumerate(move_events)
-                if me.key_moment_type or me.teaching_moment
+                if (me.key_moment_type or me.teaching_moment) and _mover_matches_side(me.ply)
             ]
             mis_by_episode: Dict[Optional[int], List[int]] = {}
             for mi in commented_mis:
@@ -299,6 +316,7 @@ class GameAnnotationPipeline:
                             key_moment_type=me.key_moment_type,
                             composer_pass_label=composer_pass_label,
                             future_context=_future_context_text(),
+                            commentary_level=level,
                         )
                         mctx = await MoveCommentaryPipeline().run(mctx)
                         text = mctx.final_text
@@ -395,24 +413,11 @@ class GameAnnotationPipeline:
 
             context.critical_moments = [e for e in move_events if e.is_critical]
 
-            # Episode narratives were generated inline during the backward sweep.
-            narrative_model = resolve_model(advanced_commenter.provider_name, "narrative")
-
-            narr_ctx = llm_call_log.set_move_context(pass_label="narrative")
-            try:
-                try:
-                    context.game_narrative = await advanced_commenter.generate_game_narrative(
-                        context, model=narrative_model, effort=eff
-                    )
-                    if commentary_callback and context.game_narrative:
-                        await commentary_callback(
-                            "GAME_NARRATIVE",
-                            {"narrative": context.game_narrative},
-                        )
-                except Exception as e:
-                    logger.error(f"Game narrative failed: {e}")
-            finally:
-                llm_call_log.reset_move_context(narr_ctx)
+            # Episode narratives were generated inline during the backward sweep;
+            # the whole-game narrative stage is gone (the Summary panel was cut).
+            state.llm_done = True
+            if commentary_callback:
+                await commentary_callback("COMMENTARY_COMPLETE", {})
 
             if audit_coverage:
                 logger.info(

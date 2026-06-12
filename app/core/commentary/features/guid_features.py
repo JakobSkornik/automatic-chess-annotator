@@ -309,7 +309,9 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
                     weighted += 2
                 else:
                     weighted += 1
-            if weighted >= 5 and mob <= 4:
+            # Strict on purpose: a loose threshold flags fianchetto bishops as
+            # "bad" and floods comments with solved/created flicker.
+            if weighted >= 7 and mob <= 3:
                 bad_bishops += 1
         put(f"{prefix}_BISHOP_PLUS_PAWNS_ON_COLOR",
             sign * pawns_on_color * _w("bishop_pawn_on_color"), flag=len(bishops))
@@ -491,6 +493,76 @@ def vector_from_plain(data: Dict[str, Dict[str, Optional[int]]]) -> FeatureVecto
 
 def compute_feature_vector_fen(fen: str) -> FeatureVector:
     return compute_feature_vector(chess.Board(fen))
+
+
+# ---------------------------------------------------------------------------
+# Square-level lookups for grounded claim texts ("passed pawn on e5",
+# "doubled c-pawns", ...). Same definitions as the vector above.
+# ---------------------------------------------------------------------------
+
+def passed_pawn_squares(board: chess.Board, color: chess.Color) -> List[str]:
+    return [
+        chess.square_name(sq)
+        for sq in board.pieces(chess.PAWN, color)
+        if _is_passed(board, sq, color)
+    ]
+
+
+def doubled_pawn_files(board: chess.Board, color: chess.Color) -> List[str]:
+    files = _pawn_files(board, color)
+    return [chess.FILE_NAMES[f] for f, sqs in sorted(files.items()) if len(sqs) > 1]
+
+
+def outpost_squares(board: chess.Board, color: chess.Color) -> List[str]:
+    out: List[str] = []
+    for sq in board.pieces(chess.KNIGHT, color):
+        rel = _relative_rank(sq, color)
+        if not (3 <= rel <= 5):
+            continue
+        defended = any(
+            (p := board.piece_at(att)) is not None
+            and p.piece_type == chess.PAWN
+            and p.color == color
+            for att in board.attackers(color, sq)
+        )
+        if not defended:
+            continue
+        f, r = chess.square_file(sq), chess.square_rank(sq)
+        assailable = any(
+            abs(chess.square_file(esq) - f) == 1
+            and (
+                (color == chess.WHITE and chess.square_rank(esq) > r)
+                or (color == chess.BLACK and chess.square_rank(esq) < r)
+            )
+            for esq in board.pieces(chess.PAWN, not color)
+        )
+        if not assailable:
+            out.append(chess.square_name(sq))
+    return out
+
+
+def bad_bishop_squares(board: chess.Board, color: chess.Color) -> List[str]:
+    out: List[str] = []
+    pawns = list(board.pieces(chess.PAWN, color))
+    for sq in board.pieces(chess.BISHOP, color):
+        light = (chess.square_file(sq) + chess.square_rank(sq)) % 2 == 1
+        weighted = 0
+        for p in pawns:
+            if ((chess.square_file(p) + chess.square_rank(p)) % 2 == 1) != light:
+                continue
+            pf = chess.square_file(p)
+            weighted += 3 if pf in (3, 4) else 2 if pf in (2, 5) else 1
+        if weighted >= 7 and len(board.attacks(sq)) <= 3:
+            out.append(chess.square_name(sq))
+    return out
+
+
+def rooks_on_seventh_squares(board: chess.Board, color: chess.Color) -> List[str]:
+    return [
+        chess.square_name(sq)
+        for sq in board.pieces(chess.ROOK, color)
+        if _relative_rank(sq, color) == 6
+    ]
 
 
 # Feature names worth charting (order = display order in the UI grid).

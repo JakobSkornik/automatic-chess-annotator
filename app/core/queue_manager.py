@@ -92,6 +92,8 @@ class QueueManager:
             move_count=job.get("move_count"),
             llm_provider=job.get("llm_provider"),
             llm_effort=job.get("llm_effort"),
+            commentary_level=job.get("commentary_level"),
+            comment_side=job.get("comment_side"),
             error=job.get("error"),
             queued_ahead=q_ahead,
             pgn_preview=job.get("pgn_preview"),
@@ -102,6 +104,8 @@ class QueueManager:
         pgn_string: str,
         llm_provider: Optional[str] = None,
         llm_effort: Optional[str] = None,
+        commentary_level: Optional[str] = None,
+        comment_side: Optional[str] = None,
     ) -> str:
         job_id = str(uuid.uuid4())
         self._enqueue_seq += 1
@@ -118,6 +122,8 @@ class QueueManager:
             "message": "Waiting in queue",
             "llm_provider": llm_provider,
             "llm_effort": llm_effort,
+            "commentary_level": commentary_level,
+            "comment_side": comment_side,
             "pgn_headers": pgn_headers,
             "move_count": move_count,
             "error": None,

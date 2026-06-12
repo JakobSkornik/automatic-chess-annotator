@@ -149,6 +149,10 @@ def game_json_to_pgn(
 
     board = chess.Board()
     node: chess.pgn.GameNode = game
+    # Continuation lines from comments that so far match the actual game:
+    # they only become variations at the ply where they diverge (otherwise
+    # they would duplicate the mainline, e.g. "4. Nf3 (4. Nf3 e6 ...)").
+    pending_continuations: List[List[str]] = []
     for move in gj.moves:
         try:
             mv = chess.Move.from_uci(move.uci)
@@ -160,6 +164,19 @@ def game_json_to_pgn(
             break
         board_before = board.copy(stack=False)
         parent = node
+
+        still_matching: List[List[str]] = []
+        for cont in pending_continuations:
+            if cont and cont[0] == move.san:
+                rest = cont[1:]
+                if rest:
+                    still_matching.append(rest)
+                # fully played out in the game -> nothing to add
+            elif len(cont) >= 2:
+                # Diverges here: a true alternative to this move.
+                _try_add_line(board_before, parent, cont)
+        pending_continuations = still_matching
+
         node = node.add_main_variation(mv)
         board.push(mv)
 
@@ -182,8 +199,10 @@ def game_json_to_pgn(
                     continue
                 if sans[0] == move.san:
                     # The displayed continuation (starts with the played move):
-                    # attach the reply line after the move.
-                    _try_add_line(board, node, sans[1:])
+                    # defer it — it becomes a variation only where it diverges
+                    # from the game (avoids duplicating the next mainline move).
+                    if len(sans) > 1:
+                        pending_continuations.append(sans[1:])
                 else:
                     # An alternative to the played move (e.g. "Better was ..."):
                     # a true variation at the same point.
@@ -196,6 +215,11 @@ def game_json_to_pgn(
 
         if comment_bits:
             node.comment = " ".join(comment_bits).strip()
+
+    # Continuations still matching at the end of the game extend past it.
+    for cont in pending_continuations:
+        if len(cont) >= 2:
+            _try_add_line(board, node, cont)
 
     out = io.StringIO()
     exporter = chess.pgn.FileExporter(out)

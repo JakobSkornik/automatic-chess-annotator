@@ -725,6 +725,8 @@ class EnginePipelineState:
     context: GameAnalysisContext
     metadata: GameMetadata
     ply_to_episode: Dict[int, int]
+    # Set by GameAnnotationPipeline when the commentary sweep finished.
+    llm_done: bool = False
 
 
 # Audience levels for comment renderings (kept in sync with phases/composer.py)
@@ -794,41 +796,6 @@ def _build_debug_info() -> Dict[str, Any]:
         "endgame_piece_threshold": endgame_piece_threshold(),
         "better_alternative_gap_cp": THRESHOLDS.get("better_alternative_gap"),
     }
-
-
-def _variation_key_factors(
-    start_fen: str,
-    leaf_fen: str,
-    *,
-    phase: str,
-    mover_is_white: bool,
-    max_factors: int = 3,
-) -> List[Dict[str, Any]]:
-    """Claims fired on the root->leaf feature diff of an engine variation
-    (engine-free; same machinery as the comment claims)."""
-    try:
-        from app.core.commentary.features.envisioned import feature_diff
-        from app.core.commentary.rules.engine import order_claims_for_mover, run_rules
-
-        mover = "WHITE" if mover_is_white else "BLACK"
-        diff = feature_diff(start_fen, leaf_fen)
-        claims = run_rules(diff, phase=phase or "mid", mover=mover)
-        claims = order_claims_for_mover(claims, mover)
-        return [
-            {
-                "text": c.text,
-                "text_state": c.text_state,
-                "features": list(c.features_involved),
-                "delta_cp": c.delta_cp,
-                "flag_note": c.flag_note,
-                "beneficiary": c.beneficiary,
-                "is_concession": c.is_concession,
-            }
-            for c in claims[:max_factors]
-        ]
-    except Exception as e:
-        logger.debug("variation key factors failed: %s", e)
-        return []
 
 
 def _build_feature_series(analyzed_rows: List[AnalyzedMoveData]) -> FeatureSeries:
@@ -933,25 +900,31 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                         primary_motif_label = str(pm)
             except Exception:
                 comment = None
-        if (
-            not comment
-            and me
-            and me.brief_commentary
-            and me.commentary_stub_ref_ply is not None
-        ):
-            comment = (
-                f"Continues the same theme as around ply {me.commentary_stub_ref_ply} "
-                f"(see that move's commentary)."
-            )
-        if not comment and key_moment and me:
-            swing = me.eval_swing_cp
-            if swing is not None:
+        # When a comment side is selected, the other side's moves stay silent —
+        # no stub or heuristic fallback either.
+        _side_sel = (state.metadata.comment_side or "both").lower()
+        _mover_is_white = move_obj.depth % 2 == 1
+        _side_ok = _side_sel == "both" or (_side_sel == "white") == _mover_is_white
+        if _side_ok:
+            if (
+                not comment
+                and me
+                and me.brief_commentary
+                and me.commentary_stub_ref_ply is not None
+            ):
                 comment = (
-                    f"{key_moment.replace('_', ' ').capitalize()} "
-                    f"(Eval swing: {swing / 100:+.2f} pawns, White POV step)"
+                    f"Continues the same theme as around ply {me.commentary_stub_ref_ply} "
+                    f"(see that move's commentary)."
                 )
-            else:
-                comment = key_moment.replace("_", " ").capitalize()
+            if not comment and key_moment and me:
+                swing = me.eval_swing_cp
+                if swing is not None:
+                    comment = (
+                        f"{key_moment.replace('_', ' ').capitalize()} "
+                        f"(Eval swing: {swing / 100:+.2f} pawns, White POV step)"
+                    )
+                else:
+                    comment = key_moment.replace("_", " ").capitalize()
         # Single-source comments (opening lines, stubs, fallbacks) read the
         # same at every audience level.
         if comment and not comments_by_level:
@@ -979,14 +952,6 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                     fen_line.append("")
 
             score_val = first_move.score
-            key_factors: List[Dict[str, Any]] = []
-            if fen_line and fen_line[-1]:
-                key_factors = _variation_key_factors(
-                    board_pv_start.fen(),
-                    fen_line[-1],
-                    phase=str(row.phase_raw or "mid"),
-                    mover_is_white=board_pv_start.turn == chess.WHITE,
-                )
             variations.append(
                 Variation(
                     rank=rank + 1,
@@ -995,7 +960,6 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                     line=san_line,
                     fens=fen_line,
                     depth=16,
-                    key_factors=key_factors,
                 )
             )
 
@@ -1151,6 +1115,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         game_narrative=context.game_narrative,
         feature_series=_build_feature_series(analyzed_rows),
         debug_info=_build_debug_info(),
+        commentary_complete=state.llm_done,
         analysis_info=AnalysisInfo(
             engine="Stockfish",
             depth=16,

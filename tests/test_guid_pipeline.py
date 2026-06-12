@@ -316,3 +316,63 @@ def test_template_concession_framing():
     facts2 = facts.model_copy(update={"concession_mode": "consequence", "ply": 22})
     text2 = render_facts_template(facts2)  # ply 22 -> variant 0
     assert "Now Black solves the problem of the bad bishop." in text2
+
+
+def test_transition_verdicts():
+    from app.core.commentary.rules.engine import verdict_for_transition
+
+    # 28.Qxe6?: White had +0.77, now -0.43 -> throws it away
+    v = verdict_for_transition(77, -43, None, "White")
+    assert "throws away the advantage" in v and "Black" in v
+    # 27...f6?: from Black's seat 0 -> +0.77 means conceding to White
+    v2 = verdict_for_transition(0, 77, None, "Black")
+    assert "concedes" in v2 and "White" in v2
+    assert verdict_for_transition(5, -8, None, "White") == "holds the balance"
+    assert "forced mate for Black" in verdict_for_transition(-650, None, -4, "White")
+    # capitalizing on the opponent's error
+    assert "seizes" in verdict_for_transition(0, 160, None, "White")
+
+
+def test_eval_token_shows_transition():
+    from app.core.commentary.phases.composer import eval_token
+
+    f = _facts().model_copy(update={"eval_before_cp": 77, "eval_cp": -43})
+    assert "(+0.77 → -0.43, Stockfish:16)" == eval_token(f)
+    # small drift -> plain token
+    f2 = _facts().model_copy(update={"eval_before_cp": 10, "eval_cp": 12})
+    assert eval_token(f2) == "(+0.12, Stockfish:16)"
+
+
+def test_refutation_in_template_and_contract():
+    f = _facts().model_copy(update={
+        "refutation_san": "Bxg2+",
+        "concession_mode": "consequence",
+    })
+    text = render_facts_template(f)
+    assert "punished by Bxg2+" in text
+    assert validate_facts_comment(text, f)
+    assert not validate_facts_comment(text.replace("Bxg2+", "Bh3"), f)
+
+
+def test_concessions_join_single_sentence():
+    f = _facts().model_copy(update={
+        "ply": 22,  # variant 0 -> "In return, "
+        "claims": [
+            Claim(rule_id="m", text="Black gains space.", beneficiary="black", delta_cp=12),
+            Claim(rule_id="c1", text="White's bad bishop is no longer a problem.",
+                  beneficiary="white", delta_cp=20, is_concession=True),
+            Claim(rule_id="c2", text="White's pieces are actively placed.",
+                  beneficiary="white", delta_cp=10, is_concession=True),
+        ],
+        "mover": "Black",
+    })
+    text = render_facts_template(f)
+    assert ("In return, White's bad bishop is no longer a problem and "
+            "White's pieces are actively placed.") in text
+
+
+def test_grounded_passed_pawn_square():
+    from app.core.commentary.features.guid_features import passed_pawn_squares
+
+    b = chess.Board("8/8/4P3/8/8/8/8/4K2k w - - 0 1")
+    assert passed_pawn_squares(b, chess.WHITE) == ["e6"]

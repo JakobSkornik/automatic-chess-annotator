@@ -16,6 +16,10 @@ class SubmitPgnRequest(BaseModel):
     pgn_string: str
     llm_provider: Optional[str] = None
     llm_effort: Optional[str] = None
+    # Audience register the comments are generated at (pre-analysis choice).
+    commentary_level: Optional[str] = None  # beginner | intermediate | expert
+    # When set, only this side's moves receive commentary.
+    comment_side: Optional[str] = None  # white | black | both
 
 
 @router.get("", response_model=List[JobResponse])
@@ -33,10 +37,19 @@ async def submit_job(request: SubmitPgnRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    level = (request.commentary_level or "").strip().lower() or None
+    if level is not None and level not in ("beginner", "intermediate", "expert"):
+        raise HTTPException(status_code=400, detail="commentary_level must be beginner|intermediate|expert")
+    side = (request.comment_side or "").strip().lower() or None
+    if side is not None and side not in ("white", "black", "both"):
+        raise HTTPException(status_code=400, detail="comment_side must be white|black|both")
+
     job_id = await queue_manager.add_job(
         request.pgn_string,
         llm_provider=request.llm_provider,
         llm_effort=request.llm_effort,
+        commentary_level=level,
+        comment_side=side,
     )
     st = queue_manager.get_job_status(job_id)
     if not st:
