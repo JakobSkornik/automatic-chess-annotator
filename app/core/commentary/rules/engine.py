@@ -68,6 +68,33 @@ def _side_label(side: str) -> str:
     return "White" if side == "WHITE" else "Black"
 
 
+def _benef(side: str) -> str:
+    """Beneficiary key for a claim that favors ``side``."""
+    return side.lower()
+
+
+def _benef_opp(side: str) -> str:
+    """Beneficiary key for a claim that favors the opponent of ``side``."""
+    return "black" if side == "WHITE" else "white"
+
+
+MAX_CONCESSIONS = 2
+
+
+def order_claims_for_mover(claims: List[Claim], mover: str) -> List[Claim]:
+    """Mover-perspective ordering: the mover's merits first; claims favoring
+    the opponent become explicitly tagged concessions, capped at
+    ``MAX_CONCESSIONS`` (strongest kept)."""
+    mover_key = mover.lower()
+    merits = [c for c in claims if c.beneficiary in (mover_key, None)]
+    concessions = [c for c in claims if c.beneficiary not in (mover_key, None)]
+    concessions = [
+        c.model_copy(update={"is_concession": True})
+        for c in concessions[:MAX_CONCESSIONS]
+    ]
+    return merits + concessions
+
+
 class _Ctx:
     """Everything a rule may look at."""
 
@@ -127,6 +154,7 @@ def rule_pawn_structure(ctx: _Ctx) -> List[Claim]:
         if total >= THRESHOLDS["pawn_structure_total"] and net >= THRESHOLDS["pawn_structure_evaluate"]:
             out.append(Claim(
                 rule_id="pawn_structure_improved",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} has improved the pawn structure.",
                 text_state=f"{_side_label(side)}'s pawn structure is now improved.",
                 features_involved=feats + ["EVALUATE_PAWNS"],
@@ -135,6 +163,7 @@ def rule_pawn_structure(ctx: _Ctx) -> List[Claim]:
         elif -total >= THRESHOLDS["pawn_structure_total"] and -net >= THRESHOLDS["pawn_structure_evaluate"]:
             out.append(Claim(
                 rule_id="pawn_structure_weakened",
+                beneficiary=_benef_opp(side),
                 text=f"{_side_label(side)}'s pawn structure has been weakened.",
                 text_state=f"{_side_label(side)}'s pawn structure is now weaker.",
                 features_involved=feats + ["EVALUATE_PAWNS"],
@@ -151,6 +180,7 @@ def rule_doubled_pawns(ctx: _Ctx) -> List[Claim]:
         if pair and pair[1] > pair[0]:
             out.append(Claim(
                 rule_id="doubled_pawns_accepted",
+                beneficiary=_benef_opp(side),
                 text=f"{_side_label(side)} is left with doubled pawns.",
                 text_state=f"{_side_label(side)} now has doubled pawns.",
                 features_involved=[name],
@@ -160,6 +190,7 @@ def rule_doubled_pawns(ctx: _Ctx) -> List[Claim]:
         elif pair and pair[1] < pair[0]:
             out.append(Claim(
                 rule_id="doubled_pawns_resolved",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} gets rid of the doubled pawns.",
                 text_state=f"{_side_label(side)}'s doubled pawns are gone.",
                 features_involved=[name],
@@ -177,6 +208,7 @@ def rule_bishop_pair(ctx: _Ctx) -> List[Claim]:
         if pair and pair[0] >= 2 and pair[1] < 2:
             out.append(Claim(
                 rule_id="bishop_pair_eliminated",
+                beneficiary=_benef_opp(side),
                 text=f"{_side_label(side)} no longer has the advantage of the bishop pair.",
                 features_involved=[name],
                 delta_cp=abs(ctx.delta(name)),
@@ -194,6 +226,7 @@ def rule_strong_knight(ctx: _Ctx) -> List[Claim]:
         if d >= THRESHOLDS["strong_knight"]:
             out.append(Claim(
                 rule_id="strong_knight_established",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} establishes a strong knight.",
                 text_state=f"{_side_label(side)} has a strong knight.",
                 features_involved=[name, cent],
@@ -203,6 +236,7 @@ def rule_strong_knight(ctx: _Ctx) -> List[Claim]:
         elif -d >= THRESHOLDS["strong_knight"]:
             out.append(Claim(
                 rule_id="strong_knight_lost",
+                beneficiary=_benef_opp(side),
                 text=f"{_side_label(side)} no longer has a strong knight.",
                 features_involved=[name, cent],
                 delta_cp=-d,
@@ -219,6 +253,7 @@ def rule_bad_bishop(ctx: _Ctx) -> List[Claim]:
         if pair and pair[1] > pair[0]:
             out.append(Claim(
                 rule_id="bad_bishop_created",
+                beneficiary=_benef_opp(side),
                 text=f"{_side_label(side)} is left with a bad bishop.",
                 text_state=f"{_side_label(side)}'s bishop is now bad.",
                 features_involved=[name, f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR", f"{side}_BISHOPS_MOBILITY"],
@@ -228,6 +263,7 @@ def rule_bad_bishop(ctx: _Ctx) -> List[Claim]:
         elif pair and pair[1] < pair[0]:
             out.append(Claim(
                 rule_id="bad_bishop_solved",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} solves the problem of the bad bishop.",
                 text_state=f"{_side_label(side)}'s bad bishop is no longer a problem.",
                 features_involved=[name, f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR", f"{side}_BISHOPS_MOBILITY"],
@@ -245,6 +281,7 @@ def rule_rook_activity(ctx: _Ctx) -> List[Claim]:
         if pair7 and pair7[1] > pair7[0]:
             out.append(Claim(
                 rule_id="rook_reaches_seventh",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)}'s rook reaches the seventh rank.",
                 text_state=f"{_side_label(side)} has a rook on the seventh rank.",
                 features_involved=[seventh],
@@ -257,6 +294,7 @@ def rule_rook_activity(ctx: _Ctx) -> List[Claim]:
         if d >= THRESHOLDS["rook_activity"]:
             out.append(Claim(
                 rule_id="rooks_activated",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)}'s rooks become more active on the open files.",
                 text_state=f"{_side_label(side)}'s rooks are active on the open files.",
                 features_involved=feats,
@@ -273,6 +311,7 @@ def rule_rook_behind_passer(ctx: _Ctx) -> List[Claim]:
         if pair and pair[1] > pair[0]:
             out.append(Claim(
                 rule_id="rook_behind_passer",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)}'s rook gets behind the passed pawn.",
                 text_state=f"{_side_label(side)}'s rook is behind the passed pawn.",
                 features_involved=[name],
@@ -291,6 +330,7 @@ def rule_passed_pawn(ctx: _Ctx) -> List[Claim]:
         if pair and pair[1] > pair[0]:
             out.append(Claim(
                 rule_id="passed_pawn_created",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} obtains a passed pawn.",
                 text_state=f"{_side_label(side)} has a passed pawn.",
                 features_involved=[name],
@@ -300,6 +340,7 @@ def rule_passed_pawn(ctx: _Ctx) -> List[Claim]:
         elif pair and pair[1] == pair[0] and pair[1] > 0 and d >= 15:
             out.append(Claim(
                 rule_id="passed_pawn_advances",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)}'s passed pawn advances dangerously.",
                 text_state=f"{_side_label(side)}'s passed pawn is far advanced.",
                 features_involved=[name],
@@ -318,6 +359,7 @@ def rule_king_safety(ctx: _Ctx) -> List[Claim]:
         if -d >= THRESHOLDS["king_safety"] and opp_tropism >= THRESHOLDS["king_tropism_corroborate"]:
             out.append(Claim(
                 rule_id="king_under_pressure",
+                beneficiary=_benef_opp(side),
                 text=f"{_side_label(side)}'s king comes under pressure.",
                 text_state=f"{_side_label(side)}'s king is under pressure.",
                 features_involved=feats + [f"{opp}_KING_TROPISM"],
@@ -326,6 +368,7 @@ def rule_king_safety(ctx: _Ctx) -> List[Claim]:
         elif d >= THRESHOLDS["king_safety"] and -opp_tropism >= THRESHOLDS["king_tropism_corroborate"]:
             out.append(Claim(
                 rule_id="king_safer",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)}'s king is now safer.",
                 text_state=f"{_side_label(side)}'s king is safe.",
                 features_involved=feats + [f"{opp}_KING_TROPISM"],
@@ -342,6 +385,7 @@ def rule_back_rank(ctx: _Ctx) -> List[Claim]:
         if pair and pair[0] == 0 and pair[1] == 1:
             out.append(Claim(
                 rule_id="back_rank_weakness",
+                beneficiary=_benef_opp(side),
                 text=f"{_side_label(side)}'s back rank becomes vulnerable.",
                 text_state=f"{_side_label(side)}'s back rank is vulnerable.",
                 features_involved=[name],
@@ -359,6 +403,7 @@ def rule_piece_activity(ctx: _Ctx) -> List[Claim]:
         if d >= THRESHOLDS["piece_activity"]:
             out.append(Claim(
                 rule_id="activity_improved",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} has improved the activity of the pieces.",
                 text_state=f"{_side_label(side)}'s pieces are actively placed.",
                 features_involved=[name],
@@ -367,6 +412,7 @@ def rule_piece_activity(ctx: _Ctx) -> List[Claim]:
         elif -d >= THRESHOLDS["piece_activity"]:
             out.append(Claim(
                 rule_id="activity_reduced",
+                beneficiary=_benef_opp(side),
                 text=f"{_side_label(side)}'s pieces become more passive.",
                 text_state=f"{_side_label(side)}'s pieces are passive.",
                 features_involved=[name],
@@ -383,6 +429,7 @@ def rule_center_and_space(ctx: _Ctx) -> List[Claim]:
         if c >= THRESHOLDS["center_control"]:
             out.append(Claim(
                 rule_id="center_control",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} takes control of the center.",
                 text_state=f"{_side_label(side)} controls the center.",
                 features_involved=[f"{side}_CENTER_CONTROL"],
@@ -391,6 +438,7 @@ def rule_center_and_space(ctx: _Ctx) -> List[Claim]:
         elif s >= THRESHOLDS["space"]:
             out.append(Claim(
                 rule_id="space_gained",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} gains space.",
                 text_state=f"{_side_label(side)} has a space advantage.",
                 features_involved=[f"{side}_SPACE"],
@@ -411,6 +459,7 @@ def rule_king_activity(ctx: _Ctx) -> List[Claim]:
         if d >= THRESHOLDS["king_activity_endgame"]:
             out.append(Claim(
                 rule_id="king_activated",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)}'s king becomes active.",
                 text_state=f"{_side_label(side)}'s king is active.",
                 features_involved=[name],
@@ -429,6 +478,7 @@ def rule_outside_passer(ctx: _Ctx) -> List[Claim]:
         if pair and pair[1] > pair[0]:
             out.append(Claim(
                 rule_id="outside_passer",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)} obtains an outside passed pawn.",
                 text_state=f"{_side_label(side)} has an outside passed pawn.",
                 features_involved=[name],
@@ -448,6 +498,7 @@ def rule_passer_escort(ctx: _Ctx) -> List[Claim]:
         if d >= THRESHOLDS["passer_escort"]:
             out.append(Claim(
                 rule_id="king_escorts_passer",
+                beneficiary=_benef(side),
                 text=f"{_side_label(side)}'s king escorts the passed pawn forward.",
                 text_state=f"{_side_label(side)}'s king supports the passed pawn.",
                 features_involved=[name, f"{side}_KING_ACTIVITY"],
@@ -568,6 +619,11 @@ def build_comment_facts(
     leaf_vec = compute_feature_vector_fen(played_line.leaf_fen)
     diff = diff_vectors(start_vec, leaf_vec)
     claims = run_rules(diff, phase=phase_raw, mover=mover.upper(), eval_cp=me.eval_after_cp)
+    claims = order_claims_for_mover(claims, mover)
+    # For dubious moves, opponent-favoring claims are not trade-offs — they ARE
+    # the explanation of the eval swing.
+    mq = me.move_quality.value if me.move_quality else ""
+    concession_mode = "consequence" if mq in ("inaccuracy", "mistake", "blunder") else "tradeoff"
 
     # Better alternative (Guid's option 3): only when the played move measurably
     # loses ground against the engine's preference.
@@ -596,6 +652,7 @@ def build_comment_facts(
             best_claims = run_rules(
                 best_diff, phase=phase_raw, mover=mover.upper(), eval_cp=best_cp
             )
+            best_claims = order_claims_for_mover(best_claims, mover)
             better = BestAlternative(
                 san=me.best_move_san or me.best_move_uci,
                 uci=me.best_move_uci,
@@ -620,4 +677,5 @@ def build_comment_facts(
         claims=claims,
         feature_diff=diff,
         better_alternative=better,
+        concession_mode=concession_mode,
     )

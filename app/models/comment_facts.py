@@ -58,6 +58,13 @@ class Claim(BaseModel):
     features_involved: List[str] = Field(default_factory=list)
     delta_cp: int = 0  # combined White-POV magnitude behind the claim
     flag_note: Optional[str] = None  # e.g. "2 -> 1"
+    # Which side this claim favors ("white" | "black"). Drives mover-perspective
+    # ordering: mover-beneficial claims are the move's merits, the rest are
+    # concessions.
+    beneficiary: Optional[str] = None
+    # True when this claim favors the opponent of the mover and is kept as an
+    # explicitly framed trade-off / consequence.
+    is_concession: bool = False
 
 
 class BestAlternative(BaseModel):
@@ -91,6 +98,10 @@ class CommentFacts(BaseModel):
     # Claims that fired but were muted by the adjacent-move dedup window
     # (kept for the academic debug/reasoning view).
     muted_claims: List[str] = Field(default_factory=list)
+    # How concessions should be framed: "tradeoff" for sound moves
+    # ("In return, ..."), "consequence" for inaccuracies/mistakes/blunders
+    # (the concessions ARE the explanation of the eval swing).
+    concession_mode: str = "tradeoff"
 
     def feature_refs(self) -> List[str]:
         seen: List[str] = []

@@ -752,6 +752,8 @@ def _facts_to_json(facts: Any) -> Dict[str, Any]:
                 "features": list(c.features_involved),
                 "delta_cp": c.delta_cp,
                 "flag_note": c.flag_note,
+                "beneficiary": c.beneficiary,
+                "is_concession": c.is_concession,
             }
             for c in (claims or [])
         ]
@@ -764,6 +766,7 @@ def _facts_to_json(facts: Any) -> Dict[str, Any]:
         "engine": facts.engine,
         "display_line": _line(facts.display_line),
         "claims": _claims(facts.claims),
+        "concession_mode": facts.concession_mode,
     }
     alt = facts.better_alternative
     if alt is not None:
@@ -805,14 +808,12 @@ def _variation_key_factors(
     (engine-free; same machinery as the comment claims)."""
     try:
         from app.core.commentary.features.envisioned import feature_diff
-        from app.core.commentary.rules.engine import run_rules
+        from app.core.commentary.rules.engine import order_claims_for_mover, run_rules
 
+        mover = "WHITE" if mover_is_white else "BLACK"
         diff = feature_diff(start_fen, leaf_fen)
-        claims = run_rules(
-            diff,
-            phase=phase or "mid",
-            mover="WHITE" if mover_is_white else "BLACK",
-        )
+        claims = run_rules(diff, phase=phase or "mid", mover=mover)
+        claims = order_claims_for_mover(claims, mover)
         return [
             {
                 "text": c.text,
@@ -820,6 +821,8 @@ def _variation_key_factors(
                 "features": list(c.features_involved),
                 "delta_cp": c.delta_cp,
                 "flag_note": c.flag_note,
+                "beneficiary": c.beneficiary,
+                "is_concession": c.is_concession,
             }
             for c in claims[:max_factors]
         ]

@@ -133,7 +133,19 @@ def render_facts_template(facts: CommentFacts) -> str:
         prefer_state = bool(
             facts.display_line and len(facts.display_line.line_san) >= 6
         )
-        parts.append(" ".join(_claim_text(c, prefer_state=prefer_state) for c in facts.claims))
+        merits = [c for c in facts.claims if not c.is_concession]
+        concessions = [c for c in facts.claims if c.is_concession]
+        if merits:
+            parts.append(" ".join(_claim_text(c, prefer_state=prefer_state) for c in merits))
+        if concessions:
+            if facts.concession_mode == "consequence":
+                # Claims start with the side's name, so "Now Black ..." reads naturally.
+                prefix = "Now " if variant == 0 else "The drawback: "
+            else:
+                prefix = "In return, " if variant == 0 else "On the other hand, "
+            conc_texts = [_claim_text(c, prefer_state=prefer_state) for c in concessions]
+            conc_texts[0] = prefix + conc_texts[0]
+            parts.append(" ".join(conc_texts))
 
     alt = facts.better_alternative
     if alt is not None:
@@ -189,6 +201,12 @@ GUID_COMPOSER_SYSTEM = (
     "the audience rules below say so — and only about features named in claims.\n"
     "- Express the evaluation ONLY through the verdict words and the eval token; "
     "never convert centipawns into 'pawns up' language.\n"
+    "- MOVER PERSPECTIVE: explain why the move serves the side that played it. "
+    "Claims listed as MERITS are what the move achieves — lead with them. Claims "
+    "listed as CONCESSIONS favor the opponent: phrase them strictly as trade-offs "
+    "('in return', 'at the cost of') for sound moves, or as the move's drawbacks "
+    "('now the opponent ...') when the concession mode says 'consequence'. NEVER "
+    "present a concession as an achievement of the move.\n"
     "- If BETTER ALTERNATIVE is present, end with one sentence naming it ('Better "
     "was {move}...' or a varied equivalent) with its verdict, claims and PV token.\n"
     "- One paragraph per rendering. No lists, no headers, no engine-worship.\n\n"
@@ -219,8 +237,7 @@ def build_facts_user_prompt(
     *,
     enrichment: Optional[Dict[str, Any]] = None,
 ) -> str:
-    claims_lines: List[str] = []
-    for c in facts.claims:
+    def _claim_line(c: Claim) -> str:
         line = f"- {c.text}"
         if c.text_state:
             line += f" | state-form: {c.text_state}"
@@ -228,9 +245,12 @@ def build_facts_user_prompt(
             line += f" [{c.flag_note}]"
         if c.features_involved:
             line += f" (features: {', '.join(c.features_involved[:3])})"
-        claims_lines.append(line)
-    if not claims_lines:
-        claims_lines = ["- (no positional claims fired; comment on verdict and line only)"]
+        return line
+
+    merit_lines = [_claim_line(c) for c in facts.claims if not c.is_concession]
+    concession_lines = [_claim_line(c) for c in facts.claims if c.is_concession]
+    if not merit_lines and not concession_lines:
+        merit_lines = ["- (no positional claims fired; comment on verdict and line only)"]
 
     blocks: List[str] = [
         "INVIOLABLE FACTS:",
@@ -238,9 +258,14 @@ def build_facts_user_prompt(
         f"Verdict: this move {facts.verdict}",
         f"EVAL token (copy verbatim): {eval_token(facts)}",
         f"PV token (copy verbatim): {pv_token(facts)}",
-        "Claims:",
-        *claims_lines,
+        f"MERITS (what the move achieves for {facts.mover}):",
+        *(merit_lines or ["- (none)"]),
     ]
+    if concession_lines:
+        blocks += [
+            f"CONCESSIONS (favor the opponent; mode: {facts.concession_mode}):",
+            *concession_lines,
+        ]
     alt = facts.better_alternative
     if alt is not None:
         alt_claims = [f"- {c.text}" for c in alt.claims] or ["- (none)"]

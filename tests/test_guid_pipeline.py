@@ -262,3 +262,57 @@ def test_state_form_claims_in_template():
     text = render_facts_template(facts)
     # long quiescent line -> envisioned-state phrasing
     assert "White's pawn structure is now improved." in text
+
+
+def test_claims_carry_beneficiary():
+    before = compute_feature_vector(
+        chess.Board("r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4")
+    )
+    # Only WHITE's light-squared bishop is gone; Black keeps both bishops.
+    after = compute_feature_vector(
+        chess.Board("r1bqkbnr/1ppp1ppp/p1n5/4p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5")
+    )
+    claims = run_rules(diff_vectors(before, after), phase="mid", mover="WHITE")
+    by_rule = {c.rule_id: c for c in claims}
+    # White losing the bishop pair benefits Black
+    assert by_rule["bishop_pair_eliminated"].beneficiary == "black"
+
+
+def test_mover_perspective_ordering_and_concession_cap():
+    from app.core.commentary.rules.engine import MAX_CONCESSIONS, order_claims_for_mover
+
+    claims = [
+        Claim(rule_id="a", text="Black solves X.", beneficiary="black", delta_cp=30),
+        Claim(rule_id="b", text="White gains Y.", beneficiary="white", delta_cp=20),
+        Claim(rule_id="c", text="Black gains Z.", beneficiary="black", delta_cp=15),
+        Claim(rule_id="d", text="Black gains W.", beneficiary="black", delta_cp=10),
+        Claim(rule_id="e", text="White gains V.", beneficiary="white", delta_cp=9),
+    ]
+    ordered = order_claims_for_mover(claims, "White")
+    # merits (white) first, in original order; concessions tagged and capped
+    assert [c.rule_id for c in ordered[:2]] == ["b", "e"]
+    concs = [c for c in ordered if c.is_concession]
+    assert len(concs) == MAX_CONCESSIONS
+    assert all(c.beneficiary == "black" for c in concs)
+    assert not any(c.is_concession for c in ordered[:2])
+
+
+def test_template_concession_framing():
+    facts = _facts().model_copy(update={
+        "claims": [
+            Claim(rule_id="m", text="White's pieces are actively placed.",
+                  beneficiary="white", delta_cp=18),
+            Claim(rule_id="x", text="Black solves the problem of the bad bishop.",
+                  beneficiary="black", delta_cp=20, is_concession=True),
+        ],
+    })
+    text = render_facts_template(facts)  # ply 21 -> variant 1
+    assert "White's pieces are actively placed." in text
+    assert "On the other hand, Black solves the problem of the bad bishop." in text
+    # merits come before concessions
+    assert text.index("actively placed") < text.index("On the other hand")
+
+    # consequence mode (dubious move): concessions explain the swing
+    facts2 = facts.model_copy(update={"concession_mode": "consequence", "ply": 22})
+    text2 = render_facts_template(facts2)  # ply 22 -> variant 0
+    assert "Now Black solves the problem of the bad bishop." in text2
