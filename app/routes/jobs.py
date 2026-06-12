@@ -89,6 +89,34 @@ async def get_job_game(job_id: str):
     raise HTTPException(status_code=400, detail="Job not ready yet")
 
 
+@router.get("/{job_id}/pgn")
+async def get_job_pgn(job_id: str, include_features: bool = Query(False)):
+    """Annotated PGN export: comments, [%eval] tags, NAGs and variations."""
+    from fastapi.responses import PlainTextResponse
+
+    from app.core.io.pgn_writer import game_json_to_pgn
+
+    file_path = f"data/games/{job_id}.json"
+    if not os.path.exists(file_path):
+        job_status = queue_manager.get_job_status(job_id)
+        if not job_status:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job_status.status == JobStatus.FAILED:
+            raise HTTPException(status_code=400, detail=f"Job failed: {job_status.message}")
+        raise HTTPException(status_code=400, detail="Job not ready yet")
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            gj = GameJson.model_validate(json.load(f))
+        pgn = game_json_to_pgn(gj, include_features=include_features)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PGN export failed: {e}")
+    return PlainTextResponse(
+        pgn,
+        media_type="application/x-chess-pgn",
+        headers={"Content-Disposition": f'attachment; filename="{job_id}.pgn"'},
+    )
+
+
 @router.websocket("/{job_id}/ws")
 async def job_commentary_ws(websocket: WebSocket, job_id: str):
     await websocket.accept()

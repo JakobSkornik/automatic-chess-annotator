@@ -180,6 +180,11 @@ class ChessEventExtractor:
             km = self._key_moment_detector.detect(
                 analyzed, prev_move_obj, pvs, pv1_change_count=row.pv1_change_count
             )
+            in_book_ply = (row.phase_raw or "") == "early"
+            if in_book_ply:
+                # Book plies carry no engine data and are commented by the
+                # opening commenter — never as key moments.
+                km = None
 
             eval_instability_cp: Optional[int] = None
             ead = row.eval_at_depth or {}
@@ -289,7 +294,7 @@ class ChessEventExtractor:
                 score_history.append(int(cur_score))
             trend = score_history[-self.SCORE_TREND_WINDOW :]
 
-            is_critical = bool(
+            is_critical = (not in_book_ply) and bool(
                 km
                 or (swing is not None and abs(swing) >= self.EVAL_SWING_CRITICAL)
                 or bool(motifs)

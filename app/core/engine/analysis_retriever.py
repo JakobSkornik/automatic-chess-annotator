@@ -13,6 +13,11 @@ from app.core.engine.engine_connector import EngineConnector
 from app.models.Move import Move
 from app.models.PgnMetadata import PgnMetadata
 from app.models.Move import AnalysisStage
+from app.core.commentary.features.guid_features import (
+    CHART_FEATURES,
+    compute_feature_vector,
+    vector_to_plain,
+)
 from app.core.commentary.features.positional_features import compute_hidden_features
 from app.core.commentary.features.pv_horizon_diff import compute_pv_horizon_diff
 from app.models.GameJson import (
@@ -20,6 +25,8 @@ from app.models.GameJson import (
     GameMetadata,
     GameMove,
     AnalysisInfo,
+    FeatureRef,
+    FeatureSeries,
     Variation,
     MoveScore,
     EpisodeSummary,
@@ -34,6 +41,7 @@ from app.core.commentary.openings.eco_book import (
     merge_opening_with_headers,
     parse_pgn_eco_tag,
 )
+from app.core.commentary.phase_classifier import PhaseClassifier
 from app.core.commentary.tantivy_positional_retriever import get_default_retriever
 from app.core.commentary.event_extractor import ChessEventExtractor
 from app.core.commentary.episode_segmenter import EpisodeSegmenter
@@ -136,6 +144,9 @@ def _mark_teaching_moments_per_episode(
         candidates: List[Tuple[int, int, int]] = []
         for ev in ep.move_events:
             if ev.key_moment_type or ev.teaching_moment or ev.brief_commentary:
+                continue
+            if ev.phase == "opening":
+                # Book plies carry no engine data; the opening commenter owns them.
                 continue
             if ev.move_quality not in (MoveQuality.BEST, MoveQuality.EXCELLENT):
                 continue
@@ -287,6 +298,55 @@ class AnalysisRetriever:
         """
         return self.analysis_stages
 
+    def analyze_book_move(self, main_move_obj: Move) -> Tuple[Move, List[List[Move]]]:
+        """Opening-book ply: static features and metadata only — no engine calls at all."""
+        board_after_move = chess.Board(main_move_obj.position)
+        uci_prefix = self._uci_prefix_for_depth(main_move_obj.depth)
+        _info_book, matched_ply = self._eco_book.match(uci_prefix)
+
+        main_move_obj.phase = "early"
+        main_move_obj.score = None
+        try:
+            after_features = compute_hidden_features(
+                board_after_move, in_opening_book_phase=True
+            )
+        except Exception as e:
+            logger.error(
+                f"Hidden features (book) failed at depth {main_move_obj.depth} "
+                f"FEN={board_after_move.fen()}: {e}"
+            )
+            after_features = {"error": str(e)}
+        if isinstance(after_features, dict):
+            after_features.setdefault("_engine", {})
+            after_features["_engine"]["opening_book_hit"] = True
+            after_features["_engine"]["opening_matched_ply"] = int(matched_ply)
+        main_move_obj.hiddenFeatures = after_features
+        (
+            main_move_obj.capturedByWhite,
+            main_move_obj.capturedByBlack,
+        ) = self._get_all_captured_pieces(board_after_move)
+        main_move_obj.isAnalyzed = True
+        main_move_obj.analysisStage = AnalysisStage.FINAL
+        main_move_obj.analysisVersion = 1
+        return main_move_obj, []
+
+    def evaluate_position(self, fen: str, *, depth: int) -> Optional[int]:
+        """One-off White-POV cp eval of a position (used to seed the book-exit baseline)."""
+        try:
+            board = chess.Board(fen)
+            info = self.engine_connector.analyse(board, depth=depth, multiPv=1)
+            if isinstance(info, list) and info:
+                info = info[0]
+            if not isinstance(info, dict):
+                return None
+            sc = info.get("score")
+            if sc is None:
+                return None
+            return int(sc.white().score(mate_score=MATE_SCORE))
+        except Exception as e:
+            logger.warning("Seed eval failed for FEN %s: %s", fen, e)
+            return None
+
     def analyze_move(
         self, main_move_obj: Move, stage: float
     ) -> Tuple[Move, List[List[Move]]]:
@@ -310,12 +370,6 @@ class AnalysisRetriever:
             .white()
             .score(mate_score=MATE_SCORE)
         )
-        # Capture trace for the after-move position (before any PV queries overwrite it)
-        try:
-            main_move_obj.trace = self.engine_connector.trace()
-        except Exception:
-            main_move_obj.trace = None
-
         uci_prefix = self._uci_prefix_for_depth(main_move_obj.depth)
         _info_book, matched_ply = self._eco_book.match(uci_prefix)
         in_book = (
@@ -323,7 +377,10 @@ class AnalysisRetriever:
             and _info_book is not None
             and matched_ply >= len(uci_prefix)
         )
-        main_move_obj.phase = self._determine_game_phase(board_after_move, uci_prefix)
+        # Phase is decided by PhaseClassifier before the engine is invoked;
+        # this path only runs for out-of-book (mid/end) plies.
+        if not main_move_obj.phase:
+            main_move_obj.phase = "mid"
         # Multi-depth instability on the after-move position (search swings / PV changes)
         def _cp_and_pv1(info_any: Any) -> Tuple[Optional[int], Optional[str]]:
             inf = info_any[0] if isinstance(info_any, list) and info_any else info_any
@@ -379,7 +436,17 @@ class AnalysisRetriever:
             after_features["_engine"]["pv1_change_count"] = pv1_change_count
             after_features["_engine"]["opening_book_hit"] = bool(in_book)
             after_features["_engine"]["opening_matched_ply"] = int(matched_ply)
-            if not in_book:
+            # Engine continuation from the position after the played move —
+            # the played move's "envisioned" line (no extra search needed).
+            try:
+                after_pv = after_primary.get("pv") or []
+                after_features["_engine"]["after_pv_uci"] = [m.uci() for m in after_pv]
+            except Exception:
+                after_features["_engine"]["after_pv_uci"] = []
+            # Superseded by the envisioned-line diff (rules/engine.py); costs a
+            # depth-18 search per move, so off unless explicitly re-enabled.
+            pv_horizon_enabled = os.environ.get("PV_HORIZON_ENABLED", "0").strip().lower() in ("1", "true")
+            if not in_book and pv_horizon_enabled:
                 try:
                     hv_plies = int(os.environ.get("PV_HORIZON_PLIES", "10"))
                     hv_depth = int(os.environ.get("PV_HORIZON_DEPTH", "18"))
@@ -524,26 +591,12 @@ class AnalysisRetriever:
                 board_for_this_pv.push(pv_chess_move)
                 fen_after_pv_move = board_for_this_pv.fen()
 
-                # Calculate trace for this PV move (as requested)
-                trace_for_pv_move_pos: Optional[Dict] = None
-                try:
-                    self.engine_connector.analyse(
-                        board_for_this_pv, time_limit=0.01, multiPv=1
-                    )
-                    trace_for_pv_move_pos = self.engine_connector.trace()
-                except Exception as e_trace:
-                    logger.error(
-                        f"Error getting trace for PV move {uci_for_pv_move} "
-                        f"at FEN {fen_after_pv_move}: {e_trace}"
-                    )
-
                 pv_step_move_obj = Move(
                     id=self.get_game_id(),
                     position=fen_after_pv_move,
                     move=uci_for_pv_move,
                     context=f"pv_{pv_idx}_step_{pv_move_idx}",
                     isAnalyzed=False,
-                    trace=trace_for_pv_move_pos,
                     piece=self._get_piece_for_move(
                         board_before_move=board_before_move_for_pv, san_move=uci_for_pv_move
                     ),
@@ -637,46 +690,6 @@ class AnalysisRetriever:
         # The function is expected to return (pieces_captured_by_white, pieces_captured_by_black)
         return black_pieces_captured_by_white, white_pieces_captured_by_black
 
-    def _determine_game_phase(self, board: chess.Board, uci_prefix: List[str]) -> str:
-        """
-        Opening lasts while the full UCI prefix matches the ECO book (longest hit covers all plies).
-        Falls back to fullmove≤10 only when ``uci_prefix`` is unavailable (caller should pass real prefix).
-        """
-        white_knights = len(board.pieces(chess.KNIGHT, chess.WHITE))
-        white_bishops = len(board.pieces(chess.BISHOP, chess.WHITE))
-        white_rooks = len(board.pieces(chess.ROOK, chess.WHITE))
-        white_queens = len(board.pieces(chess.QUEEN, chess.WHITE))
-
-        black_knights = len(board.pieces(chess.KNIGHT, chess.BLACK))
-        black_bishops = len(board.pieces(chess.BISHOP, chess.BLACK))
-        black_rooks = len(board.pieces(chess.ROOK, chess.BLACK))
-        black_queens = len(board.pieces(chess.QUEEN, chess.BLACK))
-
-        current_minor_major_pieces_count = (
-            white_knights
-            + white_bishops
-            + white_rooks
-            + white_queens
-            + black_knights
-            + black_bishops
-            + black_rooks
-            + black_queens
-        )
-
-        if uci_prefix:
-            info, matched = self._eco_book.match(uci_prefix)
-            if info is not None and matched >= len(uci_prefix):
-                return "early"
-        else:
-            if board.fullmove_number <= 10:
-                return "early"
-
-        if current_minor_major_pieces_count < 7:
-            return "end"
-
-        return "mid"
-
-
 def _board_before_mainline_move(game: Game, move_index: int) -> chess.Board:
     board = game.board()
     for i, gm in enumerate(game.mainline_moves()):
@@ -712,6 +725,22 @@ class EnginePipelineState:
     context: GameAnalysisContext
     metadata: GameMetadata
     ply_to_episode: Dict[int, int]
+
+
+def _build_feature_series(analyzed_rows: List[AnalyzedMoveData]) -> FeatureSeries:
+    """Aligned per-ply arrays of the charted Guid features (White-POV cp)."""
+    plies: List[int] = []
+    by_name: Dict[str, List[Optional[int]]] = {name: [] for name in CHART_FEATURES}
+    for row in analyzed_rows:
+        plies.append(row.ply)
+        guid = (row.hidden_features or {}).get("_guid") or {}
+        for name in CHART_FEATURES:
+            d = guid.get(name)
+            if isinstance(d, dict) and d.get("v") is not None:
+                by_name[name].append(int(d["v"]))
+            else:
+                by_name[name].append(None)
+    return FeatureSeries(plies=plies, features=by_name)
 
 
 def assemble_game_json(state: EnginePipelineState) -> GameJson:
@@ -771,6 +800,14 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         except Exception:
             rag_refs = []
 
+        if (row.phase_raw or "") == "early":
+            try:
+                hf_op = analyzed_move.hiddenFeatures or {}
+                op = hf_op.get("_opening") if isinstance(hf_op, dict) else None
+                if isinstance(op, dict) and op.get("comment"):
+                    comment = str(op["comment"])
+            except Exception:
+                comment = None
         if me and me.is_critical:
             try:
                 hf = analyzed_move.hiddenFeatures or {}
@@ -813,14 +850,17 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 continue
             first_move = pv_sequence[0]
             san_line: List[str] = []
+            fen_line: List[str] = []
             board_trace = board_pv_start.copy()
             for pm in pv_sequence:
                 try:
                     m_uci = chess.Move.from_uci(pm.move)
                     san_line.append(board_trace.san(m_uci))
                     board_trace.push(m_uci)
+                    fen_line.append(board_trace.fen())
                 except Exception:
                     san_line.append(str(pm.move))
+                    fen_line.append("")
 
             score_val = first_move.score
             variations.append(
@@ -829,6 +869,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                     move_san=san_line[0] if san_line else "",
                     score=_score_to_move_score(score_val),
                     line=san_line,
+                    fens=fen_line,
                 )
             )
 
@@ -847,6 +888,35 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
 
             pv_motif_summary = collect_pv_motif_summary(me.pv_motifs)
 
+        # Guid Expert Module outputs: which features ground this comment
+        # (chart highlights) and the diff tables behind them.
+        feature_refs: List[FeatureRef] = []
+        feature_diff_out: Optional[Dict[str, Any]] = None
+        facts = me.comment_facts if me else None
+        if facts is not None:
+            by_name: Dict[str, int] = {}
+            if facts.feature_diff:
+                for fd in list(facts.feature_diff.positive) + list(facts.feature_diff.negative):
+                    by_name[fd.name] = fd.delta_cp
+            for fname in facts.feature_refs():
+                feature_refs.append(FeatureRef(name=fname, delta_cp=int(by_name.get(fname, 0))))
+            if comment and facts.feature_diff:
+                feature_diff_out = {
+                    "positive": [fd.model_dump() for fd in facts.feature_diff.positive[:10]],
+                    "negative": [fd.model_dump() for fd in facts.feature_diff.negative[:10]],
+                }
+
+        resolved_tokens: List[Dict[str, Any]] = []
+        if comment and me:
+            try:
+                from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
+
+                resolved_tokens = resolve_tokens_for_comment(
+                    comment, me.fen_before, me.fen_after
+                )
+            except Exception:
+                resolved_tokens = []
+
         game_moves.append(
             GameMove(
                 mn=board_before.fullmove_number,
@@ -854,6 +924,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 san=san_main,
                 uci=move_obj.move,
                 fen=move_obj.position,
+                phase=str(row.phase_raw or analyzed_move.phase or "mid"),
                 score=_score_to_move_score(analyzed_move.score),
                 variations=variations,
                 comment=comment,
@@ -872,6 +943,9 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 opponent_threats=[t.value for t in (me.opponent_threats if me else [])],
                 pv_motif_summary=pv_motif_summary,
                 motif_trajectory=me.motif_trajectory if me else None,
+                feature_refs=feature_refs,
+                feature_diff=feature_diff_out,
+                resolved_tokens=resolved_tokens,
             )
         )
 
@@ -880,7 +954,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         moves=game_moves,
         episodes=episode_summaries,
         game_narrative=context.game_narrative,
-        game_summary=context.game_digest or None,
+        feature_series=_build_feature_series(analyzed_rows),
         analysis_info=AnalysisInfo(
             engine="Stockfish",
             depth=16,
@@ -934,10 +1008,11 @@ async def run_engine_analysis_to_json(
     total_moves = len(moves_list)
     analyzed_rows: List[AnalyzedMoveData] = []
     previous_move_obj: Optional[Move] = None
+    phase_classifier = PhaseClassifier(eco_book)
+    seed_depth = int(os.environ.get("BOOK_EXIT_SEED_DEPTH", "16"))
 
     for idx, move_obj in enumerate(moves_list):
         progress = (idx / max(total_moves, 1)) * 90.0
-        await progress_callback(progress, f"Engine: move {idx + 1}/{total_moves}")
 
         board_before = _board_before_mainline_move(game, idx)
         fen_before = board_before.fen()
@@ -947,7 +1022,37 @@ async def run_engine_analysis_to_json(
         except Exception:
             san_main = move_obj.move
 
-        analyzed_move, pvs = retriever.analyze_move(move_obj, stage=16)
+        board_after = chess.Board(move_obj.position)
+        uci_prefix = retriever._uci_prefix_for_depth(move_obj.depth)
+        phase = phase_classifier.classify(board_after, uci_prefix)
+        move_obj.phase = phase
+
+        if phase == "early":
+            # In-book ply: no engine work at all.
+            await progress_callback(progress, f"Book: move {idx + 1}/{total_moves}")
+            analyzed_move, pvs = retriever.analyze_book_move(move_obj)
+        else:
+            await progress_callback(progress, f"Engine: move {idx + 1}/{total_moves}")
+            if previous_move_obj is not None and previous_move_obj.score is None:
+                # First move out of book: evaluate the book-exit position once so
+                # eval-swing detection has a baseline for this novelty.
+                seed = retriever.evaluate_position(fen_before, depth=seed_depth)
+                if seed is not None:
+                    previous_move_obj.score = seed
+                    if analyzed_rows:
+                        analyzed_rows[-1] = analyzed_rows[-1].model_copy(
+                            update={"score_cp": seed}
+                        )
+            analyzed_move, pvs = retriever.analyze_move(move_obj, stage=16)
+
+        # Guid feature vector (engine-free): every mainline ply, all phases —
+        # feeds the per-feature progression charts and the rule engine.
+        try:
+            guid_vec = compute_feature_vector(board_after)
+            if isinstance(analyzed_move.hiddenFeatures, dict):
+                analyzed_move.hiddenFeatures["_guid"] = vector_to_plain(guid_vec)
+        except Exception as e:
+            logger.error("Guid feature vector failed at ply %s: %s", move_obj.depth, e)
 
         try:
             if analyzed_move.hiddenFeatures is None:
@@ -984,7 +1089,6 @@ async def run_engine_analysis_to_json(
                 phase_raw=str(analyzed_move.phase or "mid"),
                 pvs=list(pvs) if pvs else [],
                 hidden_features=analyzed_move.hiddenFeatures or {},
-                trace=analyzed_move.trace,
                 captured_by_white=analyzed_move.capturedByWhite or {},
                 captured_by_black=analyzed_move.capturedByBlack or {},
                 analyzed_move=analyzed_move,
@@ -995,12 +1099,46 @@ async def run_engine_analysis_to_json(
         )
         previous_move_obj = analyzed_move
 
+    # Deterministic opening comments for in-book plies (no engine, no LLM)
+    from app.core.commentary.phases.early import attach_opening_comments
+
+    attach_opening_comments(analyzed_rows, eco_book)
+
     await progress_callback(92.0, "Extracting events and episodes...")
     extractor = ChessEventExtractor(
         eco_book=eco_book,
         key_moment_detector=retriever.key_moment_detector,
     )
     move_events = extractor.extract_events(game, analyzed_rows)
+
+    # Guid Expert Module: fire the rule engine for every out-of-book move and
+    # attach the resulting CommentFacts (the comment's inviolable content).
+    from app.core.commentary.rules import build_comment_facts
+
+    CLAIM_DEDUP_WINDOW_PLIES = int(os.environ.get("CLAIM_DEDUP_WINDOW_PLIES", "6"))
+    last_claim_ply: Dict[str, int] = {}
+    for mi, me in enumerate(move_events):
+        row = analyzed_rows[me.move_index] if 0 <= me.move_index < len(analyzed_rows) else None
+        if row is None:
+            continue
+        try:
+            facts = build_comment_facts(row, me, depth=16)
+        except Exception as e:
+            logger.warning("comment facts failed at ply %s: %s", me.ply, e)
+            facts = None
+        if facts is not None:
+            # A persistent feature change (e.g. an unsolved bad bishop) fires on
+            # every envisioned line; keep the first occurrence, mute repeats.
+            kept = []
+            for c in facts.claims:
+                prev = last_claim_ply.get(c.text)
+                if prev is not None and (me.ply - prev) <= CLAIM_DEDUP_WINDOW_PLIES:
+                    continue
+                last_claim_ply[c.text] = me.ply
+                kept.append(c)
+            facts = facts.model_copy(update={"claims": kept})
+            move_events[mi] = me.model_copy(update={"comment_facts": facts})
+
     from app.core.commentary.features.motif_trajectory import (
         compute_episode_trajectories,
         compute_move_trajectories,

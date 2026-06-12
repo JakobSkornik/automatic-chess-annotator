@@ -33,6 +33,8 @@ class MoveCommentaryContext:
     final_text: str = ""
     fallback_used: Optional[str] = None
     composer_pass_label: Optional[str] = None
+    # Reverse-order generation: what the game already "knows" about its future
+    future_context: Optional[str] = None
 
 
 class MoveStage(Protocol):
@@ -55,6 +57,12 @@ class RagRetrievalStage:
     async def run(self, ctx: MoveCommentaryContext) -> None:
         if ctx.skip:
             return
+        if ctx.move_event.comment_facts is not None:
+            from app.core.commentary.phases.composer import humanization_level
+
+            if humanization_level() < 2:
+                # Enrichment (and thus RAG) is only used at full humanization.
+                return
         from app.core.commentary.advanced_comment_service import (
             compute_rag_top_k,
             _detail_level_for_key_moment,
@@ -74,11 +82,66 @@ class RagRetrievalStage:
         )
 
 
+class FactsComposeStage:
+    """Guid path: render CommentFacts (template or fact-contract LLM call)."""
+
+    name = "facts_compose"
+
+    async def run(self, ctx: MoveCommentaryContext) -> None:
+        if ctx.skip:
+            return
+        facts = ctx.move_event.comment_facts
+        if facts is None:
+            return
+        from app.core.commentary.forbidden_phrases import scrub_forbidden
+        from app.core.commentary.phases.composer import compose_facts_comment
+
+        enrichment: Dict[str, Any] = {}
+        gc = ctx.game_context
+        if gc.opening_name or gc.opening_eco:
+            enrichment["opening"] = f"{gc.opening_name or ''} ({gc.opening_eco or ''})".strip()
+        if ctx.episode is not None and (ctx.episode.dominant_theme or ctx.episode.title):
+            enrichment["episode_theme"] = ctx.episode.dominant_theme or ctx.episode.title
+        if ctx.future_context:
+            enrichment["what_happens_later"] = ctx.future_context
+        if ctx.rag_results:
+            top = ctx.rag_results[0]
+            snippet = str(getattr(top, "text", "") or "")[:300]
+            if snippet:
+                enrichment["master_note"] = snippet
+
+        pl = ctx.composer_pass_label or (
+            "key_moment" if ctx.move_event.key_moment_type else "teaching"
+        )
+        model = resolve_model(ctx.service.provider_name, "composer", pass_label=pl)
+        result = await compose_facts_comment(
+            ctx.service,
+            facts,
+            model=model,
+            effort=ctx.composer_effort,
+            enrichment=enrichment,
+        )
+        text, forbidden_hits = scrub_forbidden(str(result.get("text") or ""))
+        ctx.final_text = text
+        ctx.llm_debug.update(
+            {
+                "facts_rendering": result.get("rendering"),
+                "humanization_level": result.get("level"),
+                "facts_contract_ok": result.get("contract_ok"),
+                "forbidden_phrase_hits": len(forbidden_hits),
+                "claims": [c.text for c in facts.claims],
+                "feature_refs": facts.feature_refs(),
+            }
+        )
+
+
 class RationaleStage:
     name = "rationale"
 
     async def run(self, ctx: MoveCommentaryContext) -> None:
-        if ctx.skip:
+        if ctx.skip or ctx.final_text:
+            return
+        if ctx.move_event.comment_facts is not None:
             return
         from app.core.commentary.move_rationale import build_rationale
 
@@ -89,7 +152,7 @@ class PromptBuildStage:
     name = "prompt_build"
 
     async def run(self, ctx: MoveCommentaryContext) -> None:
-        if ctx.skip:
+        if ctx.skip or ctx.final_text or ctx.move_event.comment_facts is not None:
             return
         user_prompt, rag_results, dbg = await ctx.service.build_event_llm_input(
             ctx.move_event,
@@ -109,7 +172,7 @@ class LlmCallStage:
     name = "llm_call"
 
     async def run(self, ctx: MoveCommentaryContext) -> None:
-        if ctx.skip:
+        if ctx.skip or ctx.final_text or ctx.move_event.comment_facts is not None:
             return
         pl = ctx.composer_pass_label or (
             "key_moment" if ctx.move_event.key_moment_type else "teaching"
@@ -165,6 +228,7 @@ class MoveCommentaryPipeline:
             [
                 KeyMomentGateStage(),
                 RagRetrievalStage(),
+                FactsComposeStage(),
                 RationaleStage(),
                 PromptBuildStage(),
                 LlmCallStage(),

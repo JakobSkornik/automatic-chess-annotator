@@ -25,6 +25,17 @@ class Variation(BaseModel):
     move_san: str
     score: Optional[MoveScore] = None
     line: List[str]
+    # Position after each ply of `line` — lets the PV popup slide/autoplay
+    # without replaying SAN on the frontend.
+    fens: List[str] = []
+
+
+class FeatureRef(BaseModel):
+    """A positional feature this move's comment is grounded in (chart highlight)."""
+
+    name: str
+    delta_cp: int = 0
+
 
 class GameMove(BaseModel):
     mn: int
@@ -32,6 +43,7 @@ class GameMove(BaseModel):
     san: str
     uci: str
     fen: str
+    phase: str = "mid"  # "early" | "mid" | "end"
     score: Optional[MoveScore] = None
     variations: List[Variation] = []
     comment: Optional[str] = None
@@ -50,6 +62,10 @@ class GameMove(BaseModel):
     opponent_threats: List[str] = []
     pv_motif_summary: List[str] = []
     motif_trajectory: Optional[str] = None
+    # Guid Expert Module outputs
+    feature_refs: List[FeatureRef] = []
+    feature_diff: Optional[Dict[str, Any]] = None  # {"positive": [...], "negative": [...]}
+    resolved_tokens: List[Dict[str, Any]] = []
 
 class GameMetadata(BaseModel):
     id: str
@@ -70,6 +86,13 @@ class AnalysisInfo(BaseModel):
     multipv: int
     timestamp: float
 
+
+class FeatureSeries(BaseModel):
+    """Per-ply progression of every charted positional feature (White-POV cp)."""
+
+    plies: List[int] = []
+    features: Dict[str, List[Optional[int]]] = {}
+
 class EpisodeSummary(BaseModel):
     episode_index: int
     title: str
@@ -84,7 +107,7 @@ class GameJson(BaseModel):
     moves: List[GameMove]
     episodes: List[EpisodeSummary] = []
     game_narrative: Optional[str] = None
-    game_summary: Optional[Dict[str, Any]] = None
+    feature_series: Optional[FeatureSeries] = None
     analysis_info: AnalysisInfo
 
 

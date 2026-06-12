@@ -15,7 +15,6 @@ class Move(BaseModel):
     isAnalyzed: bool
     piece: str
     score: Optional[float] = None
-    trace: Optional[Dict] = None
     phase: Optional[str] = None
     capturedByWhite: Optional[Dict[str, int]] = None
     capturedByBlack: Optional[Dict[str, int]] = None

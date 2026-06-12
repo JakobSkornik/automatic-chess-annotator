@@ -73,19 +73,6 @@ class EngineConnector:
         result = self.engine.analyse(board, limit, multipv=multiPv)
         return result
 
-    def trace(self) -> dict:
-        """
-        Retrieves a trace of the engine's search process for the given board position.
-
-        :param board: The chess.Board object representing the position to trace.
-        :return: A dictionary with the engine's search trace.
-        """
-        try:
-            trace = self.engine.trace()
-            return trace
-        except Exception as e:
-            raise RuntimeError(f"Engine trace failed: {e}")
-
     def close(self) -> None:
         """
         Shuts down the chess engine.

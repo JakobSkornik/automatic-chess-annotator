@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.comment_facts import CommentFacts
+
 
 class TacticalMotif(str, Enum):
     FORK = "fork"
@@ -227,6 +229,8 @@ class MoveEvent(BaseModel):
     opponent_threats: List[TacticalMotif] = Field(default_factory=list)
     # Sustained motif pattern label when a motif persists >=3 consecutive plies
     motif_trajectory: Optional[str] = None
+    # Guid Expert Module output: the move's inviolable comment facts
+    comment_facts: Optional[CommentFacts] = None
 
 
 class Episode(BaseModel):
@@ -278,7 +282,6 @@ class AnalyzedMoveData(BaseModel):
     phase_raw: str = ""
     pvs: List[List[Any]] = Field(default_factory=list)
     hidden_features: Dict[str, Any] = Field(default_factory=dict)
-    trace: Optional[Dict[str, Any]] = None
     captured_by_white: Dict[str, int] = Field(default_factory=dict)
     captured_by_black: Dict[str, int] = Field(default_factory=dict)
     analyzed_move: Any = None

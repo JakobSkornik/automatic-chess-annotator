@@ -259,21 +259,16 @@ class KeyMomentDetector:
             if curr_cent - prev_cent >= 1.0 and prev_cent <= 1.5:
                 results.append("piece_activation")
 
-        # -- Opening transition: first move out of book --
-        # Heuristic: if previous move had an opening name in trace but current doesn't
-        if previous_move and previous_move.trace and isinstance(previous_move.trace, dict):
-            had_opening = previous_move.trace.get("openingName") or previous_move.trace.get("openingCode")
-            if had_opening:
-                curr_trace = current_move.trace if isinstance(current_move.trace, dict) else {}
-                has_opening = curr_trace.get("openingName") or curr_trace.get("openingCode")
-                if (
-                    not has_opening
-                    and current_move.depth > self._last_book_depth
-                    and not self._fired_opening_transition
-                ):
-                    results.append("opening_transition")
-                    self._fired_opening_transition = True
-                    self._last_book_depth = current_move.depth
+        # -- Opening transition: first move out of book (phase leaves "early") --
+        if (
+            not self._fired_opening_transition
+            and self._prev_phase in ("early", "opening")
+            and current_move.phase
+            and current_move.phase not in ("early", "opening")
+        ):
+            results.append("opening_transition")
+            self._fired_opening_transition = True
+            self._last_book_depth = current_move.depth
 
         # -- Endgame transition: phase changes from mid to end (once per game) --
         if (
