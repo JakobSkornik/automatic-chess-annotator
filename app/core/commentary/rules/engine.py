@@ -639,6 +639,8 @@ def verdict_for_transition(
         return verdict_for_eval(after_cp)
 
     if d < 0:  # the mover lost ground
+        if b > 25 and a > 25:
+            return f"lets {mover}'s advantage shrink"
         if b > 25 and -25 <= a <= 25:
             return "lets the advantage slip away to equality"
         if b > 25 and a < -25:
@@ -694,6 +696,30 @@ def _decode_eval(cp: Optional[int]) -> tuple:
         n = _MATE_SCORE - abs(cp)
         return None, (n if cp > 0 else -n)
     return int(cp), None
+
+
+def _line_feature_series(start_fen: str, fens: List[str], names: List[str]) -> dict:
+    """Per-point White-POV cp series for `names` along a line (point 0 = start
+    position, then one per kept ply). Engine-free."""
+    if not names:
+        return {}
+    points = [start_fen] + list(fens)
+    series: dict = {name: [] for name in names}
+    for fen in points:
+        if not fen:
+            for name in names:
+                series[name].append(series[name][-1] if series[name] else 0)
+            continue
+        try:
+            vec = compute_feature_vector_fen(fen)
+        except Exception:
+            for name in names:
+                series[name].append(series[name][-1] if series[name] else 0)
+            continue
+        for name in names:
+            fv = vec.get(name)
+            series[name].append(fv.value_cp if fv is not None else 0)
+    return series
 
 
 def build_comment_facts(
@@ -752,6 +778,45 @@ def build_comment_facts(
     if eval_mate is not None or (eval_cp is not None and abs(eval_cp) > 500):
         claims = []
 
+    # Fallback explanation when no positional rule fired — especially on
+    # tactical mistakes the positional rules don't model. Derive ONE grounded
+    # claim from material / the refutation / the engine's preference so the
+    # comment always says WHY, not just the verdict. All facts (material delta,
+    # best-move SAN), so the contract holds.
+    if not claims and mq in ("inaccuracy", "mistake", "blunder"):
+        opp = "black" if mover == "White" else "white"
+        mover_sign = 1 if mover == "White" else -1
+
+        def _net_material(vec) -> int:
+            fv = vec.get("MATERIAL_BALANCE")
+            return fv.value_cp if fv is not None else 0
+
+        mat_delta = mover_sign * (_net_material(leaf_vec) - _net_material(start_vec))
+        best_san = me.best_move_san
+        fb: Optional[Claim] = None
+        if mat_delta <= -100:
+            txt = f"{mover} loses material"
+            if best_san:
+                txt += f"; {best_san} held the balance"
+            fb = Claim(
+                rule_id="tactical_material_loss",
+                text=txt + ".",
+                beneficiary=opp,
+                delta_cp=abs(mat_delta),
+                features_involved=["MATERIAL_BALANCE"],
+            )
+        elif refutation_san is None and best_san:
+            # No material swing and no refutation sentence from the template:
+            # point at the engine's preference so the reasons list is not empty.
+            fb = Claim(
+                rule_id="eval_concession",
+                text=f"the engine preferred {best_san} here.",
+                beneficiary=opp,
+                delta_cp=60,
+            )
+        if fb is not None:
+            claims = [fb]
+
     # Better alternative (Guid's option 3): only when the played move measurably
     # loses ground against the engine's preference.
     better: Optional[BestAlternative] = None
@@ -800,6 +865,30 @@ def build_comment_facts(
                 display_line=best_line,
                 claims=best_claims,
             )
+
+    # Feature progression along the displayed line, for the features the comment
+    # is grounded in (always include MATERIAL_BALANCE so material is chartable).
+    feat_names = sorted(
+        {f for c in claims for f in c.features_involved} | {"MATERIAL_BALANCE"}
+    )
+    played_line = played_line.model_copy(
+        update={"feature_series": _line_feature_series(me.fen_before, played_line.fens, feat_names)}
+    )
+    if better is not None and better.display_line is not None:
+        alt_names = sorted(
+            {f for c in better.claims for f in c.features_involved} | {"MATERIAL_BALANCE"}
+        )
+        better = better.model_copy(
+            update={
+                "display_line": better.display_line.model_copy(
+                    update={
+                        "feature_series": _line_feature_series(
+                            me.fen_before, better.display_line.fens, alt_names
+                        )
+                    }
+                )
+            }
+        )
 
     return CommentFacts(
         ply=me.ply,

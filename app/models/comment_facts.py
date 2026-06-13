@@ -8,7 +8,7 @@ these facts but may not add to them.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -44,6 +44,10 @@ class EnvisionedLine(BaseModel):
     trimmed_plies: int = 0
     start_quiescent: bool = True
     leaf_quiescent: bool = True
+    # Per-point progression of the comment's features along this line
+    # (point 0 = start position, then one per kept ply). White-POV cp.
+    # Lets the UI chart how the fired-rule features evolve through the line.
+    feature_series: Dict[str, List[int]] = Field(default_factory=dict)
 
 
 class Claim(BaseModel):

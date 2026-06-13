@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 from typing import List, Tuple
 
+# NOTE: "holds the balance" is deliberately absent — it is a sanctioned
+# transition verdict produced by the rule engine (rules/engine.py).
 FORBIDDEN_REGEX = re.compile(
     r"engine confirms|engine preference|engine's top choice|settles near|settling near|"
-    r"holds the balance|preserves the rhythm|drives the rhythm|stalls the initiative|"
+    r"preserves the rhythm|drives the rhythm|stalls the initiative|"
     r"flows through|keeps matters level|king tuck",
     re.I,
 )

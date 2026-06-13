@@ -744,6 +744,7 @@ def _facts_to_json(facts: Any) -> Dict[str, Any]:
             "start_fen": dl.start_fen,
             "san": list(dl.line_san),
             "fens": list(dl.fens),
+            "feature_series": dict(getattr(dl, "feature_series", {}) or {}),
         }
 
     def _claims(claims: Any) -> List[Dict[str, Any]]:
@@ -916,6 +917,16 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                     f"Continues the same theme as around ply {me.commentary_stub_ref_ply} "
                     f"(see that move's commentary)."
                 )
+            # Floor: a move with CommentFacts always renders at least the
+            # deterministic Guid template (verdict + numbered line + eval) —
+            # never the bare "X (Eval swing: …)" stub.
+            if not comment and me and me.comment_facts is not None:
+                try:
+                    from app.core.commentary.phases.composer import render_facts_template
+
+                    comment = render_facts_template(me.comment_facts)
+                except Exception:
+                    comment = None
             if not comment and key_moment and me:
                 swing = me.eval_swing_cp
                 if swing is not None:

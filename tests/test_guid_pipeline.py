@@ -376,3 +376,41 @@ def test_grounded_passed_pawn_square():
 
     b = chess.Board("8/8/4P3/8/8/8/8/4K2k w - - 0 1")
     assert passed_pawn_squares(b, chess.WHITE) == ["e6"]
+
+
+def test_parse_text_extracts_from_schema_blob():
+    from app.core.commentary.phases.composer import _parse_text
+
+    blob = (
+        '{"type":"object","properties":{"text":{"type":"string"}},'
+        '"required":["text"],"additionalProperties":false}\n\n'
+        '{"text":"21...Nc5 leaves White with a decisive advantage (+5.31, Stockfish:16)."}'
+    )
+    assert _parse_text(blob) == "21...Nc5 leaves White with a decisive advantage (+5.31, Stockfish:16)."
+    # plain object still works
+    assert _parse_text('{"text":"hello"}') == "hello"
+    # last valid object wins on concatenation
+    assert _parse_text('{"text":"first"}\n{"text":"second"}') == "second"
+
+
+def test_validate_rejects_schema_and_raw_json():
+    facts = _facts()
+    assert not validate_facts_comment('{"type":"object","properties":{}}', facts)
+    assert not validate_facts_comment('{"text":"x"}', facts)
+    # a real rendered comment still validates
+    assert validate_facts_comment(render_facts_template(facts), facts)
+
+
+def test_line_feature_series_shape():
+    from app.core.commentary.rules.engine import _line_feature_series
+
+    start = chess.STARTING_FEN
+    b = chess.Board()
+    fens = []
+    for u in ("e2e4", "e7e5", "g1f3"):
+        b.push_uci(u)
+        fens.append(b.fen())
+    series = _line_feature_series(start, fens, ["MATERIAL_BALANCE", "WHITE_PIECE_ACTIVITY"])
+    # one point for the start position plus one per ply
+    assert len(series["MATERIAL_BALANCE"]) == len(fens) + 1
+    assert all(isinstance(v, int) for v in series["WHITE_PIECE_ACTIVITY"])
