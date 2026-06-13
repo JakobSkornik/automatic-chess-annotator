@@ -60,6 +60,10 @@ class GameMove(BaseModel):
     move_category: Optional[str] = None
     plan_comparison: Optional[Dict[str, Any]] = None
     is_critical: bool = False
+    # True only for moves that received a real key-moment/teaching commentary
+    # pass (drives the move-list dot) — not the template-floor facts that every
+    # analyzed move carries.
+    is_key_moment: bool = False
     episode_index: Optional[int] = None
     named_motifs: List[str] = []
     primary_motif_label: Optional[str] = None

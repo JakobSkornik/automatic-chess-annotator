@@ -1102,6 +1102,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 move_category=me.move_category.value if me and me.move_category else None,
                 plan_comparison=me.plan_comparison.model_dump() if me and me.plan_comparison else None,
                 is_critical=bool(me.is_critical if me else False),
+                is_key_moment=bool(me and (me.key_moment_type or me.teaching_moment)),
                 episode_index=ep_idx,
                 named_motifs=named_motifs,
                 primary_motif_label=primary_motif_label,
