@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Set
-
 import chess
 
 from app.models.chess_events import TacticalMotif
@@ -29,7 +27,9 @@ def _material_sum(board: chess.Board, color: chess.Color) -> int:
     return total
 
 
-def _fork_after_move(board_after: chess.Board, moved_to: int, mover_color: chess.Color) -> bool:
+def _fork_after_move(
+    board_after: chess.Board, moved_to: int, mover_color: chess.Color
+) -> bool:
     """Moved piece attacks two or more valuable enemy targets (incl. king + piece)."""
     enemy = not mover_color
     count = 0
@@ -50,7 +50,9 @@ def _sign(x: int) -> int:
     return (x > 0) - (x < 0)
 
 
-def _skewer_heuristic(board_after: chess.Board, moved_to: int, mover_color: chess.Color) -> bool:
+def _skewer_heuristic(
+    board_after: chess.Board, moved_to: int, mover_color: chess.Color
+) -> bool:
     """Moved piece attacks a valuable enemy unit with a more valuable one further along the ray."""
     enemy = not mover_color
     for tgt_sq in chess.SQUARES:
@@ -170,12 +172,21 @@ def _decoy_sacrifice(
 
 
 def _interference_block(
-    board_before: chess.Board, board_after: chess.Board, move: chess.Move, mover_color: chess.Color
+    board_before: chess.Board,
+    board_after: chess.Board,
+    move: chess.Move,
+    mover_color: chess.Color,
 ) -> bool:
     """Piece lands on a square between a sliding attacker and a valuable target (clear ray)."""
     enemy = not mover_color
     piece = board_before.piece_at(move.from_square)
-    if not piece or piece.piece_type not in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.PAWN):
+    if not piece or piece.piece_type not in (
+        chess.KNIGHT,
+        chess.BISHOP,
+        chess.ROOK,
+        chess.QUEEN,
+        chess.PAWN,
+    ):
         return False
     if (
         not board_before.is_capture(move)
@@ -187,7 +198,11 @@ def _interference_block(
     inter_sq = move.to_square
     for atk_sq in chess.SQUARES:
         ap = board_before.piece_at(atk_sq)
-        if not ap or ap.color != enemy or ap.piece_type not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
+        if (
+            not ap
+            or ap.color != enemy
+            or ap.piece_type not in (chess.BISHOP, chess.ROOK, chess.QUEEN)
+        ):
             continue
         for tgt_sq in chess.SQUARES:
             tp = board_before.piece_at(tgt_sq)
@@ -211,7 +226,9 @@ def _interference_block(
     return False
 
 
-def _zwischenzug_check(board_before: chess.Board, board_after: chess.Board, move: chess.Move) -> bool:
+def _zwischenzug_check(
+    board_before: chess.Board, board_after: chess.Board, move: chess.Move
+) -> bool:
     """Check with a piece that did not attack the enemy king before the move (intermezzo)."""
     if board_before.is_capture(move):
         return False
@@ -241,7 +258,9 @@ def _quiet_move_threatens_major(
     return False
 
 
-def _x_ray_attack(board_after: chess.Board, moved_to: int, mover_color: chess.Color) -> bool:
+def _x_ray_attack(
+    board_after: chess.Board, moved_to: int, mover_color: chess.Color
+) -> bool:
     """Piece on moved_to attacks an enemy piece through a friendly blocker."""
     enemy = not mover_color
     for df, dr in (
@@ -281,7 +300,9 @@ def _x_ray_attack(board_after: chess.Board, moved_to: int, mover_color: chess.Co
     return False
 
 
-def _double_attack_non_fork(board_after: chess.Board, moved_to: int, mover_color: chess.Color) -> bool:
+def _double_attack_non_fork(
+    board_after: chess.Board, moved_to: int, mover_color: chess.Color
+) -> bool:
     """Two+ enemy pieces attacked but not meeting fork heuristic (e.g. two minors)."""
     enemy = not mover_color
     n = 0
@@ -296,7 +317,9 @@ def _double_attack_non_fork(board_after: chess.Board, moved_to: int, mover_color
     return n >= 2 and not _fork_after_move(board_after, moved_to, mover_color)
 
 
-def _clearance_move(board_before: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
+def _clearance_move(
+    board_before: chess.Board, move: chess.Move, mover_color: chess.Color
+) -> bool:
     """Rook/queen steps off a line so a friendly rook/queen behind gains a new attacked square."""
     p = board_before.piece_at(move.from_square)
     if not p or p.piece_type not in (chess.ROOK, chess.QUEEN):
@@ -314,7 +337,7 @@ def _clearance_move(board_before: chess.Board, move: chess.Move, mover_color: ch
     if bf == 0 and br == 0:
         return False
     f, r = ff, fr
-    behind_sq: Optional[int] = None
+    behind_sq: int | None = None
     while True:
         f += bf
         r += br
@@ -339,7 +362,9 @@ def _clearance_move(board_before: chess.Board, move: chess.Move, mover_color: ch
     uf = _sign(ff - chess.square_file(behind_sq))
     ur = _sign(fr - chess.square_rank(behind_sq))
     past_sq = chess.square(ff + uf, fr + ur)
-    if not (0 <= chess.square_file(past_sq) <= 7 and 0 <= chess.square_rank(past_sq) <= 7):
+    if not (
+        0 <= chess.square_file(past_sq) <= 7 and 0 <= chess.square_rank(past_sq) <= 7
+    ):
         return False
     try:
         seen_before = board_before.attacks(behind_sq)
@@ -384,11 +409,11 @@ def detect_tactical_motifs(
     board_before: chess.Board,
     board_after: chess.Board,
     move: chess.Move,
-    eval_before_cp: Optional[int],
-    eval_after_cp: Optional[int],
-) -> List[TacticalMotif]:
+    eval_before_cp: int | None,
+    eval_after_cp: int | None,
+) -> list[TacticalMotif]:
     """Return detected tactical motifs for the played move."""
-    motifs: List[TacticalMotif] = []
+    motifs: list[TacticalMotif] = []
     piece_after = board_after.piece_at(move.to_square)
     if piece_after is None:
         return motifs
@@ -417,9 +442,17 @@ def detect_tactical_motifs(
 
     mat_before = _material_sum(board_before, moved_color)
     mat_after = _material_sum(board_after, moved_color)
-    if mat_after < mat_before - 1 and eval_before_cp is not None and eval_after_cp is not None:
+    if (
+        mat_after < mat_before - 1
+        and eval_before_cp is not None
+        and eval_after_cp is not None
+    ):
         is_white = moved_color == chess.WHITE
-        gain = (eval_after_cp - eval_before_cp) if is_white else (eval_before_cp - eval_after_cp)
+        gain = (
+            (eval_after_cp - eval_before_cp)
+            if is_white
+            else (eval_before_cp - eval_after_cp)
+        )
         if gain >= 50:
             motifs.append(TacticalMotif.SACRIFICE)
 
@@ -467,7 +500,9 @@ def detect_tactical_motifs(
     if _clearance_move(board_before, move, moved_color):
         motifs.append(TacticalMotif.CLEARANCE)
 
-    if board_before.is_capture(move) and board_before.is_attacked_by(enemy, move.from_square):
+    if board_before.is_capture(move) and board_before.is_attacked_by(
+        enemy, move.from_square
+    ):
         motifs.append(TacticalMotif.DESPERADO)
 
     if (
@@ -478,7 +513,11 @@ def detect_tactical_motifs(
         and eval_after_cp is not None
     ):
         is_w = moved_color == chess.WHITE
-        drop = (eval_after_cp - eval_before_cp) if is_w else (eval_before_cp - eval_after_cp)
+        drop = (
+            (eval_after_cp - eval_before_cp)
+            if is_w
+            else (eval_before_cp - eval_after_cp)
+        )
         if drop <= 40:
             motifs.append(TacticalMotif.POSITIONAL_PAWN_SAC)
 
@@ -494,8 +533,8 @@ def detect_tactical_motifs(
         ):
             motifs.append(TacticalMotif.TRADE_TO_DEFUSE_ATTACK)
 
-    seen: Set[TacticalMotif] = set()
-    out: List[TacticalMotif] = []
+    seen: set[TacticalMotif] = set()
+    out: list[TacticalMotif] = []
     for m in motifs:
         if m not in seen:
             seen.add(m)

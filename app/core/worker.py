@@ -1,16 +1,21 @@
 import asyncio
 import logging
-import traceback
 import os
+import traceback
+
+from app.core.commentary.advanced_comment_service import AdvancedCommentService
+from app.core.commentary.pipeline.game_pipeline import GameAnnotationPipeline
+from app.core.commentary.tantivy_positional_retriever import get_default_retriever
+from app.core.engine.analysis_retriever import (
+    assemble_game_json,
+    run_engine_analysis_to_json,
+)
+from app.core.engine.engine_connector import get_global_engine_connector
 from app.core.queue_manager import queue_manager
 from app.models.job import JobStatus
-from app.core.engine.engine_connector import get_global_engine_connector
-from app.core.commentary.advanced_comment_service import AdvancedCommentService
-from app.core.commentary.tantivy_positional_retriever import get_default_retriever
-from app.core.engine.analysis_retriever import assemble_game_json, run_engine_analysis_to_json
-from app.core.commentary.pipeline.game_pipeline import GameAnnotationPipeline
 
 logger = logging.getLogger(__name__)
+
 
 async def analysis_worker():
     logger.info("Worker started, waiting for jobs...")
@@ -20,7 +25,9 @@ async def analysis_worker():
             try:
                 # Use a timeout so we can periodically check for cancellation
                 # if the queue is empty.
-                job_id = await asyncio.wait_for(queue_manager.job_queue.get(), timeout=1.0)
+                job_id = await asyncio.wait_for(
+                    queue_manager.job_queue.get(), timeout=1.0
+                )
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
@@ -28,19 +35,28 @@ async def analysis_worker():
                 break
 
             job_data = queue_manager.get_job_data(job_id)
-            
+
             if not job_data:
                 queue_manager.job_queue.task_done()
                 continue
-            
+
             logger.info(f"Processing job {job_id}")
-            queue_manager.update_job_status(job_id, JobStatus.PROCESSING, progress=0, message="Starting analysis...")
+            queue_manager.update_job_status(
+                job_id, JobStatus.PROCESSING, progress=0, message="Starting analysis..."
+            )
 
             try:
                 pgn_string = job_data["pgn"]
-                
-                async def progress_callback(percentage: float, message: str):
-                    queue_manager.update_job_status(job_id, JobStatus.PROCESSING, progress=percentage, message=message)
+
+                async def progress_callback(
+                    percentage: float, message: str, job_id=job_id
+                ):
+                    queue_manager.update_job_status(
+                        job_id,
+                        JobStatus.PROCESSING,
+                        progress=percentage,
+                        message=message,
+                    )
                     await asyncio.sleep(0)
 
                 _, state = await run_engine_analysis_to_json(
@@ -65,17 +81,27 @@ async def analysis_worker():
                     message="Engine analysis done, generating commentary...",
                 )
 
-                prov = (job_data.get("llm_provider") or os.environ.get("LLM_DEFAULT_PROVIDER") or "openai").strip().lower()
+                prov = (
+                    (
+                        job_data.get("llm_provider")
+                        or os.environ.get("LLM_DEFAULT_PROVIDER")
+                        or "openai"
+                    )
+                    .strip()
+                    .lower()
+                )
                 advanced_commenter = AdvancedCommentService(
                     rag_retriever=get_default_retriever(),
                     provider_key=prov,
                 )
 
-                async def commentary_callback(msg_type: str, payload: dict):
+                async def commentary_callback(
+                    msg_type: str, payload: dict, job_id=job_id
+                ):
                     queue_manager.buffer_commentary(job_id, msg_type, payload)
                     await queue_manager.broadcast_to_job_ws(job_id, msg_type, payload)
 
-                async def llm_progress(percentage: float, message: str):
+                async def llm_progress(percentage: float, message: str, job_id=job_id):
                     queue_manager.update_job_status(
                         job_id,
                         JobStatus.ENGINE_COMPLETE,
@@ -89,7 +115,10 @@ async def analysis_worker():
                     advanced_commenter,
                     progress_callback=llm_progress,
                     commentary_callback=commentary_callback,
-                    llm_effort=job_data.get("llm_effort") or os.environ.get("LLM_DEFAULT_EFFORT"),
+                    llm_effort=job_data.get("llm_effort")
+                    or os.environ.get("LLM_DEFAULT_EFFORT"),
+                    commentary_level=job_data.get("commentary_level"),
+                    comment_side=job_data.get("comment_side"),
                 )
 
                 final_json = assemble_game_json(state)
@@ -97,11 +126,18 @@ async def analysis_worker():
                     f.write(final_json.model_dump_json(indent=2))
 
                 queue_manager.clear_commentary_buffer(job_id)
-                queue_manager.update_job_status(job_id, JobStatus.COMPLETED, progress=100, message="Analysis complete")
-                
+                queue_manager.update_job_status(
+                    job_id,
+                    JobStatus.COMPLETED,
+                    progress=100,
+                    message="Analysis complete",
+                )
+
             except asyncio.CancelledError:
                 logger.info(f"Job {job_id} cancelled.")
-                queue_manager.mark_failed(job_id, "Analysis cancelled by server shutdown.")
+                queue_manager.mark_failed(
+                    job_id, "Analysis cancelled by server shutdown."
+                )
                 raise
 
             except Exception as e:

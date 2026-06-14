@@ -3,10 +3,11 @@ Inline annotation tokens for LLM commentary: [type:content] syntax.
 
 Resolved token payloads are JSON-serializable dicts for the frontend.
 """
+
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import chess
 
@@ -23,9 +24,9 @@ _FILE_CANDIDATE_RE = re.compile(r"\b(?:the\s+)?([a-hA-H])-file\b")
 KNOWN_TYPES = frozenset({"pv", "move", "square", "file", "eval", "piece"})
 
 
-def parse_tokens(text: str) -> List[Dict[str, Any]]:
+def parse_tokens(text: str) -> list[dict[str, Any]]:
     """Find all [type:content] tokens in text."""
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for m in TOKEN_RE.finditer(text or ""):
         out.append(
             {
@@ -39,12 +40,12 @@ def parse_tokens(text: str) -> List[Dict[str, Any]]:
     return out
 
 
-def _split_san_moves(content: str) -> List[str]:
+def _split_san_moves(content: str) -> list[str]:
     """Split PV content on whitespace into SAN tokens."""
     return [p for p in (content or "").split() if p]
 
 
-def _resolve_pv_line(content: str, start_fen: str) -> Optional[List[Dict[str, str]]]:
+def _resolve_pv_line(content: str, start_fen: str) -> list[dict[str, str]] | None:
     """Replay space-separated SAN from start_fen; return list of {san, fen, from, to}."""
     moves = _split_san_moves(content)
     if not moves:
@@ -53,7 +54,7 @@ def _resolve_pv_line(content: str, start_fen: str) -> Optional[List[Dict[str, st
         board = chess.Board(start_fen)
     except Exception:
         return None
-    out: List[Dict[str, str]] = []
+    out: list[dict[str, str]] = []
     for san in moves:
         try:
             mv = board.parse_san(san)
@@ -73,7 +74,7 @@ def _resolve_pv_line(content: str, start_fen: str) -> Optional[List[Dict[str, st
     return out if out else None
 
 
-def _resolve_single_move(content: str, fen_before: str) -> Optional[Dict[str, str]]:
+def _resolve_single_move(content: str, fen_before: str) -> dict[str, str] | None:
     """Parse one SAN on fen_before; return from, to, san."""
     san = (content or "").strip().split()
     if len(san) != 1:
@@ -88,7 +89,7 @@ def _resolve_single_move(content: str, fen_before: str) -> Optional[Dict[str, st
         return None
 
 
-def _parse_square(content: str) -> Optional[str]:
+def _parse_square(content: str) -> str | None:
     s = (content or "").strip().lower()
     if len(s) != 2:
         return None
@@ -97,14 +98,14 @@ def _parse_square(content: str) -> Optional[str]:
     return s
 
 
-def _parse_file(content: str) -> Optional[str]:
+def _parse_file(content: str) -> str | None:
     s = (content or "").strip().lower()
     if len(s) != 1 or s not in "abcdefgh":
         return None
     return s
 
 
-def _parse_eval(content: str) -> Optional[float]:
+def _parse_eval(content: str) -> float | None:
     t = (content or "").strip().replace(",", ".")
     try:
         return float(t)
@@ -112,7 +113,7 @@ def _parse_eval(content: str) -> Optional[float]:
         return None
 
 
-def _parse_piece_square(content: str) -> Optional[Dict[str, str]]:
+def _parse_piece_square(content: str) -> dict[str, str] | None:
     """
     Expect piece letter (PNBRQK) + square, e.g. Nd7, Bg5.
     Highlights the destination square.
@@ -135,7 +136,7 @@ def resolve_tokens(
     text: str,
     fen_before: str,
     fen_after: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Parse and resolve all tokens in `text`.
 
@@ -146,7 +147,7 @@ def resolve_tokens(
     `data` is None if unknown type or resolution failed.
     """
     parsed = parse_tokens(text)
-    resolved: List[Dict[str, Any]] = []
+    resolved: list[dict[str, Any]] = []
     default_fen = chess.Board().fen()
     fb = fen_before or default_fen
     fa = fen_after or default_fen
@@ -157,7 +158,7 @@ def resolve_tokens(
         raw = p["raw"]
         start = p["start"]
         end = p["end"]
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "type": t,
             "raw": raw,
             "content": content,
@@ -170,12 +171,21 @@ def resolve_tokens(
             resolved.append(entry)
             continue
 
-        data: Optional[Dict[str, Any]] = None
+        data: dict[str, Any] | None = None
         try:
             if t == "pv":
-                line = _resolve_pv_line(content, fa)
-                if line:
-                    data = {"line": line}
+                # Guid display lines start WITH the played move (replay from
+                # fen_before); plain continuations start after it (fen_after).
+                # Try both and keep the resolution that covers more plies.
+                best_fen: str | None = None
+                best_line: list[dict[str, str]] | None = None
+                for candidate_fen in (fb, fa):
+                    line = _resolve_pv_line(content, candidate_fen)
+                    if line and (best_line is None or len(line) > len(best_line)):
+                        best_fen = candidate_fen
+                        best_line = line
+                if best_line:
+                    data = {"line": best_line, "start_fen": best_fen}
             elif t == "move":
                 m = _resolve_single_move(content, fb)
                 if m:
@@ -207,9 +217,9 @@ def resolve_tokens(
 
 def resolve_tokens_for_comment(
     text: str,
-    fen_before: Optional[str],
-    fen_after: Optional[str],
-) -> List[Dict[str, Any]]:
+    fen_before: str | None,
+    fen_after: str | None,
+) -> list[dict[str, Any]]:
     """Convenience wrapper with safe defaults."""
     return resolve_tokens(
         text,
@@ -218,15 +228,12 @@ def resolve_tokens_for_comment(
     )
 
 
-def _existing_token_spans(text: str) -> List[Tuple[int, int]]:
+def _existing_token_spans(text: str) -> list[tuple[int, int]]:
     return [(p["start"], p["end"]) for p in parse_tokens(text)]
 
 
-def _spans_overlap(start: int, end: int, spans: List[Tuple[int, int]]) -> bool:
-    for s, e in spans:
-        if start < e and end > s:
-            return True
-    return False
+def _spans_overlap(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
+    return any(start < e and end > s for s, e in spans)
 
 
 def _san_legal_on_fen(fen: str, san: str) -> bool:
@@ -250,7 +257,7 @@ def auto_tokenize(text: str, fen_before: str, fen_after: str) -> str:
     fb = fen_before or chess.Board().fen()
     fa = fen_after or chess.Board().fen()
     spans = _existing_token_spans(text)
-    edits: List[Tuple[int, int, str]] = []
+    edits: list[tuple[int, int, str]] = []
 
     for m in _EVAL_CANDIDATE_RE.finditer(text):
         s, e = m.start(), m.end()

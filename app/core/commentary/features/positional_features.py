@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 import chess
 
-
-FILES = [
-    [chess.square(file_idx, rank) for rank in range(8)] for file_idx in range(8)
-]
+FILES = [[chess.square(file_idx, rank) for rank in range(8)] for file_idx in range(8)]
 
 CENTER_SQUARES = [
     chess.D4,
@@ -57,8 +54,8 @@ def _is_light_square(square: int) -> bool:
     return (file_idx + rank_idx) % 2 == 0
 
 
-def _pawn_files(board: chess.Board, color: chess.Color) -> Dict[int, List[int]]:
-    files: Dict[int, List[int]] = {}
+def _pawn_files(board: chess.Board, color: chess.Color) -> dict[int, list[int]]:
+    files: dict[int, list[int]] = {}
     for sq in board.pieces(chess.PAWN, color):
         fi = _file_index(sq)
         files.setdefault(fi, []).append(sq)
@@ -84,13 +81,17 @@ def _is_passed_pawn(board: chess.Board, pawn_sq: int, color: chess.Color) -> boo
     return True
 
 
-def _open_and_semi_open_files(board: chess.Board) -> Dict[str, List[int]]:
-    open_files: List[int] = []
-    semi_open_white: List[int] = []
-    semi_open_black: List[int] = []
+def _open_and_semi_open_files(board: chess.Board) -> dict[str, list[int]]:
+    open_files: list[int] = []
+    semi_open_white: list[int] = []
+    semi_open_black: list[int] = []
     for f in range(8):
-        has_white_pawn = any(sq in board.pieces(chess.PAWN, chess.WHITE) for sq in FILES[f])
-        has_black_pawn = any(sq in board.pieces(chess.PAWN, chess.BLACK) for sq in FILES[f])
+        has_white_pawn = any(
+            sq in board.pieces(chess.PAWN, chess.WHITE) for sq in FILES[f]
+        )
+        has_black_pawn = any(
+            sq in board.pieces(chess.PAWN, chess.BLACK) for sq in FILES[f]
+        )
         if not has_white_pawn and not has_black_pawn:
             open_files.append(f)
         else:
@@ -105,9 +106,16 @@ def _open_and_semi_open_files(board: chess.Board) -> Dict[str, List[int]]:
     }
 
 
-def _side_squares(board: chess.Board, color: chess.Color) -> Set[int]:
-    squares: Set[int] = set()
-    for pt in (chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING):
+def _side_squares(board: chess.Board, color: chess.Color) -> set[int]:
+    squares: set[int] = set()
+    for pt in (
+        chess.PAWN,
+        chess.KNIGHT,
+        chess.BISHOP,
+        chess.ROOK,
+        chess.QUEEN,
+        chess.KING,
+    ):
         squares.update(board.pieces(pt, color))
     return squares
 
@@ -120,12 +128,12 @@ def _minor_major_count(board: chess.Board) -> int:
     return s
 
 
-def _attacked_and_attacking(board: chess.Board, color: chess.Color) -> Dict[str, int]:
+def _attacked_and_attacking(board: chess.Board, color: chess.Color) -> dict[str, int]:
     enemy = not color
     own_sqs = _side_squares(board, color)
     enemy_sqs = _side_squares(board, enemy)
     attacked_pieces = sum(1 for sq in own_sqs if board.is_attacked_by(enemy, sq))
-    attackers: Set[int] = set()
+    attackers: set[int] = set()
     for sq in enemy_sqs:
         for atk_sq in board.attackers(color, sq):
             attackers.add(atk_sq)
@@ -148,16 +156,21 @@ def _center_control(board: chess.Board, color: chess.Color) -> int:
     return sum(1 for sq in CENTER_SQUARES if board.is_attacked_by(color, sq))
 
 
-def _king_safety(board: chess.Board, color: chess.Color) -> Dict[str, int]:
+def _king_safety(board: chess.Board, color: chess.Color) -> dict[str, int]:
     king_sq = board.king(color)
     if king_sq is None:
-        return {"kingShieldPawns": 0, "openFilesAdjacent": 0, "semiOpenFilesAdjacent": 0, "kingZoneAttacks": 0}
+        return {
+            "kingShieldPawns": 0,
+            "openFilesAdjacent": 0,
+            "semiOpenFilesAdjacent": 0,
+            "kingZoneAttacks": 0,
+        }
 
     king_file = chess.square_file(king_sq)
     king_rank = chess.square_rank(king_sq)
     forward = 1 if color == chess.WHITE else -1
 
-    shield_squares: List[int] = []
+    shield_squares: list[int] = []
     for df in (-1, 0, 1):
         f = king_file + df
         if 0 <= f <= 7:
@@ -166,15 +179,21 @@ def _king_safety(board: chess.Board, color: chess.Color) -> Dict[str, int]:
                 if 0 <= r <= 7:
                     shield_squares.append(chess.square(f, r))
     king_shield_pawns = sum(
-        1 for sq in shield_squares if board.piece_at(sq) == chess.Piece(chess.PAWN, color)
+        1
+        for sq in shield_squares
+        if board.piece_at(sq) == chess.Piece(chess.PAWN, color)
     )
 
-    adjacent_files = {f for f in (king_file - 1, king_file, king_file + 1) if 0 <= f <= 7}
+    adjacent_files = {
+        f for f in (king_file - 1, king_file, king_file + 1) if 0 <= f <= 7
+    }
     open_adjacent = 0
     semi_open_adjacent = 0
     for f in adjacent_files:
         has_own_pawn = any(sq in board.pieces(chess.PAWN, color) for sq in FILES[f])
-        has_enemy_pawn = any(sq in board.pieces(chess.PAWN, not color) for sq in FILES[f])
+        has_enemy_pawn = any(
+            sq in board.pieces(chess.PAWN, not color) for sq in FILES[f]
+        )
         if not has_own_pawn and not has_enemy_pawn:
             open_adjacent += 1
         elif not has_own_pawn and has_enemy_pawn:
@@ -194,7 +213,7 @@ def _king_safety(board: chess.Board, color: chess.Color) -> Dict[str, int]:
     }
 
 
-def _material_snapshot(board: chess.Board) -> Dict[str, Dict]:
+def _material_snapshot(board: chess.Board) -> dict[str, dict]:
     values = {"p": 1, "n": 3, "b": 3, "r": 5, "q": 9}
     counts_white = {
         "p": len(board.pieces(chess.PAWN, chess.WHITE)),
@@ -215,7 +234,7 @@ def _material_snapshot(board: chess.Board) -> Dict[str, Dict]:
     diff = {k: counts_white[k] - counts_black[k] for k in values}
     diff["total"] = total_white - total_black
 
-    imbalance: List[str] = []
+    imbalance: list[str] = []
     if diff["r"] != 0 or diff["b"] != 0 or diff["n"] != 0:
         if diff["r"] == -1 and (diff["b"] + diff["n"]) >= 2:
             imbalance.append("twoMinorsForRook")
@@ -252,17 +271,17 @@ def _is_weak_square(board: chess.Board, sq: int, for_color: chess.Color) -> bool
     return True
 
 
-def _weak_squares_full_board(board: chess.Board, color: chess.Color) -> List[str]:
-    out: List[str] = []
+def _weak_squares_full_board(board: chess.Board, color: chess.Color) -> list[str]:
+    out: list[str] = []
     for sq in chess.SQUARES:
         if _is_weak_square(board, sq, color):
             out.append(_sq_name(sq))
     return out
 
 
-def _holes(board: chess.Board, color: chess.Color) -> List[str]:
+def _holes(board: chess.Board, color: chess.Color) -> list[str]:
     """Weak squares in own half (can't be defended by own pawns)."""
-    out: List[str] = []
+    out: list[str] = []
     for sq in chess.SQUARES:
         r = chess.square_rank(sq)
         if color == chess.WHITE and r > 3:
@@ -274,7 +293,7 @@ def _holes(board: chess.Board, color: chess.Color) -> List[str]:
     return out
 
 
-def _outposts(board: chess.Board, color: chess.Color) -> Dict[str, List[str]]:
+def _outposts(board: chess.Board, color: chess.Color) -> dict[str, list[str]]:
     enemy = not color
     own_pawns = board.pieces(chess.PAWN, color)
 
@@ -283,8 +302,8 @@ def _outposts(board: chess.Board, color: chess.Color) -> Dict[str, List[str]]:
     else:
         rank_range = range(2, 5)
 
-    occupied: List[str] = []
-    available: List[str] = []
+    occupied: list[str] = []
+    available: list[str] = []
 
     for rank in rank_range:
         for file_idx in range(8):
@@ -313,7 +332,11 @@ def _outposts(board: chess.Board, color: chess.Color) -> Dict[str, List[str]]:
 
             name = _sq_name(sq)
             piece = board.piece_at(sq)
-            if piece and piece.color == color and piece.piece_type in (chess.KNIGHT, chess.BISHOP):
+            if (
+                piece
+                and piece.color == color
+                and piece.piece_type in (chess.KNIGHT, chess.BISHOP)
+            ):
                 occupied.append(name)
             else:
                 available.append(name)
@@ -321,7 +344,7 @@ def _outposts(board: chess.Board, color: chess.Color) -> Dict[str, List[str]]:
     return {"occupied": occupied, "available": available}
 
 
-def _bishop_quality(board: chess.Board, color: chess.Color) -> Dict[str, int]:
+def _bishop_quality(board: chess.Board, color: chess.Color) -> dict[str, int]:
     bishops = list(board.pieces(chess.BISHOP, color))
     own_pawns = list(board.pieces(chess.PAWN, color))
     good = 0
@@ -336,7 +359,7 @@ def _bishop_quality(board: chess.Board, color: chess.Color) -> Dict[str, int]:
     return {"goodBishops": good, "badBishops": bad}
 
 
-def _pawn_structure_classification(board: chess.Board) -> Dict[str, object]:
+def _pawn_structure_classification(board: chess.Board) -> dict[str, object]:
     white_pawns = board.pieces(chess.PAWN, chess.WHITE)
     black_pawns = board.pieces(chess.PAWN, chess.BLACK)
 
@@ -352,7 +375,7 @@ def _pawn_structure_classification(board: chess.Board) -> Dict[str, object]:
         if chess.square_file(sq) in center_files and 2 <= chess.square_rank(sq) <= 5
     ]
 
-    tension: List[str] = []
+    tension: list[str] = []
     for wp in white_pawns:
         wf, wr = chess.square_file(wp), chess.square_rank(wp)
         for df in (-1, 1):
@@ -377,7 +400,7 @@ def _pawn_structure_classification(board: chess.Board) -> Dict[str, object]:
     else:
         center_type = "semi-open"
 
-    breaks: List[str] = []
+    breaks: list[str] = []
     for color, own_pawns_set, enemy_pawns_set, forward in [
         (chess.WHITE, white_pawns, black_pawns, 1),
         (chess.BLACK, black_pawns, white_pawns, -1),
@@ -385,7 +408,9 @@ def _pawn_structure_classification(board: chess.Board) -> Dict[str, object]:
         side = "White" if color == chess.WHITE else "Black"
         for pawn_sq in own_pawns_set:
             pf, pr = chess.square_file(pawn_sq), chess.square_rank(pawn_sq)
-            advance_sq = chess.square(pf, pr + forward) if 0 <= pr + forward <= 7 else None
+            advance_sq = (
+                chess.square(pf, pr + forward) if 0 <= pr + forward <= 7 else None
+            )
             if advance_sq is None:
                 continue
             if board.piece_at(advance_sq) is not None:
@@ -424,7 +449,9 @@ def _centralization(board: chess.Board, color: chess.Color) -> float:
     total = 0.0
     for sq in pieces:
         f, r = chess.square_file(sq), chess.square_rank(sq)
-        min_dist = min(abs(f - cf) + abs(r - cr) for cf, cr in [(3, 3), (3, 4), (4, 3), (4, 4)])
+        min_dist = min(
+            abs(f - cf) + abs(r - cr) for cf, cr in [(3, 3), (3, 4), (4, 3), (4, 4)]
+        )
         total += max(0, 4 - min_dist)
     return round(total / len(pieces), 2)
 
@@ -439,11 +466,12 @@ def _king_exposure(board: chess.Board, color: chess.Color) -> float:
     king_sq = board.king(color)
     if king_sq is not None:
         king_file = chess.square_file(king_sq)
-        if 2 <= king_file <= 5:
-            if not board.has_kingside_castling_rights(color) and not board.has_queenside_castling_rights(
-                color
-            ):
-                score += 2.0
+        if (
+            2 <= king_file <= 5
+            and not board.has_kingside_castling_rights(color)
+            and not board.has_queenside_castling_rights(color)
+        ):
+            score += 2.0
     return round(min(10.0, score), 1)
 
 
@@ -466,12 +494,12 @@ def _clear_between(board: chess.Board, a: int, b: int) -> bool:
     return True
 
 
-def _batteries(board: chess.Board, color: chess.Color) -> List[str]:
+def _batteries(board: chess.Board, color: chess.Color) -> list[str]:
     queens = list(board.pieces(chess.QUEEN, color))
     bishops = list(board.pieces(chess.BISHOP, color))
     rooks = list(board.pieces(chess.ROOK, color))
 
-    result: List[str] = []
+    result: list[str] = []
     for q in queens:
         qf, qr = chess.square_file(q), chess.square_rank(q)
         for b in bishops:
@@ -485,18 +513,18 @@ def _batteries(board: chess.Board, color: chess.Color) -> List[str]:
     return result[:4]
 
 
-def _doubled_pawn_squares(board: chess.Board, color: chess.Color) -> List[str]:
+def _doubled_pawn_squares(board: chess.Board, color: chess.Color) -> list[str]:
     pf = _pawn_files(board, color)
-    out: List[str] = []
+    out: list[str] = []
     for lst in pf.values():
         if len(lst) > 1:
             out.extend(_sq_name(s) for s in lst)
     return sorted(set(out), key=lambda n: (n[1], n[0]))
 
 
-def _isolated_pawn_squares(board: chess.Board, color: chess.Color) -> List[str]:
+def _isolated_pawn_squares(board: chess.Board, color: chess.Color) -> list[str]:
     pf = _pawn_files(board, color)
-    out: List[str] = []
+    out: list[str] = []
     for f, lst in pf.items():
         has_left = (f - 1) in pf
         has_right = (f + 1) in pf
@@ -505,8 +533,10 @@ def _isolated_pawn_squares(board: chess.Board, color: chess.Color) -> List[str]:
     return out
 
 
-def _passed_pawn_records(board: chess.Board, color: chess.Color) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def _passed_pawn_records(
+    board: chess.Board, color: chess.Color
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     for sq in board.pieces(chess.PAWN, color):
         if _is_passed_pawn(board, sq, color):
             human_rank = chess.square_rank(sq) + 1
@@ -514,10 +544,10 @@ def _passed_pawn_records(board: chess.Board, color: chess.Color) -> List[Dict[st
     return sorted(out, key=lambda d: d["sq"])
 
 
-def _backward_pawn_squares(board: chess.Board, color: chess.Color) -> List[str]:
+def _backward_pawn_squares(board: chess.Board, color: chess.Color) -> list[str]:
     enemy = not color
     pf = _pawn_files(board, color)
-    out: List[str] = []
+    out: list[str] = []
     for pawn_sq in board.pieces(chess.PAWN, color):
         pr = chess.square_rank(pawn_sq)
         pf_i = chess.square_file(pawn_sq)
@@ -526,9 +556,9 @@ def _backward_pawn_squares(board: chess.Board, color: chess.Color) -> List[str]:
         if not (0 <= adv_r <= 7):
             continue
         advance_sq = chess.square(pf_i, adv_r)
-        blocked_or_attacked = board.piece_at(advance_sq) is not None or board.is_attacked_by(
-            enemy, advance_sq
-        )
+        blocked_or_attacked = board.piece_at(
+            advance_sq
+        ) is not None or board.is_attacked_by(enemy, advance_sq)
         if not blocked_or_attacked:
             continue
         has_advanced_neighbor = False
@@ -553,8 +583,8 @@ def _backward_pawn_squares(board: chess.Board, color: chess.Color) -> List[str]:
     return out
 
 
-def _contested_squares(board: chess.Board, cap: int = 10) -> List[Dict[str, Any]]:
-    scored: List[Tuple[int, Dict[str, Any]]] = []
+def _contested_squares(board: chess.Board, cap: int = 10) -> list[dict[str, Any]]:
+    scored: list[tuple[int, dict[str, Any]]] = []
     for sq in chess.SQUARES:
         wa = len(board.attackers(chess.WHITE, sq))
         ba = len(board.attackers(chess.BLACK, sq))
@@ -564,11 +594,13 @@ def _contested_squares(board: chess.Board, cap: int = 10) -> List[Dict[str, Any]
     return [d for _, d in scored[:cap]]
 
 
-def _trapped_pieces(board: chess.Board, color: chess.Color, skip: bool) -> List[Dict[str, Any]]:
+def _trapped_pieces(
+    board: chess.Board, color: chess.Color, skip: bool
+) -> list[dict[str, Any]]:
     if skip:
         return []
     enemy = not color
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     original_turn = board.turn
     for sq in _side_squares(board, color):
         piece = board.piece_at(sq)
@@ -587,7 +619,7 @@ def _trapped_pieces(board: chess.Board, color: chess.Color, skip: bool) -> List[
     return out
 
 
-def _king_pawn_tropism(board: chess.Board, color: chess.Color) -> Optional[float]:
+def _king_pawn_tropism(board: chess.Board, color: chess.Color) -> float | None:
     ksq = board.king(color)
     if ksq is None:
         return None
@@ -599,10 +631,10 @@ def _king_pawn_tropism(board: chess.Board, color: chess.Color) -> Optional[float
     return round(tot / len(epawns), 2)
 
 
-def _connectivity(board: chess.Board, color: chess.Color) -> Dict[str, int]:
+def _connectivity(board: chess.Board, color: chess.Color) -> dict[str, int]:
     own = _side_squares(board, color)
-    adj: Dict[int, Set[int]] = {sq: set() for sq in own}
-    defenders: Set[int] = set()
+    adj: dict[int, set[int]] = {sq: set() for sq in own}
+    defenders: set[int] = set()
     for defender_sq in own:
         piece = board.piece_at(defender_sq)
         if piece is None or piece.piece_type == chess.KING:
@@ -614,13 +646,13 @@ def _connectivity(board: chess.Board, color: chess.Color) -> Dict[str, int]:
                 defenders.add(defender_sq)
                 adj[defender_sq].add(target_sq)
                 adj[target_sq].add(defender_sq)
-    visited: Set[int] = set()
+    visited: set[int] = set()
     chains = 0
     for sq in own:
         if sq in visited:
             continue
         stack = [sq]
-        comp: List[int] = []
+        comp: list[int] = []
         while stack:
             u = stack.pop()
             if u in visited:
@@ -635,11 +667,11 @@ def _connectivity(board: chess.Board, color: chess.Color) -> Dict[str, int]:
     return {"defenders": len(defenders), "chains": chains}
 
 
-def _pawn_islands(board: chess.Board, color: chess.Color) -> Dict[str, Any]:
+def _pawn_islands(board: chess.Board, color: chess.Color) -> dict[str, Any]:
     pf = sorted(_pawn_files(board, color).keys())
     if not pf:
         return {"count": 0, "runs": []}
-    runs: List[str] = []
+    runs: list[str] = []
     start = prev = pf[0]
     for f in pf[1:]:
         if f == prev + 1:
@@ -651,8 +683,8 @@ def _pawn_islands(board: chess.Board, color: chess.Color) -> Dict[str, Any]:
     return {"count": len(runs), "runs": runs}
 
 
-def _blockades(board: chess.Board) -> List[Dict[str, str]]:
-    out: List[Dict[str, str]] = []
+def _blockades(board: chess.Board) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
     for color in (chess.WHITE, chess.BLACK):
         enemy = not color
         fwd = 1 if color == chess.WHITE else -1
@@ -668,7 +700,11 @@ def _blockades(board: chess.Board) -> List[Dict[str, str]]:
             if pc and pc.color == enemy and pc.piece_type != chess.PAWN:
                 side = "white" if color == chess.WHITE else "black"
                 out.append(
-                    {"passer": _sq_name(psq), "blocker": _sq_name(front_sq), "side": side}
+                    {
+                        "passer": _sq_name(psq),
+                        "blocker": _sq_name(front_sq),
+                        "side": side,
+                    }
                 )
     return out
 
@@ -683,8 +719,8 @@ def _opposite_color_bishops(board: chess.Board) -> bool:
     return wl != bl
 
 
-def _wrong_rook_pawn_flags(board: chess.Board) -> List[Dict[str, str]]:
-    out: List[Dict[str, str]] = []
+def _wrong_rook_pawn_flags(board: chess.Board) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
     for color in (chess.WHITE, chess.BLACK):
         bishops = list(board.pieces(chess.BISHOP, color))
         if len(bishops) != 1:
@@ -705,7 +741,9 @@ def _wrong_rook_pawn_flags(board: chess.Board) -> List[Dict[str, str]]:
     return out
 
 
-def _mop_up_distance(board: chess.Board, material: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _mop_up_distance(
+    board: chess.Board, material: dict[str, Any]
+) -> dict[str, Any] | None:
     diff = material.get("diff") if isinstance(material.get("diff"), dict) else {}
     total = diff.get("total")
     if not isinstance(total, (int, float)) or abs(total) < 500:
@@ -730,13 +768,12 @@ def _pawn_heavy_no_major(board: chess.Board) -> bool:
     return rq == 0
 
 
-def _rule_of_square_flags(board: chess.Board) -> List[Dict[str, Any]]:
+def _rule_of_square_flags(board: chess.Board) -> list[dict[str, Any]]:
     if not _pawn_heavy_no_major(board):
         return []
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for color in (chess.WHITE, chess.BLACK):
         enemy_k = board.king(not color)
-        pr_fwd = 1 if color == chess.WHITE else -1
         promo_r = 7 if color == chess.WHITE else 0
         for psq in board.pieces(chess.PAWN, color):
             if not _is_passed_pawn(board, psq, color):
@@ -747,11 +784,17 @@ def _rule_of_square_flags(board: chess.Board) -> List[Dict[str, Any]]:
             dist_k = chess.square_distance(enemy_k, promo_sq)
             tempo_bonus = 1 if board.turn == color else 0
             wins_race = steps + tempo_bonus <= dist_k
-            out.append({"sq": _sq_name(psq), "side": "white" if color == chess.WHITE else "black", "promotionRaceOk": wins_race})
+            out.append(
+                {
+                    "sq": _sq_name(psq),
+                    "side": "white" if color == chess.WHITE else "black",
+                    "promotionRaceOk": wins_race,
+                }
+            )
     return out
 
 
-def _opening_tempo_snapshot(board: chess.Board) -> Dict[str, int]:
+def _opening_tempo_snapshot(board: chess.Board) -> dict[str, int]:
     w_home = sum(
         1
         for pt in (chess.KNIGHT, chess.BISHOP)
@@ -768,7 +811,7 @@ def _opening_tempo_snapshot(board: chess.Board) -> Dict[str, int]:
     return {"minorPiecesStillHome": w_home + b_home, "developedScore": developed}
 
 
-def _is_empty_for_drop(key: Optional[str], val: Any) -> bool:
+def _is_empty_for_drop(key: str | None, val: Any) -> bool:
     if key in CASTLING_KEYS:
         return False
     if key in KEEP_ZERO_METRICS and isinstance(val, (int, float)) and val == 0:
@@ -781,14 +824,12 @@ def _is_empty_for_drop(key: Optional[str], val: Any) -> bool:
         return True
     if val == [] or val == {}:
         return True
-    if val == "":
-        return True
-    return False
+    return val == ""
 
 
-def _drop_empty(obj: Any, *, _top_level_key: Optional[str] = None) -> Any:
+def _drop_empty(obj: Any, *, _top_level_key: str | None = None) -> Any:
     if isinstance(obj, dict):
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for k, v in obj.items():
             if _top_level_key is None and k in PROTECTED_TOP_LEVEL_KEYS:
                 out[k] = _drop_empty(v, _top_level_key=k)
@@ -806,21 +847,21 @@ def _drop_empty(obj: Any, *, _top_level_key: Optional[str] = None) -> Any:
 
 
 def _build_board_overlay(
-    files_info: Dict[str, List[int]],
-    white: Dict[str, Any],
-    black: Dict[str, Any],
-    contested: List[Dict[str, Any]],
-    pawn_structure: Dict[str, Any],
-    trapped_w: List[Dict[str, Any]],
-    trapped_b: List[Dict[str, Any]],
-) -> Dict[str, Any]:
+    files_info: dict[str, list[int]],
+    white: dict[str, Any],
+    black: dict[str, Any],
+    contested: list[dict[str, Any]],
+    pawn_structure: dict[str, Any],
+    trapped_w: list[dict[str, Any]],
+    trapped_b: list[dict[str, Any]],
+) -> dict[str, Any]:
     ow = white.get("outposts") if isinstance(white.get("outposts"), dict) else {}
     ob = black.get("outposts") if isinstance(black.get("outposts"), dict) else {}
 
-    def _files_to_letters(idx_list: List[int]) -> List[str]:
+    def _files_to_letters(idx_list: list[int]) -> list[str]:
         return [FILE_NAMES[i] for i in idx_list]
 
-    overlay: Dict[str, Any] = {
+    overlay: dict[str, Any] = {
         "openFiles": _files_to_letters(list(files_info.get("open", []))),
         "semiOpenWhite": _files_to_letters(list(files_info.get("semiOpenWhite", []))),
         "semiOpenBlack": _files_to_letters(list(files_info.get("semiOpenBlack", []))),
@@ -831,12 +872,20 @@ def _build_board_overlay(
         "contestedSquares": contested,
         "outpostsWhite": (ow.get("occupied") or []) + (ow.get("available") or []),
         "outpostsBlack": (ob.get("occupied") or []) + (ob.get("available") or []),
-        "passedPawnsWhite": [x["sq"] for x in white.get("passedPawns", []) if isinstance(x, dict)],
-        "passedPawnsBlack": [x["sq"] for x in black.get("passedPawns", []) if isinstance(x, dict)],
+        "passedPawnsWhite": [
+            x["sq"] for x in white.get("passedPawns", []) if isinstance(x, dict)
+        ],
+        "passedPawnsBlack": [
+            x["sq"] for x in black.get("passedPawns", []) if isinstance(x, dict)
+        ],
         "doubledPawnsWhite": white.get("doubledPawns"),
         "doubledPawnsBlack": black.get("doubledPawns"),
-        "pawnBreaks": pawn_structure.get("breaks") if isinstance(pawn_structure, dict) else [],
-        "trappedPieces": [{"sq": x["sq"], "piece": x["piece"], "color": "w"} for x in trapped_w]
+        "pawnBreaks": pawn_structure.get("breaks")
+        if isinstance(pawn_structure, dict)
+        else [],
+        "trappedPieces": [
+            {"sq": x["sq"], "piece": x["piece"], "color": "w"} for x in trapped_w
+        ]
         + [{"sq": x["sq"], "piece": x["piece"], "color": "b"} for x in trapped_b],
     }
     return overlay
@@ -844,9 +893,9 @@ def _build_board_overlay(
 
 def compute_hidden_features(
     board: chess.Board, *, in_opening_book_phase: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Dense positional features for both sides + UI overlay. Numeric features are absolute per side."""
-    features: Dict[str, Any] = {}
+    features: dict[str, Any] = {}
 
     files_info = _open_and_semi_open_files(board)
     material = _material_snapshot(board)
@@ -862,7 +911,7 @@ def compute_hidden_features(
     contested = _contested_squares(board, cap=10)
 
     for color, label in ((chess.WHITE, "white"), (chess.BLACK, "black")):
-        side: Dict[str, Any] = {}
+        side: dict[str, Any] = {}
 
         num_bishops = len(board.pieces(chess.BISHOP, color))
         num_knights = len(board.pieces(chess.KNIGHT, color))
@@ -917,9 +966,9 @@ def compute_hidden_features(
             for i in range(len(rooks)):
                 for j in range(i + 1, len(rooks)):
                     a, b = rooks[i], rooks[j]
-                    if chess.square_file(a) == chess.square_file(b) or chess.square_rank(a) == chess.square_rank(
+                    if chess.square_file(a) == chess.square_file(
                         b
-                    ):
+                    ) or chess.square_rank(a) == chess.square_rank(b):
                         if _clear_between(board, a, b):
                             connected = True
                             break
@@ -952,7 +1001,7 @@ def compute_hidden_features(
         features["tempo"] = _opening_tempo_snapshot(board)
 
     if is_endgame:
-        eg: Dict[str, Any] = {}
+        eg: dict[str, Any] = {}
         blk = _blockades(board)
         if blk:
             eg["blockades"] = blk

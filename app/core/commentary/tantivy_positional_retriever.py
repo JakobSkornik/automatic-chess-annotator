@@ -6,7 +6,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import chess
 import tantivy
@@ -65,7 +65,7 @@ def _jaccard_tokens(a: str, b: str) -> float:
     return len(sa & sb) / len(union)
 
 
-def _field_boosts_for_phase(phase: str) -> List[Tuple[str, float]]:
+def _field_boosts_for_phase(phase: str) -> list[tuple[str, float]]:
     """Field boosts: phase-specific emphasis (quiet middlegame weights structure)."""
     p = (phase or "middlegame").lower()
     if p == "opening":
@@ -105,7 +105,7 @@ def _field_boosts_for_phase(phase: str) -> List[Tuple[str, float]]:
     ]
 
 
-def _material_tuple(board: chess.Board) -> Tuple[int, ...]:
+def _material_tuple(board: chess.Board) -> tuple[int, ...]:
     return tuple(
         len(board.pieces(pt, c))
         for c in (chess.WHITE, chess.BLACK)
@@ -134,16 +134,20 @@ def _king_placement_match(bq: chess.Board, bd: chess.Board) -> float:
         return 1.0
     wf_q, wf_d = chess.square_file(wkq), chess.square_file(wkd)
     bf_q, bf_d = chess.square_file(bkq), chess.square_file(bkd)
-    if _king_side_bucket(wf_q) == _king_side_bucket(wf_d) and _king_side_bucket(bf_q) == _king_side_bucket(
-        bf_d
-    ):
+    if _king_side_bucket(wf_q) == _king_side_bucket(wf_d) and _king_side_bucket(
+        bf_q
+    ) == _king_side_bucket(bf_d):
         return 0.5
     return 0.0
 
 
 def _pawn_skeleton_jaccard(bq: chess.Board, bd: chess.Board) -> float:
-    wq = set(bq.pieces(chess.PAWN, chess.WHITE)) | set(bq.pieces(chess.PAWN, chess.BLACK))
-    wd = set(bd.pieces(chess.PAWN, chess.WHITE)) | set(bd.pieces(chess.PAWN, chess.BLACK))
+    wq = set(bq.pieces(chess.PAWN, chess.WHITE)) | set(
+        bq.pieces(chess.PAWN, chess.BLACK)
+    )
+    wd = set(bd.pieces(chess.PAWN, chess.WHITE)) | set(
+        bd.pieces(chess.PAWN, chess.BLACK)
+    )
     union = len(wq | wd)
     if union == 0:
         return 1.0
@@ -177,8 +181,8 @@ def _board_similarity_middlegame(
     deco: str,
     *,
     v2: bool,
-    query_phase: Optional[str],
-    ply: Optional[int],
+    query_phase: str | None,
+    ply: int | None,
 ) -> float:
     mat = _material_match(bq, bd)
     king = _king_placement_match(bq, bd)
@@ -230,15 +234,17 @@ class _NoopRetriever(RAGRetriever):
         query: RAGQuery,
         top_k: int = 2,
         *,
-        retrieval_debug: Optional[Dict[str, Any]] = None,
-    ) -> List[RAGResult]:
+        retrieval_debug: dict[str, Any] | None = None,
+    ) -> list[RAGResult]:
         return []
 
 
 def get_default_retriever() -> RAGRetriever:
     raw = os.environ.get("RAG_BM25_PATH")
     if not raw:
-        logger.warning("RAG: RAG_BM25_PATH not set; commentary will run without examples")
+        logger.warning(
+            "RAG: RAG_BM25_PATH not set; commentary will run without examples"
+        )
         return _NoopRetriever()
     path = os.path.abspath(os.path.expanduser(raw.strip()))
     if not os.path.isdir(path):
@@ -253,7 +259,7 @@ class TantivyPositionalRetriever(RAGRetriever):
     def __init__(self, index_path: str) -> None:
         self._path = os.path.abspath(os.path.expanduser(index_path))
         self._index: tantivy.Index | None = None
-        self._corpus_version: Optional[str] = None
+        self._corpus_version: str | None = None
 
     def _get_index(self) -> tantivy.Index:
         if self._index is not None:
@@ -273,8 +279,8 @@ class TantivyPositionalRetriever(RAGRetriever):
         query: RAGQuery,
         top_k: int = 2,
         *,
-        retrieval_debug: Optional[Dict[str, Any]] = None,
-    ) -> List[RAGResult]:
+        retrieval_debug: dict[str, Any] | None = None,
+    ) -> list[RAGResult]:
         if retrieval_debug is not None:
             retrieval_debug.clear()
 
@@ -294,7 +300,9 @@ class TantivyPositionalRetriever(RAGRetriever):
 
         rag_phase = classify_rag_phase(board)
         qeco = (query.eco or "").strip()
-        eco_prefix = (query.eco_prefix or "").strip() or (qeco[:2] if len(qeco) >= 2 else "")
+        eco_prefix = (query.eco_prefix or "").strip() or (
+            qeco[:2] if len(qeco) >= 2 else ""
+        )
         min_score = _min_score_for_phase(rag_phase)
         v2 = self._v2_corpus()
 
@@ -316,7 +324,7 @@ class TantivyPositionalRetriever(RAGRetriever):
 
         index.reload()
         searcher = index.searcher()
-        subqueries: List[tuple] = []
+        subqueries: list[tuple] = []
         for fname, boost in _field_boosts_for_phase(rag_phase):
             if boost <= 0:
                 continue
@@ -339,7 +347,9 @@ class TantivyPositionalRetriever(RAGRetriever):
             return []
 
         try:
-            q_pc = index.parse_query(base_enc["player_color"], default_field_names=["player_color"])
+            q_pc = index.parse_query(
+                base_enc["player_color"], default_field_names=["player_color"]
+            )
         except Exception:
             _dbg(reason="player_color_parse_failed")
             return []
@@ -350,25 +360,36 @@ class TantivyPositionalRetriever(RAGRetriever):
                 q_ph = index.parse_query(rag_phase, default_field_names=["rag_phase"])
                 subqueries.append((Occur.Must, q_ph))
             except Exception as e:
-                logger.warning("Tantivy RAG: rag_phase filter failed; index may be v1. Error: %s", e)
+                logger.warning(
+                    "Tantivy RAG: rag_phase filter failed; index may be v1. Error: %s",
+                    e,
+                )
                 v2 = False
 
         if v2 and rag_phase == "opening" and (qeco or eco_prefix):
             try:
                 if qeco and len(qeco) >= 3:
-                    q_e = index.parse_query(qeco[:16], default_field_names=["opening_eco"])
+                    q_e = index.parse_query(
+                        qeco[:16], default_field_names=["opening_eco"]
+                    )
                     subqueries.append((Occur.Should, Query.boost_query(q_e, 2.2)))
                 if eco_prefix:
-                    q_p = index.parse_query(eco_prefix, default_field_names=["opening_prefix"])
+                    q_p = index.parse_query(
+                        eco_prefix, default_field_names=["opening_prefix"]
+                    )
                     subqueries.append((Occur.Should, Query.boost_query(q_p, 1.4)))
-                q_b = index.parse_query(op_bucket, default_field_names=["opening_ply_bucket"])
+                q_b = index.parse_query(
+                    op_bucket, default_field_names=["opening_ply_bucket"]
+                )
                 subqueries.append((Occur.Should, Query.boost_query(q_b, 1.1)))
             except Exception as e:
                 logger.debug("Opening boost parse skip: %s", e)
 
         if v2 and rag_phase == "endgame" and end_q:
             try:
-                q_e = index.parse_query(end_q, default_field_names=["endgame_signature"])
+                q_e = index.parse_query(
+                    end_q, default_field_names=["endgame_signature"]
+                )
                 subqueries.append((Occur.Should, Query.boost_query(q_e, 0.5)))
             except Exception as e:
                 logger.debug("Endgame extra pass skip: %s", e)
@@ -394,8 +415,8 @@ class TantivyPositionalRetriever(RAGRetriever):
         q_phase = rag_phase
         ply = query.ply
 
-        scored: List[Tuple[float, Any, float]] = []
-        raw_scores: List[float] = []
+        scored: list[tuple[float, Any, float]] = []
+        raw_scores: list[float] = []
         for score, addr in hits:
             try:
                 doc = searcher.doc(addr)
@@ -408,7 +429,7 @@ class TantivyPositionalRetriever(RAGRetriever):
         if max_bm25 <= 0:
             max_bm25 = 1.0
 
-        finals: List[Tuple[float, Any]] = []
+        finals: list[tuple[float, Any]] = []
         for bm25, doc, _addr in scored:
             fen = (doc.get_first("fen") or "").strip()
             pv_san = (doc.get_first("pv_san") or "").strip()
@@ -455,12 +476,32 @@ class TantivyPositionalRetriever(RAGRetriever):
             ann_boost = 1.0 / (1 + max(plies_ann, 0))
             final *= ann_boost
             finals.append(
-                (final, (doc, pv_san, fen, deco, oeco, ann, plies_ann, bm25, d_sig, d_fp, bm25_norm, bsim))
+                (
+                    final,
+                    (
+                        doc,
+                        pv_san,
+                        fen,
+                        deco,
+                        oeco,
+                        ann,
+                        plies_ann,
+                        bm25,
+                        d_sig,
+                        d_fp,
+                        bm25_norm,
+                        bsim,
+                    ),
+                )
             )
 
         finals.sort(key=lambda x: x[0], reverse=True)
         if not finals:
-            _dbg(reason="no_final_scores", rag_phase=rag_phase, min_score_threshold=min_score)
+            _dbg(
+                reason="no_final_scores",
+                rag_phase=rag_phase,
+                min_score_threshold=min_score,
+            )
             return []
         best_score = finals[0][0]
         if best_score < min_score:
@@ -478,14 +519,27 @@ class TantivyPositionalRetriever(RAGRetriever):
             )
             return []
 
-        out: List[RAGResult] = []
+        out: list[RAGResult] = []
         seen_fen: set[str] = set()
         for final, payload in finals:
             if final < min_score:
                 break
             if len(out) >= top_k:
                 break
-            (doc, pv_san, fen, deco, oeco, ann, plies_ann, bm25, d_sig, d_fp, bm25n, bsim) = payload
+            (
+                doc,
+                pv_san,
+                fen,
+                deco,
+                oeco,
+                ann,
+                plies_ann,
+                bm25,
+                d_sig,
+                d_fp,
+                bm25n,
+                bsim,
+            ) = payload
             source = (doc.get_first("source") or "").strip()
             if fen and fen in seen_fen:
                 continue
@@ -512,7 +566,9 @@ class TantivyPositionalRetriever(RAGRetriever):
             if query.material_imbalance:
                 tags["material_signature"] = str(query.material_imbalance)[:120]
             if v2 and (doc.get_first("opening_ply_bucket") or ""):
-                tags["opening_ply_bucket"] = (doc.get_first("opening_ply_bucket") or "").strip()
+                tags["opening_ply_bucket"] = (
+                    doc.get_first("opening_ply_bucket") or ""
+                ).strip()
             on_doc = (doc.get_first("opening_name") or "").strip() if v2 else ""
             if on_doc:
                 tags["opening_name"] = on_doc[:160]

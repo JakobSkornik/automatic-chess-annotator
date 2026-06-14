@@ -5,13 +5,18 @@ from __future__ import annotations
 import unittest
 
 from app.core.commentary.advanced_comment_service import (
-    AdvancedCommentService,
     COMPOSER_OUTPUT_SCHEMA,
+    AdvancedCommentService,
 )
 from app.core.commentary.rag_retriever import RAGQuery, RAGResult, RAGRetriever
+from app.models.chess_events import (
+    GameAnalysisContext,
+    MoveCategory,
+    MoveEvent,
+    MoveEventType,
+    MoveQuality,
+)
 from app.models.GameJson import AnalysisInfo, GameJson, GameMetadata, GameMove, RagRef
-from app.models.chess_events import GameAnalysisContext, MoveCategory, MoveEvent, MoveEventType, MoveQuality
-
 
 _LONG_MASTER_NOTE = (
     "White develops naturally while Black fianchettoes the king bishop. "
@@ -73,7 +78,9 @@ class TestCommentaryRagGolden(unittest.TestCase):
         svc = AdvancedCommentService(rag_retriever=_StubRAG(), provider_key="openai")
 
         async def _run() -> None:
-            blob, refs, dbg = await svc.build_event_llm_input(me, None, GameAnalysisContext())
+            blob, refs, dbg = await svc.build_event_llm_input(
+                me, None, GameAnalysisContext()
+            )
             self.assertGreater(len(refs), 0)
             self.assertIn("MASTER ANNOTATIONS", blob)
             self.assertIn("Paraphrase-able master idea.", blob)
@@ -97,7 +104,13 @@ class TestCommentaryRagGolden(unittest.TestCase):
 
     def test_composer_schema_contains_rag_and_alternative_fields(self) -> None:
         props = set(COMPOSER_OUTPUT_SCHEMA["properties"].keys())
-        for k in ("better_alternative", "rag_idea_used", "rag_applied", "named_motifs", "text"):
+        for k in (
+            "better_alternative",
+            "rag_idea_used",
+            "rag_applied",
+            "named_motifs",
+            "text",
+        ):
             self.assertIn(k, props)
 
     def test_game_json_rag_refs_round_trip(self) -> None:
@@ -134,6 +147,7 @@ class TestCommentaryRagGolden(unittest.TestCase):
         g2 = GameJson.model_validate_json(g.model_dump_json())
         self.assertEqual(len(g2.moves[0].rag_refs), 1)
         self.assertEqual(g2.moves[0].rag_refs[0].opening_name, "Sicilian")
+
 
 _START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 

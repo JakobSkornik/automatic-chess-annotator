@@ -4,7 +4,6 @@ import unittest
 from app.core.queue_manager import QueueManager, _extract_pgn_snapshot
 from app.models.job import JobStatus
 
-
 MIN_PGN = """[Event "T"]
 [White "A"]
 [Black "B"]
@@ -37,7 +36,9 @@ class TestQueueManager(unittest.TestCase):
             assert st is not None
             self.assertEqual(st.status, JobStatus.FAILED)
             self.assertEqual(st.error, "boom")
-            id3 = await qm.add_job(qm.get_job_data(id2)["pgn"], llm_provider="openai", llm_effort="medium")
+            id3 = await qm.add_job(
+                qm.get_job_data(id2)["pgn"], llm_provider="openai", llm_effort="medium"
+            )
             self.assertNotEqual(id3, id2)
 
         asyncio.run(run())

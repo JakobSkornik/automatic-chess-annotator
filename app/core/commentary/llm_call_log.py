@@ -9,27 +9,29 @@ import threading
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_GAME_ID: ContextVar[Optional[str]] = ContextVar("llm_call_log_game_id", default=None)
-_PLY: ContextVar[Optional[int]] = ContextVar("llm_call_log_ply", default=None)
-_EPISODE_INDEX: ContextVar[Optional[int]] = ContextVar(
+_GAME_ID: ContextVar[str | None] = ContextVar("llm_call_log_game_id", default=None)
+_PLY: ContextVar[int | None] = ContextVar("llm_call_log_ply", default=None)
+_EPISODE_INDEX: ContextVar[int | None] = ContextVar(
     "llm_call_log_episode_index", default=None
 )
-_PASS_LABEL: ContextVar[Optional[str]] = ContextVar("llm_call_log_pass_label", default=None)
+_PASS_LABEL: ContextVar[str | None] = ContextVar(
+    "llm_call_log_pass_label", default=None
+)
 
 _lock_registry_lock = threading.Lock()
-_game_locks: Dict[str, threading.Lock] = {}
-_game_seq: Dict[str, int] = {}
+_game_locks: dict[str, threading.Lock] = {}
+_game_seq: dict[str, int] = {}
 
 
 def is_enabled() -> bool:
     return os.environ.get("LOG_LLM_TO_FILE", "").strip().lower() in ("1", "true")
 
 
-def set_game_context(game_id: Optional[str]) -> Any:
+def set_game_context(game_id: str | None) -> Any:
     """Return token for ``reset_game_context``."""
     return _GAME_ID.set(game_id)
 
@@ -40,10 +42,10 @@ def reset_game_context(token: Any) -> None:
 
 def set_move_context(
     *,
-    ply: Optional[int] = None,
-    episode_index: Optional[int] = None,
-    pass_label: Optional[str] = None,
-) -> Tuple[Any, Any, Any]:
+    ply: int | None = None,
+    episode_index: int | None = None,
+    pass_label: str | None = None,
+) -> tuple[Any, Any, Any]:
     """Return tokens tuple for ``reset_move_context``."""
     return (
         _PLY.set(ply),
@@ -52,7 +54,7 @@ def set_move_context(
     )
 
 
-def reset_move_context(tokens: Tuple[Any, Any, Any]) -> None:
+def reset_move_context(tokens: tuple[Any, Any, Any]) -> None:
     t0, t1, t2 = tokens
     _PASS_LABEL.reset(t2)
     _EPISODE_INDEX.reset(t1)
@@ -82,13 +84,13 @@ def log_call(
     user: str,
     response: str,
     model: str,
-    effort: Optional[str],
-    schema_name: Optional[str],
-    token_usage: Optional[int],
+    effort: str | None,
+    schema_name: str | None,
+    token_usage: int | None,
     elapsed_ms: float,
     ok: bool,
-    error: Optional[str] = None,
-) -> Optional[int]:
+    error: str | None = None,
+) -> int | None:
     if not is_enabled():
         return None
     gid = _GAME_ID.get()
@@ -105,7 +107,7 @@ def log_call(
         ms = dt.microsecond // 1000
         ts = dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{ms:03d}Z"
 
-        record: Dict[str, Any] = {
+        record: dict[str, Any] = {
             "seq": seq,
             "ts": ts,
             "game_id": gid,
@@ -144,7 +146,7 @@ def log_call(
         return seq
 
 
-def append_postcheck(*, ref_seq: int, payload: Dict[str, Any]) -> None:
+def append_postcheck(*, ref_seq: int, payload: dict[str, Any]) -> None:
     """Append a correction row after composer post-processing (e.g. rag_applied overlap fix)."""
     if not is_enabled():
         return
@@ -157,7 +159,7 @@ def append_postcheck(*, ref_seq: int, payload: Dict[str, Any]) -> None:
         dt = datetime.now(timezone.utc)
         ms = dt.microsecond // 1000
         ts = dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{ms:03d}Z"
-        record: Dict[str, Any] = {
+        record: dict[str, Any] = {
             "seq": ref_seq,
             "ts": ts,
             "game_id": gid,
@@ -181,4 +183,6 @@ def append_postcheck(*, ref_seq: int, payload: Dict[str, Any]) -> None:
             with path.open("a", encoding="utf-8") as f:
                 f.write(line + "\n")
         except OSError as e:
-            logger.warning("llm_call_log append_postcheck: failed to write %s: %s", path, e)
+            logger.warning(
+                "llm_call_log append_postcheck: failed to write %s: %s", path, e
+            )

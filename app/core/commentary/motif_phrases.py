@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Dict, Sequence
+from collections.abc import Sequence
 
 from app.models.chess_events import StrategicMotif, TacticalMotif
 
-_OVERRIDES: Dict[str, str] = {
+_OVERRIDES: dict[str, str] = {
     "fork": "double attack — one piece attacks two enemy units at once",
     "pin": "pin — a piece cannot move without exposing a more valuable target",
     "skewer": "skewer — attack through a valuable piece to a second target behind it",
@@ -37,8 +37,8 @@ _OVERRIDES: Dict[str, str] = {
 }
 
 
-def _build_glossary() -> Dict[str, str]:
-    out: Dict[str, str] = {}
+def _build_glossary() -> dict[str, str]:
+    out: dict[str, str] = {}
     for e in list(TacticalMotif) + list(StrategicMotif):
         key = e.value
         out[key] = _OVERRIDES.get(
@@ -48,7 +48,7 @@ def _build_glossary() -> Dict[str, str]:
     return out
 
 
-MOTIF_GLOSSARY: Dict[str, str] = _build_glossary()
+MOTIF_GLOSSARY: dict[str, str] = _build_glossary()
 
 
 def glossary_phrase_for(motif_key: str) -> str:

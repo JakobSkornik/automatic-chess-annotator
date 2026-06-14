@@ -29,7 +29,9 @@ class TestPositionalFeaturesV2(unittest.TestCase):
         b = chess.Board("8/8/8/8/P7/8/5K1k/8 w - - 0 1")
         f = compute_hidden_features(b)
         passed = f["white"]["passedPawns"]
-        self.assertTrue(any(isinstance(x, dict) and x.get("sq") == "a4" for x in passed))
+        self.assertTrue(
+            any(isinstance(x, dict) and x.get("sq") == "a4" for x in passed)
+        )
 
     def test_material_skeleton_survives_dense(self) -> None:
         b = chess.Board()
@@ -42,7 +44,9 @@ class TestPositionalFeaturesV2(unittest.TestCase):
         f = compute_hidden_features(b)
         bo = f["boardOverlay"]
         # Empty lists are dropped from overlay (dense output).
-        self.assertTrue(bo.get("openFiles") is None or isinstance(bo.get("openFiles"), list))
+        self.assertTrue(
+            bo.get("openFiles") is None or isinstance(bo.get("openFiles"), list)
+        )
 
     def test_in_opening_book_empty_prefix(self) -> None:
         hit, n = in_opening_book([])

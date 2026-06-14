@@ -153,7 +153,9 @@ def _add_doc_v2(
     doc.add_text("plies_to_next_annotation", plies_ann)
     doc.add_text("rag_phase", rag_phase)
     doc.add_text("opening_eco", opening_eco or eco)
-    doc.add_text("opening_prefix", (opening_eco or eco)[:2] if (opening_eco or eco) else "")
+    doc.add_text(
+        "opening_prefix", (opening_eco or eco)[:2] if (opening_eco or eco) else ""
+    )
     doc.add_text("opening_name", "")
     doc.add_text("opening_matched_ply", "0")
     doc.add_text("opening_ply_bucket", opening_ply_bucket)
@@ -166,7 +168,9 @@ def _add_doc_v2(
 
 
 def _write_v2_metadata(path: Path) -> None:
-    (path / "metadata.json").write_text(json.dumps({"corpus_version": "2"}), encoding="utf-8")
+    (path / "metadata.json").write_text(
+        json.dumps({"corpus_version": "2"}), encoding="utf-8"
+    )
 
 
 class TestTantivyBM25(unittest.TestCase):
@@ -189,7 +193,9 @@ class TestTantivyBM25(unittest.TestCase):
             retriever = TantivyPositionalRetriever(str(path))
 
             async def _run() -> None:
-                q = RAGQuery(fen=target_fen, pv_san=pv, eco="B20", ply=8, phase="opening")
+                q = RAGQuery(
+                    fen=target_fen, pv_san=pv, eco="B20", ply=8, phase="opening"
+                )
                 hits = await retriever.retrieve(q, top_k=2)
                 self.assertTrue(hits, "expected at least one BM25 hit")
                 top = hits[0]
@@ -276,7 +282,9 @@ class TestTantivyBM25(unittest.TestCase):
             schema = _build_schema_v2()
             idx = tantivy.Index(schema, path=str(path))
             writer = idx.writer()
-            _add_doc_v2(writer, enc, fen, "B12", rag_phase="middlegame", opening_eco="B12")
+            _add_doc_v2(
+                writer, enc, fen, "B12", rag_phase="middlegame", opening_eco="B12"
+            )
             writer.commit()
             idx.reload()
 

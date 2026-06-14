@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import time
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from app.core.commentary import llm_call_log
 from app.core.commentary.advanced_comment_service import AdvancedCommentService
 from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
-from app.core.commentary.llm_policy import resolve_model
-from app.core.commentary.pipeline.move_pipeline import MoveCommentaryContext, MoveCommentaryPipeline
-from app.core.commentary.rag_retriever import rag_results_to_ws_refs
-from app.core.commentary.features.future_line_compare import compare_played_vs_best_future_lines
+from app.core.commentary.features.future_line_compare import (
+    compare_played_vs_best_future_lines,
+)
 from app.core.commentary.features.move_category import classify_move_event
+from app.core.commentary.llm_policy import resolve_model
+from app.core.commentary.pipeline.move_pipeline import (
+    MoveCommentaryContext,
+    MoveCommentaryPipeline,
+)
+from app.core.commentary.rag_retriever import rag_results_to_ws_refs
 from app.core.engine.analysis_retriever import (
     EnginePipelineState,
     _apply_back_to_back_key_moment_suppression,
@@ -28,6 +33,48 @@ from app.models.chess_events import Episode
 logger = logging.getLogger(__name__)
 
 
+def compute_turning_points(
+    move_events: list[Any],
+    *,
+    min_swing_cp: int = 150,
+    max_points: int = 3,
+) -> list[dict[str, Any]]:
+    """Heuristic turning points from the eval series (replaces the LLM game digest).
+
+    A turning point is a large White-POV eval swing, ranked higher when the
+    advantage flips sign or a balanced position becomes decisive.
+    """
+    candidates: list[tuple] = []
+    for me in move_events:
+        if (
+            me.eval_swing_cp is None
+            or me.eval_before_cp is None
+            or me.eval_after_cp is None
+        ):
+            continue
+        swing = abs(int(me.eval_swing_cp))
+        if swing < min_swing_cp:
+            continue
+        before = int(me.eval_before_cp)
+        after = int(me.eval_after_cp)
+        sign_flip = (before >= 50 and after <= -50) or (before <= -50 and after >= 50)
+        becomes_decisive = abs(before) < 100 <= abs(after)
+        rank = swing + (200 if sign_flip else 0) + (100 if becomes_decisive else 0)
+        candidates.append((rank, me))
+    candidates.sort(key=lambda t: -t[0])
+    picked = [
+        {
+            "ply": me.ply,
+            "san": me.san,
+            "swing_cp": int(me.eval_swing_cp),
+            "eval_before_cp": int(me.eval_before_cp),
+            "eval_after_cp": int(me.eval_after_cp),
+        }
+        for _rank, me in candidates[:max_points]
+    ]
+    return sorted(picked, key=lambda d: d["ply"])
+
+
 class GameAnnotationPipeline:
     """Single entrypoint for post-engine LLM commentary (mutates ``EnginePipelineState``)."""
 
@@ -36,59 +83,48 @@ class GameAnnotationPipeline:
         state: EnginePipelineState,
         advanced_commenter: AdvancedCommentService,
         *,
-        progress_callback: Optional[Callable[[float, str], Awaitable[None]]] = None,
-        commentary_callback: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
-        llm_effort: Optional[str] = None,
+        progress_callback: Callable[[float, str], Awaitable[None]] | None = None,
+        commentary_callback: Callable[[str, dict[str, Any]], Awaitable[None]]
+        | None = None,
+        llm_effort: str | None = None,
+        commentary_level: str | None = None,
+        comment_side: str | None = None,
     ) -> None:
         eff = llm_effort or os.environ.get("LLM_DEFAULT_EFFORT", "medium")
+        level = (commentary_level or "intermediate").strip().lower()
+        if level not in ("beginner", "intermediate", "expert"):
+            level = "intermediate"
+        side = (comment_side or "both").strip().lower()
+        if side not in ("white", "black", "both"):
+            side = "both"
+        state.metadata = state.metadata.model_copy(
+            update={"commentary_level": level, "comment_side": side}
+        )
         analyzed_rows = state.analyzed_rows
         move_events = state.move_events
         episodes = state.episodes
         context = state.context
         ply_to_episode = state.ply_to_episode
-        digest_model = resolve_model(advanced_commenter.provider_name, "digest")
 
         gid_token = llm_call_log.set_game_context(state.metadata.id)
         try:
-            digest_ctx = llm_call_log.set_move_context(pass_label="digest")
-            try:
-                try:
-                    game_digest = await advanced_commenter.generate_game_digest(
-                        context, model=digest_model, effort=eff
-                    )
-                except Exception as e:
-                    logger.warning("game digest failed: %s", e)
-                    game_digest = {}
-            finally:
-                llm_call_log.reset_move_context(digest_ctx)
-            context.game_digest = game_digest
-            if commentary_callback and game_digest:
-                await commentary_callback("GAME_SUMMARY", {"digest": game_digest})
+            # Turning points are computed heuristically from the eval series;
+            # the whole-game LLM digest (and its game_summary output) is gone.
+            turning_points = compute_turning_points(move_events)
+            context.game_digest = {"turning_points": turning_points}
 
-            arch_raw = game_digest.get("strategic_archetype") if isinstance(game_digest, dict) else None
-            if isinstance(arch_raw, str) and arch_raw.strip():
-                a = arch_raw.strip()
-                state.metadata = state.metadata.model_copy(update={"strategic_archetype": a})
-                md = dict(context.metadata or {})
-                md["strategic_archetype"] = a
-                context.metadata = md
-
-            tps = (game_digest or {}).get("turning_points") or []
             ply_to_mi = {me.ply: mi for mi, me in enumerate(move_events)}
-            for tp in tps:
-                if not isinstance(tp, dict):
-                    continue
-                try:
-                    p = int(tp.get("ply", 0))
-                except (TypeError, ValueError):
-                    continue
+            for tp in turning_points:
+                p = int(tp["ply"])
                 mi = ply_to_mi.get(p)
                 if mi is None:
                     continue
                 me = move_events[mi]
                 if me.key_moment_type:
                     continue
-                promoted = me.model_copy(update={"key_moment_type": "critical_decision"})
+                promoted = me.model_copy(
+                    update={"key_moment_type": "critical_decision"}
+                )
                 move_events[mi] = promoted
                 context.move_events[mi] = promoted
                 for ep in episodes:
@@ -102,8 +138,8 @@ class GameAnnotationPipeline:
                 move_events, episodes, context, state.metadata.result
             )
 
-            audit_coverage: List[float] = []
-            audit_evals: List[int] = []
+            audit_coverage: list[float] = []
+            audit_evals: list[int] = []
             audit_forbidden = 0
             rag_usage_num = 0
             rag_usage_den = 0
@@ -114,13 +150,104 @@ class GameAnnotationPipeline:
             n_key_moments = max(len(key_moment_list), 1)
             key_moment_idx = 0
 
-            for mi, me in enumerate(move_events):
-                if not (me.key_moment_type or me.teaching_moment):
+            # --- Reverse-order generation -------------------------------------
+            # Comments are written from the LAST move backwards, so each prompt
+            # can see what happens later in the game (foreshadowing). Episodes
+            # are processed last-to-first; an episode's narrative is generated
+            # right after its moves so earlier episodes can reference it.
+            result_str = str(state.metadata.result or "*")
+            winner_note = {
+                "1-0": "White went on to win",
+                "0-1": "Black went on to win",
+                "1/2-1/2": "the game ended in a draw",
+            }.get(result_str, "the result was unrecorded")
+            future_comments: list[dict[str, Any]] = []  # nearest-later first
+            future_episode_notes: list[str] = []
+
+            def _future_context_text() -> str:
+                parts = [f"Game outcome: {result_str} ({winner_note})."]
+                for fc in future_comments[:3]:
+                    parts.append(
+                        f"Later, at move {(fc['ply'] + 1) // 2} ({fc['san']}): {fc['text'][:160]}"
+                    )
+                parts.extend(future_episode_notes[:2])
+                return "\n".join(parts)[:1200]
+
+            def _mover_matches_side(ply: int) -> bool:
+                if side == "both":
+                    return True
+                is_white_move = ply % 2 == 1
+                return (side == "white") == is_white_move
+
+            episodes_desc = sorted(episodes, key=lambda e: -e.episode_index)
+            commented_mis = [
+                mi
+                for mi, me in enumerate(move_events)
+                if (me.key_moment_type or me.teaching_moment)
+                and _mover_matches_side(me.ply)
+            ]
+            mis_by_episode: dict[int | None, list[int]] = {}
+            for mi in commented_mis:
+                ep_key = ply_to_episode.get(move_events[mi].ply)
+                mis_by_episode.setdefault(ep_key, []).append(mi)
+
+            ordered_units: list[tuple] = []  # ("move", mi, episode) / ("episode", ep)
+            for ep in episodes_desc:
+                for mi in sorted(
+                    mis_by_episode.get(ep.episode_index, []),
+                    key=lambda i: -move_events[i].ply,
+                ):
+                    ordered_units.append(("move", mi, ep))
+                ordered_units.append(("episode", ep, None))
+            for mi in sorted(
+                mis_by_episode.get(None, []), key=lambda i: -move_events[i].ply
+            ):
+                ordered_units.append(("move", mi, None))
+
+            episode_model = resolve_model(advanced_commenter.provider_name, "episode")
+
+            for unit_kind, unit_a, unit_b in ordered_units:
+                if unit_kind == "episode":
+                    ep_obj: Episode = unit_a
+                    ep_ctx = llm_call_log.set_move_context(
+                        episode_index=ep_obj.episode_index, pass_label="episode"
+                    )
+                    try:
+                        try:
+                            ep_obj.narrative_summary = (
+                                await advanced_commenter.generate_episode_commentary(
+                                    ep_obj, model=episode_model, effort=eff
+                                )
+                            )
+                        except Exception as e:
+                            logger.error("Episode commentary failed: %s", e)
+                            ep_obj.narrative_summary = ep_obj.narrative_summary or None
+                        if ep_obj.narrative_summary:
+                            future_episode_notes.insert(
+                                0,
+                                f"Then ('{ep_obj.title}'): {ep_obj.narrative_summary[:140]}",
+                            )
+                            if commentary_callback:
+                                await commentary_callback(
+                                    "EPISODE_NARRATIVE",
+                                    {
+                                        "episode_index": ep_obj.episode_index,
+                                        "title": ep_obj.title,
+                                        "narrative": ep_obj.narrative_summary,
+                                    },
+                                )
+                    finally:
+                        llm_call_log.reset_move_context(ep_ctx)
                     continue
-                ep = next((e for e in episodes if e.episode_index == ply_to_episode.get(me.ply)), None)
+
+                mi = unit_a
+                me = move_events[mi]
+                ep = unit_b
                 composer_pass_label = "key_moment" if me.key_moment_type else "teaching"
                 composer_model = resolve_model(
-                    advanced_commenter.provider_name, "composer", pass_label=composer_pass_label
+                    advanced_commenter.provider_name,
+                    "composer",
+                    pass_label=composer_pass_label,
                 )
                 move_ctx = llm_call_log.set_move_context(
                     ply=me.ply,
@@ -132,18 +259,39 @@ class GameAnnotationPipeline:
                     key_moment_idx += 1
                     if progress_callback:
                         label = (
-                            "teaching" if me.teaching_moment and not me.key_moment_type else "key moment"
+                            "teaching"
+                            if me.teaching_moment and not me.key_moment_type
+                            else "key moment"
                         )
-                        await progress_callback(pct, f"LLM: {label} {me.san} (ply {me.ply})")
-                    row = analyzed_rows[me.move_index] if 0 <= me.move_index < len(analyzed_rows) else None
-                    depth_bm25 = int(os.environ.get("RAG_BM25_STOCKFISH_DEPTH", "14"))
-                    pv_san_bm25: List[str] = []
-                    if row:
+                        await progress_callback(
+                            pct, f"LLM: {label} {me.san} (ply {me.ply})"
+                        )
+                    row = (
+                        analyzed_rows[me.move_index]
+                        if 0 <= me.move_index < len(analyzed_rows)
+                        else None
+                    )
+                    has_facts = me.comment_facts is not None
+                    pv_san_bm25: list[str] = []
+                    if row and not has_facts:
+                        # Legacy path only: facts moves carry their own lines.
+                        depth_bm25 = int(
+                            os.environ.get("RAG_BM25_STOCKFISH_DEPTH", "14")
+                        )
                         pv_san_bm25 = _bm25_pv_san_from_fen_after(
                             state.retriever.engine_connector, row.fen_after, depth_bm25
                         )
+                    elif row and has_facts and me.comment_facts.display_line:
+                        pv_san_bm25 = list(me.comment_facts.display_line.line_san[:5])
                     future_delta = None
-                    if row and me.best_move_uci and me.uci != me.best_move_uci:
+                    if (
+                        row
+                        and not has_facts
+                        and me.best_move_uci
+                        and me.uci != me.best_move_uci
+                    ):
+                        # Legacy path only: facts.better_alternative supersedes this
+                        # (and saves a depth-18 search per key moment).
                         depth_fl = int(os.environ.get("FUTURE_LINE_DEPTH", "18"))
                         n_plies = int(os.environ.get("FUTURE_LINE_PLIES", "6"))
                         try:
@@ -157,7 +305,9 @@ class GameAnnotationPipeline:
                                 n_plies=n_plies,
                             )
                         except Exception as e:
-                            logger.warning("future_line_compare failed ply %s: %s", me.ply, e)
+                            logger.warning(
+                                "future_line_compare failed ply %s: %s", me.ply, e
+                            )
                     me_for_rag = me.model_copy(
                         update={
                             "pv_san": pv_san_bm25,
@@ -188,7 +338,9 @@ class GameAnnotationPipeline:
                                 "effort": eff,
                             },
                         )
-                    effort_move = "low" if me.teaching_moment and not me.key_moment_type else eff
+                    effort_move = (
+                        "low" if me.teaching_moment and not me.key_moment_type else eff
+                    )
                     try:
                         mctx = MoveCommentaryContext(
                             move_event=me_for_rag,
@@ -199,6 +351,8 @@ class GameAnnotationPipeline:
                             composer_effort=effort_move,
                             key_moment_type=me.key_moment_type,
                             composer_pass_label=composer_pass_label,
+                            future_context=_future_context_text(),
+                            commentary_level=level,
                         )
                         mctx = await MoveCommentaryPipeline().run(mctx)
                         text = mctx.final_text
@@ -206,25 +360,49 @@ class GameAnnotationPipeline:
                         llm_debug = dict(mctx.llm_debug or {})
 
                         if text:
-                            persist_rag = (
-                                os.environ.get("RAG_PERSIST_REFS", "1").strip().lower()
-                                not in ("0", "false", "")
-                            )
+                            persist_rag = os.environ.get(
+                                "RAG_PERSIST_REFS", "1"
+                            ).strip().lower() not in ("0", "false", "")
                             for r in analyzed_rows:
                                 if r.ply == me.ply:
                                     if isinstance(r.analyzed_move.hiddenFeatures, dict):
-                                        r.analyzed_move.hiddenFeatures.setdefault("_llm", {})
+                                        r.analyzed_move.hiddenFeatures.setdefault(
+                                            "_llm", {}
+                                        )
                                         _slot = r.analyzed_move.hiddenFeatures["_llm"]
                                         _slot["comment"] = text
-                                        _slot["named_motifs"] = llm_debug.get("composer_named_motifs", [])
+                                        if mctx.level_texts:
+                                            _slot["comments"] = dict(mctx.level_texts)
+                                        if llm_debug.get("facts_renderings"):
+                                            _slot["facts_renderings"] = llm_debug[
+                                                "facts_renderings"
+                                            ]
+                                        if "facts_contract_ok" in llm_debug:
+                                            _slot["facts_contract_ok"] = llm_debug[
+                                                "facts_contract_ok"
+                                            ]
+                                        _slot["named_motifs"] = llm_debug.get(
+                                            "composer_named_motifs", []
+                                        )
                                         rat = llm_debug.get("rationale") or {}
-                                        _slot["primary_motif_label"] = rat.get("primary_motif_label", "")
+                                        _slot["primary_motif_label"] = rat.get(
+                                            "primary_motif_label", ""
+                                        )
                                         if persist_rag:
-                                            _slot["rag_refs"] = rag_results_to_ws_refs(rag_results or [])
-                                        _slot["composer_rag_applied"] = llm_debug.get("composer_rag_applied")
+                                            _slot["rag_refs"] = rag_results_to_ws_refs(
+                                                rag_results or []
+                                            )
+                                        _slot["composer_rag_applied"] = llm_debug.get(
+                                            "composer_rag_applied"
+                                        )
                                     break
-                            arch_snip = str((context.game_digest or {}).get("strategic_archetype") or "")
-                            motif_hint = ", ".join(llm_debug.get("composer_named_motifs") or []) or (
+                            arch_snip = str(
+                                (context.game_digest or {}).get("strategic_archetype")
+                                or ""
+                            )
+                            motif_hint = ", ".join(
+                                llm_debug.get("composer_named_motifs") or []
+                            ) or (
                                 "heuristic-fallback"
                                 if llm_debug.get("fallback_used") == "heuristic"
                                 else "—"
@@ -234,13 +412,24 @@ class GameAnnotationPipeline:
                                 f"After {me.san} (ply {me.ply}): {motif_hint}; archetype={arch_snip}"
                             )
                             context.prior_context_snippets = hints[-6:]
+                            # Reverse order: this comment is "the future" for
+                            # every move still to be commented.
+                            future_comments.insert(
+                                0, {"ply": me.ply, "san": me.san, "text": text}
+                            )
                         if llm_debug:
                             ca = llm_debug.get("commentary_audit")
                             if isinstance(ca, dict):
                                 try:
-                                    audit_coverage.append(float(ca.get("motif_coverage_ratio", 0)))
-                                    audit_evals.append(int(ca.get("eval_token_count", 0)))
-                                    audit_forbidden += int(ca.get("forbidden_phrase_hits", 0))
+                                    audit_coverage.append(
+                                        float(ca.get("motif_coverage_ratio", 0))
+                                    )
+                                    audit_evals.append(
+                                        int(ca.get("eval_token_count", 0))
+                                    )
+                                    audit_forbidden += int(
+                                        ca.get("forbidden_phrase_hits", 0)
+                                    )
                                 except (TypeError, ValueError):
                                     pass
                                 if ca.get("rag_had_hits"):
@@ -248,7 +437,9 @@ class GameAnnotationPipeline:
                                     if ca.get("rag_applied"):
                                         rag_usage_num += 1
                         if commentary_callback and text:
-                            resolved_tokens = resolve_tokens_for_comment(text, me.fen_before, me.fen_after)
+                            resolved_tokens = resolve_tokens_for_comment(
+                                text, me.fen_before, me.fen_after
+                            )
                             await commentary_callback(
                                 "AI_COMMENT_UPDATE",
                                 {
@@ -284,52 +475,11 @@ class GameAnnotationPipeline:
 
             context.critical_moments = [e for e in move_events if e.is_critical]
 
-            if progress_callback:
-                await progress_callback(98.5, "LLM: episode narratives...")
-
-            episode_model = resolve_model(advanced_commenter.provider_name, "episode")
-            narrative_model = resolve_model(advanced_commenter.provider_name, "narrative")
-
-            async def _episode_narrative(ep: Episode) -> None:
-                ep_ctx = llm_call_log.set_move_context(
-                    episode_index=ep.episode_index, pass_label="episode"
-                )
-                try:
-                    try:
-                        ep.narrative_summary = await advanced_commenter.generate_episode_commentary(
-                            ep, model=episode_model, effort=eff
-                        )
-                        if commentary_callback and ep.narrative_summary:
-                            await commentary_callback(
-                                "EPISODE_NARRATIVE",
-                                {
-                                    "episode_index": ep.episode_index,
-                                    "title": ep.title,
-                                    "narrative": ep.narrative_summary,
-                                },
-                            )
-                    except Exception as e:
-                        logger.error("Episode commentary failed: %s", e)
-                finally:
-                    llm_call_log.reset_move_context(ep_ctx)
-
-            await asyncio.gather(*[_episode_narrative(ep) for ep in episodes])
-
-            narr_ctx = llm_call_log.set_move_context(pass_label="narrative")
-            try:
-                try:
-                    context.game_narrative = await advanced_commenter.generate_game_narrative(
-                        context, model=narrative_model, effort=eff
-                    )
-                    if commentary_callback and context.game_narrative:
-                        await commentary_callback(
-                            "GAME_NARRATIVE",
-                            {"narrative": context.game_narrative},
-                        )
-                except Exception as e:
-                    logger.error(f"Game narrative failed: {e}")
-            finally:
-                llm_call_log.reset_move_context(narr_ctx)
+            # Episode narratives were generated inline during the backward sweep;
+            # the whole-game narrative stage is gone (the Summary panel was cut).
+            state.llm_done = True
+            if commentary_callback:
+                await commentary_callback("COMMENTARY_COMPLETE", {})
 
             if audit_coverage:
                 logger.info(

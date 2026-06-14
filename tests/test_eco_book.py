@@ -1,8 +1,9 @@
 """ECO longest-prefix match and FEN fallback."""
 
+import io
+
 import chess
 import chess.pgn
-import io
 
 from app.core.commentary.openings.eco_book import (
     ECOBook,
@@ -61,7 +62,7 @@ def test_parse_eco_invalid():
 
 
 def test_merge_prefers_header_name_when_family_matches():
-    detected = type("I", (), {"code": "B12", "name": "Caro-Kann Defense", "variation": None})()
+    type("I", (), {"code": "B12", "name": "Caro-Kann Defense", "variation": None})()
     # merge expects OpeningInfo - use real OpeningInfo
     from app.core.commentary.openings.eco_book import OpeningInfo
 

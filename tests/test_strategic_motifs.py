@@ -35,7 +35,9 @@ class TestStrategicMotifs(unittest.TestCase):
         b1 = b_setup.copy()
         b1.push(m)
         hf = {"black": {"badBishops": 1}}
-        out = detect_strategic_motifs(b_setup, b1, m, hf, eval_after_cp=0, phase="opening")
+        out = detect_strategic_motifs(
+            b_setup, b1, m, hf, eval_after_cp=0, phase="opening"
+        )
         vals = [x.value for x in out]
         self.assertNotIn("bad_bishop", vals)
 

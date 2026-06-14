@@ -8,14 +8,14 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.core.commentary.advanced_comment_service import COMPOSER_OUTPUT_SCHEMA
 from app.core.commentary.llm_providers import (
+    DYNAMIC_SECTION_SENTINEL,
     AnthropicProvider,
     CursorProvider,
-    DYNAMIC_SECTION_SENTINEL,
     OpenAIProvider,
     make_llm_provider,
 )
-from app.core.commentary.advanced_comment_service import COMPOSER_OUTPUT_SCHEMA
 
 
 class TestMakeLlmProvider(unittest.TestCase):
@@ -152,7 +152,9 @@ class TestOpenAIProvider(unittest.TestCase):
 class TestAnthropicProvider(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.env = patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test"}, clear=False)
+        self.env = patch.dict(
+            "os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test"}, clear=False
+        )
         self.env.start()
 
     def tearDown(self) -> None:

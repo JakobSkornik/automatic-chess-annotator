@@ -4,7 +4,10 @@ import unittest
 
 import chess
 
-from app.core.commentary.features.positional_tokens import ENCODER_VERSION, encode_position
+from app.core.commentary.features.positional_tokens import (
+    ENCODER_VERSION,
+    encode_position,
+)
 
 
 class TestPositionalTokens(unittest.TestCase):

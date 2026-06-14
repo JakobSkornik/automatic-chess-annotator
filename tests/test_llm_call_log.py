@@ -10,7 +10,9 @@ import pytest
 from app.core.commentary import llm_call_log
 
 
-def test_log_call_disabled_by_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_log_call_disabled_by_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("LOG_LLM_TO_FILE", raising=False)
     tok = llm_call_log.set_game_context("should-not-write")
@@ -32,7 +34,9 @@ def test_log_call_disabled_by_default(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert not (tmp_path / "logs" / "llm").exists()
 
 
-def test_enabled_without_game_context_writes_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_enabled_without_game_context_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("LOG_LLM_TO_FILE", "1")
     llm_call_log.log_call(
@@ -50,7 +54,9 @@ def test_enabled_without_game_context_writes_nothing(monkeypatch: pytest.MonkeyP
     assert not (tmp_path / "logs").exists()
 
 
-def test_enabled_with_game_two_calls_ordered_seq(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_enabled_with_game_two_calls_ordered_seq(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("LOG_LLM_TO_FILE", "true")
     gid = "game-seq-test-unique"
@@ -121,11 +127,15 @@ def test_ply_propagates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
         llm_call_log.reset_move_context(mtok)
         llm_call_log.reset_game_context(gtok)
 
-    line = json.loads((tmp_path / "logs" / "llm" / f"{gid}.jsonl").read_text(encoding="utf-8"))
+    line = json.loads(
+        (tmp_path / "logs" / "llm" / f"{gid}.jsonl").read_text(encoding="utf-8")
+    )
     assert line["ply"] == 15
 
 
-def test_append_postcheck_writes_second_line(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_append_postcheck_writes_second_line(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("LOG_LLM_TO_FILE", "1")
     gid = "game-postcheck-test"
@@ -153,7 +163,12 @@ def test_append_postcheck_writes_second_line(monkeypatch: pytest.MonkeyPatch, tm
         llm_call_log.reset_move_context(mtok)
         llm_call_log.reset_game_context(gtok)
 
-    lines = (tmp_path / "logs" / "llm" / f"{gid}.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    lines = (
+        (tmp_path / "logs" / "llm" / f"{gid}.jsonl")
+        .read_text(encoding="utf-8")
+        .strip()
+        .splitlines()
+    )
     assert len(lines) == 2
     row = json.loads(lines[1])
     assert row["pass_name"] == "composer_postcheck"
@@ -161,7 +176,9 @@ def test_append_postcheck_writes_second_line(monkeypatch: pytest.MonkeyPatch, tm
     assert row["postcheck"]["rag_applied"] is False
 
 
-def test_file_isolation_per_cwd(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_file_isolation_per_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("LOG_LLM_TO_FILE", "1")
     gid = "isolation-game"

@@ -4,8 +4,8 @@ import unittest
 
 from app.core.commentary.advanced_comment_service import COMPOSER_OUTPUT_SCHEMA
 from app.core.commentary.rag_retriever import build_rag_query
-from app.models.GameJson import RagRef
 from app.models.chess_events import MoveEvent, MoveEventType, MoveQuality
+from app.models.GameJson import RagRef
 
 
 class TestRAGQuery(unittest.TestCase):

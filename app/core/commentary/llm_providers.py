@@ -11,7 +11,12 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, Dict, Mapping, Optional, Protocol, Tuple, Type, runtime_checkable
+from collections.abc import Mapping
+from typing import (
+    Any,
+    Protocol,
+    runtime_checkable,
+)
 
 from openai import AsyncOpenAI
 
@@ -21,7 +26,7 @@ logger = logging.getLogger(__name__)
 _Agent: Any = None
 _AgentOptions: Any = None
 _LocalAgentOptions: Any = None
-_CursorAgentError: Type[BaseException] = Exception
+_CursorAgentError: type[BaseException] = Exception
 
 DYNAMIC_SECTION_SENTINEL = "\n\n===DYNAMIC===\n\n"
 
@@ -173,8 +178,8 @@ class LlmProvider(Protocol):
         *,
         model: str,
         effort: str,
-        max_output_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]: ...
+        max_output_tokens: int | None = None,
+    ) -> tuple[str, int]: ...
 
     async def json_schema_call(
         self,
@@ -183,10 +188,10 @@ class LlmProvider(Protocol):
         *,
         model: str,
         effort: str,
-        schema: Dict[str, Any],
+        schema: dict[str, Any],
         schema_name: str,
-        max_output_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]: ...
+        max_output_tokens: int | None = None,
+    ) -> tuple[str, int]: ...
 
 
 class OpenAIProvider:
@@ -207,10 +212,10 @@ class OpenAIProvider:
         *,
         model: str,
         effort: str,
-        max_output_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]:
+        max_output_tokens: int | None = None,
+    ) -> tuple[str, int]:
         user = _strip_sentinel_for_openai(user)
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "model": model,
             "input": [
                 {"role": "system", "content": [{"type": "input_text", "text": system}]},
@@ -239,12 +244,12 @@ class OpenAIProvider:
         *,
         model: str,
         effort: str,
-        schema: Dict[str, Any],
+        schema: dict[str, Any],
         schema_name: str,
-        max_output_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]:
+        max_output_tokens: int | None = None,
+    ) -> tuple[str, int]:
         user = _strip_sentinel_for_openai(user)
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "model": model,
             "input": [
                 {"role": "system", "content": [{"type": "input_text", "text": system}]},
@@ -282,7 +287,9 @@ class AnthropicProvider:
         try:
             from anthropic import AsyncAnthropic
         except ImportError as e:
-            raise ImportError("Install the anthropic package to use AnthropicProvider") from e
+            raise ImportError(
+                "Install the anthropic package to use AnthropicProvider"
+            ) from e
         self._client = AsyncAnthropic()
 
     @property
@@ -312,10 +319,10 @@ class AnthropicProvider:
         *,
         model: str,
         effort: str,
-        max_output_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]:
+        max_output_tokens: int | None = None,
+    ) -> tuple[str, int]:
         max_tok = max_output_tokens if max_output_tokens is not None else 4096
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": max_tok,
             "system": system,
@@ -336,10 +343,10 @@ class AnthropicProvider:
         *,
         model: str,
         effort: str,
-        schema: Dict[str, Any],
+        schema: dict[str, Any],
         schema_name: str,
-        max_output_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]:
+        max_output_tokens: int | None = None,
+    ) -> tuple[str, int]:
         tool_name = schema_name or "structured_output"
         tools = [
             {
@@ -350,7 +357,7 @@ class AnthropicProvider:
         ]
         max_tok = max_output_tokens if max_output_tokens is not None else 4096
         user_payload = self._user_content_blocks(user)
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": max_tok,
             "system": system,
@@ -360,7 +367,10 @@ class AnthropicProvider:
         }
         msg = await self._client.messages.create(**kwargs)
         for block in getattr(msg, "content", []) or []:
-            if getattr(block, "type", None) == "tool_use" and getattr(block, "name", "") == tool_name:
+            if (
+                getattr(block, "type", None) == "tool_use"
+                and getattr(block, "name", "") == tool_name
+            ):
                 inp = getattr(block, "input", None)
                 if isinstance(inp, dict):
                     return json.dumps(inp), _usage_total_anthropic(msg)
@@ -376,9 +386,16 @@ class CursorProvider:
     def __init__(self) -> None:
         global _Agent, _AgentOptions, _LocalAgentOptions, _CursorAgentError
         try:
-            from cursor_sdk import Agent, AgentOptions, CursorAgentError, LocalAgentOptions
+            from cursor_sdk import (
+                Agent,
+                AgentOptions,
+                CursorAgentError,
+                LocalAgentOptions,
+            )
         except ImportError as e:
-            raise ImportError("Install the cursor-sdk package to use CursorProvider") from e
+            raise ImportError(
+                "Install the cursor-sdk package to use CursorProvider"
+            ) from e
         _patch_cursor_bridge_discovery()
         _Agent = Agent
         _AgentOptions = AgentOptions
@@ -400,7 +417,7 @@ class CursorProvider:
             local=_LocalAgentOptions(cwd=os.getcwd()),
         )
 
-    async def _prompt(self, prompt: str, *, model: str) -> Tuple[str, int]:
+    async def _prompt(self, prompt: str, *, model: str) -> tuple[str, int]:
         """Run Agent.prompt off the event loop. effort/max_output_tokens are ignored."""
         opts = self._agent_options(model)
 
@@ -427,8 +444,8 @@ class CursorProvider:
         *,
         model: str,
         effort: str,
-        max_output_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]:
+        max_output_tokens: int | None = None,
+    ) -> tuple[str, int]:
         user = _strip_sentinel_for_openai(user)
         prompt = f"{system.strip()}\n\n{user.strip()}".strip()
         return await self._prompt(prompt, model=model)
@@ -440,10 +457,10 @@ class CursorProvider:
         *,
         model: str,
         effort: str,
-        schema: Dict[str, Any],
+        schema: dict[str, Any],
         schema_name: str,
-        max_output_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]:
+        max_output_tokens: int | None = None,
+    ) -> tuple[str, int]:
         user = _strip_sentinel_for_openai(user)
         schema_hint = (
             f"Return ONLY a JSON object matching schema '{schema_name}'. "
@@ -455,8 +472,12 @@ class CursorProvider:
         return _strip_json_fence(raw), usage
 
 
-def make_llm_provider(provider_key: Optional[str] = None) -> LlmProvider:
-    k = (provider_key or os.environ.get("LLM_DEFAULT_PROVIDER") or "openai").strip().lower()
+def make_llm_provider(provider_key: str | None = None) -> LlmProvider:
+    k = (
+        (provider_key or os.environ.get("LLM_DEFAULT_PROVIDER") or "openai")
+        .strip()
+        .lower()
+    )
     if k == "anthropic":
         return AnthropicProvider()
     if k == "cursor":

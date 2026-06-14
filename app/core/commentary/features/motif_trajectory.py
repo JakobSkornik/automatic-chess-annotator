@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
 
-from app.models.chess_events import Episode, MoveEvent, StrategicMotif, TacticalMotif
+from app.models.chess_events import Episode, MoveEvent
 
 MIN_STREAK = 3
 
 
-def _motif_keys(ev: MoveEvent) -> List[str]:
-    return [m.value for m in ev.tactical_motifs] + [m.value for m in ev.strategic_motifs]
+def _motif_keys(ev: MoveEvent) -> list[str]:
+    return [m.value for m in ev.tactical_motifs] + [
+        m.value for m in ev.strategic_motifs
+    ]
 
 
-def compute_move_trajectories(events: List[MoveEvent]) -> None:
+def compute_move_trajectories(events: list[MoveEvent]) -> None:
     """
     Mutates ``events`` in place: sets ``motif_trajectory`` when a motif persists
     for ``MIN_STREAK`` consecutive plies.
@@ -22,7 +23,7 @@ def compute_move_trajectories(events: List[MoveEvent]) -> None:
     if not events:
         return
 
-    streaks: Dict[str, int] = defaultdict(int)
+    streaks: dict[str, int] = defaultdict(int)
     prev_ply = events[0].ply - 1
 
     for ev in events:
@@ -30,7 +31,7 @@ def compute_move_trajectories(events: List[MoveEvent]) -> None:
             streaks.clear()
         prev_ply = ev.ply
 
-        current: Set[str] = set(_motif_keys(ev))
+        current: set[str] = set(_motif_keys(ev))
         for key in list(streaks.keys()):
             if key in current:
                 streaks[key] += 1
@@ -46,10 +47,10 @@ def compute_move_trajectories(events: List[MoveEvent]) -> None:
             ev.motif_trajectory = f"sustained_{primary}"
 
 
-def compute_episode_trajectories(episodes: List[Episode]) -> None:
+def compute_episode_trajectories(episodes: list[Episode]) -> None:
     """Set ``Episode.motif_trajectory`` from dominant sustained patterns in the chunk."""
     for ep in episodes:
-        counts: Dict[str, int] = defaultdict(int)
+        counts: dict[str, int] = defaultdict(int)
         for ev in ep.move_events:
             if ev.motif_trajectory:
                 key = ev.motif_trajectory.replace("sustained_", "")
@@ -59,10 +60,10 @@ def compute_episode_trajectories(episodes: List[Episode]) -> None:
             ep.motif_trajectory = f"episode_sustained_{best}"
 
 
-def trajectory_summary(events: List[MoveEvent]) -> List[str]:
+def trajectory_summary(events: list[MoveEvent]) -> list[str]:
     """Collect unique trajectory labels for prompts."""
-    out: List[str] = []
-    seen: Set[str] = set()
+    out: list[str] = []
+    seen: set[str] = set()
     for ev in events:
         if ev.motif_trajectory and ev.motif_trajectory not in seen:
             seen.add(ev.motif_trajectory)

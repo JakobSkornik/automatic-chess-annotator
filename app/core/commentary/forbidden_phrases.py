@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import re
-from typing import List, Tuple
 
+# NOTE: "holds the balance" is deliberately absent — it is a sanctioned
+# transition verdict produced by the rule engine (rules/engine.py).
 FORBIDDEN_REGEX = re.compile(
     r"engine confirms|engine preference|engine's top choice|settles near|settling near|"
-    r"holds the balance|preserves the rhythm|drives the rhythm|stalls the initiative|"
+    r"preserves the rhythm|drives the rhythm|stalls the initiative|"
     r"flows through|keeps matters level|king tuck",
     re.I,
 )
@@ -17,10 +18,10 @@ def forbidden_hit_count(text: str) -> int:
     return len(FORBIDDEN_REGEX.findall(text or ""))
 
 
-def forbidden_hit_strings(text: str) -> List[str]:
+def forbidden_hit_strings(text: str) -> list[str]:
     """Unique matched substrings (lowered for display), preserve first-seen order."""
     seen: set[str] = set()
-    out: List[str] = []
+    out: list[str] = []
     for m in FORBIDDEN_REGEX.finditer(text or ""):
         s = m.group(0).strip()
         key = s.lower()
@@ -30,7 +31,7 @@ def forbidden_hit_strings(text: str) -> List[str]:
     return out
 
 
-def scrub_forbidden(text: str) -> Tuple[str, List[str]]:
+def scrub_forbidden(text: str) -> tuple[str, list[str]]:
     """Remove forbidden phrases; returns (cleaned_text, unique hits before removal)."""
     hits = forbidden_hit_strings(text)
     cleaned = FORBIDDEN_REGEX.sub("", text or "")

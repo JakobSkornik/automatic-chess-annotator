@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 import chess
 
@@ -33,17 +33,18 @@ def _backward_enemy_pawn_exists(board: chess.Board, mover: chess.Color) -> bool:
     return False
 
 
-def _pawn_files(board: chess.Board, color: chess.Color) -> Dict[int, List[int]]:
-    files: Dict[int, List[int]] = {}
+def _pawn_files(board: chess.Board, color: chess.Color) -> dict[int, list[int]]:
+    files: dict[int, list[int]] = {}
     for sq in board.pieces(chess.PAWN, color):
         fi = chess.square_file(sq)
         files.setdefault(fi, []).append(sq)
     return files
 
+
 MATE_SCORE = 1_000_000
 
 
-def _list_feature_len(side: Dict[str, Any], key: str) -> int:
+def _list_feature_len(side: dict[str, Any], key: str) -> int:
     v = side.get(key)
     if isinstance(v, list):
         return len(v)
@@ -52,9 +53,9 @@ def _list_feature_len(side: Dict[str, Any], key: str) -> int:
     return 0
 
 
-def _dedupe(xs: List[StrategicMotif]) -> List[StrategicMotif]:
-    seen: Set[StrategicMotif] = set()
-    out: List[StrategicMotif] = []
+def _dedupe(xs: list[StrategicMotif]) -> list[StrategicMotif]:
+    seen: set[StrategicMotif] = set()
+    out: list[StrategicMotif] = []
     for x in xs:
         if x not in seen:
             seen.add(x)
@@ -81,18 +82,18 @@ def detect_strategic_motifs(
     board_before: chess.Board,
     board_after: chess.Board,
     move: chess.Move,
-    hidden_features: Optional[Dict[str, Any]],
+    hidden_features: dict[str, Any] | None,
     *,
-    eval_after_cp: Optional[int] = None,
-    eval_before_cp: Optional[int] = None,
-    eval_swing_cp: Optional[int] = None,
+    eval_after_cp: int | None = None,
+    eval_before_cp: int | None = None,
+    eval_swing_cp: int | None = None,
     phase: str = "middlegame",
-    best_pv_ucis: Optional[List[str]] = None,
-    plan_comparison: Optional[PlanComparison] = None,
-) -> List[StrategicMotif]:
+    best_pv_ucis: list[str] | None = None,
+    plan_comparison: PlanComparison | None = None,
+) -> list[StrategicMotif]:
     """Return strategic/endgame motif tags (best-effort heuristics)."""
     hf = hidden_features if isinstance(hidden_features, dict) else {}
-    motifs: List[StrategicMotif] = []
+    motifs: list[StrategicMotif] = []
 
     piece_after = board_after.piece_at(move.to_square)
     if piece_after is None:
@@ -101,7 +102,7 @@ def detect_strategic_motifs(
     w = hf.get("white") if isinstance(hf.get("white"), dict) else {}
     b = hf.get("black") if isinstance(hf.get("black"), dict) else {}
     ps = hf.get("pawnStructure") if isinstance(hf.get("pawnStructure"), dict) else {}
-    mat = hf.get("material") if isinstance(hf.get("material"), dict) else {}
+    hf.get("material") if isinstance(hf.get("material"), dict) else {}
 
     # --- From hidden feature extractors (positional_features) ---
     out_w = w.get("outposts") if isinstance(w.get("outposts"), dict) else {}
@@ -124,13 +125,11 @@ def detect_strategic_motifs(
     if black_bad:
         motifs.append(StrategicMotif.BAD_BISHOP)
     if isinstance(w.get("goodBishops"), int) and w["goodBishops"] >= 1:
-        if not white_bad_hf:
-            if mover == chess.WHITE:
-                motifs.append(StrategicMotif.GOOD_BISHOP)
+        if not white_bad_hf and mover == chess.WHITE:
+            motifs.append(StrategicMotif.GOOD_BISHOP)
     if isinstance(b.get("goodBishops"), int) and b["goodBishops"] >= 1:
-        if not black_bad_hf:
-            if mover == chess.BLACK:
-                motifs.append(StrategicMotif.GOOD_BISHOP)
+        if not black_bad_hf and mover == chess.BLACK:
+            motifs.append(StrategicMotif.GOOD_BISHOP)
     if w.get("hasBishopPair") and mover == chess.WHITE:
         motifs.append(StrategicMotif.BISHOP_PAIR_ADVANTAGE)
     if b.get("hasBishopPair") and mover == chess.BLACK:
@@ -142,11 +141,12 @@ def detect_strategic_motifs(
         motifs.append(StrategicMotif.WEAK_SQUARE_EXPLOITED)
         motifs.append(StrategicMotif.WEAK_SQUARE_CREATION)
 
-    if isinstance(w.get("lightSquareBishops"), int) and isinstance(
-        w.get("darkSquareBishops"), int
+    if (
+        isinstance(w.get("lightSquareBishops"), int)
+        and isinstance(w.get("darkSquareBishops"), int)
+        and abs(w["lightSquareBishops"] - w.get("darkSquareBishops", 0)) >= 2
     ):
-        if abs(w["lightSquareBishops"] - w.get("darkSquareBishops", 0)) >= 2:
-            motifs.append(StrategicMotif.COLOR_COMPLEX_WEAKNESS)
+        motifs.append(StrategicMotif.COLOR_COMPLEX_WEAKNESS)
 
     # IQP / hanging pawns (heuristic from counts + center type)
     ct = ps.get("centerType") if isinstance(ps, dict) else None
@@ -161,30 +161,38 @@ def detect_strategic_motifs(
             motifs.append(StrategicMotif.HANGING_PAWNS)
 
     # Open file: rook/queen on open file
-    for sq in board_after.pieces(chess.ROOK, mover) | board_after.pieces(chess.QUEEN, mover):
+    for sq in board_after.pieces(chess.ROOK, mover) | board_after.pieces(
+        chess.QUEEN, mover
+    ):
         f = chess.square_file(sq)
         wpf = any(
-            chess.square(f, r) in board_after.pieces(chess.PAWN, chess.WHITE) for r in range(8)
+            chess.square(f, r) in board_after.pieces(chess.PAWN, chess.WHITE)
+            for r in range(8)
         )
         bpf = any(
-            chess.square(f, r) in board_after.pieces(chess.PAWN, chess.BLACK) for r in range(8)
+            chess.square(f, r) in board_after.pieces(chess.PAWN, chess.BLACK)
+            for r in range(8)
         )
         if not wpf and not bpf:
             motifs.append(StrategicMotif.OPEN_FILE_OCCUPATION)
             break
 
     # Minority attack pattern: a-b-c pawns vs d-e for same side (very rough)
-    if ct == "semi-open" and isinstance(ps.get("tension"), list) and len(ps["tension"]) >= 2:
+    if (
+        ct == "semi-open"
+        and isinstance(ps.get("tension"), list)
+        and len(ps["tension"]) >= 2
+    ):
         motifs.append(StrategicMotif.MINORITY_ATTACK)
 
     # Castling opposite sides
     wk = board_after.king(chess.WHITE)
     bk = board_after.king(chess.BLACK)
-    wf, wr, bf, br = 0, 0, 0, 0
+    _wf, wr, _bf, br = 0, 0, 0, 0
     has_oppo_race = False
     if wk is not None and bk is not None:
-        wf, wr = chess.square_file(wk), chess.square_rank(wk)
-        bf, br = chess.square_file(bk), chess.square_rank(bk)
+        _wf, wr = chess.square_file(wk), chess.square_rank(wk)
+        _bf, br = chess.square_file(bk), chess.square_rank(bk)
         if (wr <= 2 and br >= 6) or (wr >= 6 and br <= 2):
             motifs.append(StrategicMotif.OPPOSITE_SIDE_CASTLING_RACE)
             has_oppo_race = True
@@ -193,7 +201,12 @@ def detect_strategic_motifs(
         tf = chess.square_file(move.to_square)
         if tf in (3, 4) and eval_swing_cp is not None and abs(eval_swing_cp) >= 40:
             motifs.append(StrategicMotif.CENTRAL_COUNTER_VS_WING_ATTACK)
-    if has_oppo_race and eval_swing_cp is not None and wk is not None and bk is not None:
+    if (
+        has_oppo_race
+        and eval_swing_cp is not None
+        and wk is not None
+        and bk is not None
+    ):
         if mover == chess.WHITE and wr <= 2 and br >= 5:
             if chess.square_file(move.to_square) <= 2 and eval_swing_cp <= -40:
                 motifs.append(StrategicMotif.WRONG_WING_PIECE_IN_RACE)
@@ -207,10 +220,7 @@ def detect_strategic_motifs(
     # Prophylaxis: PV2 square, king stepping off pressure, wing luft pawn, or covering engine targets
     pv_ucis = best_pv_ucis or []
     quiet = not board_before.is_capture(move) and not board_after.is_check()
-    if (
-        len(pv_ucis) >= 2
-        and quiet
-    ):
+    if len(pv_ucis) >= 2 and quiet:
         try:
             opp = chess.Move.from_uci(pv_ucis[1])
             if opp.to_square in board_after.attacks(move.to_square):
@@ -252,7 +262,11 @@ def detect_strategic_motifs(
 
     if board_before.is_capture(move):
         cap = board_before.piece_at(move.to_square)
-        if cap and cap.piece_type in (chess.QUEEN, chess.ROOK) and eval_after_cp is not None:
+        if (
+            cap
+            and cap.piece_type in (chess.QUEEN, chess.ROOK)
+            and eval_after_cp is not None
+        ):
             if mover == chess.WHITE and eval_after_cp >= 100:
                 motifs.append(StrategicMotif.SIMPLIFICATION_WHEN_AHEAD)
             if mover == chess.BLACK and eval_after_cp <= -100:
@@ -336,19 +350,24 @@ def detect_strategic_motifs(
         b_rooks = len(board_after.pieces(chess.ROOK, chess.BLACK))
         w_pawns = len(board_after.pieces(chess.PAWN, chess.WHITE))
         b_pawns = len(board_after.pieces(chess.PAWN, chess.BLACK))
-        if w_rooks == 1 and b_rooks == 1 and w_pawns + b_pawns == 1 and minors + rq <= 2:
-            pr = next(iter(board_after.pieces(chess.PAWN, chess.WHITE) or []), None) or next(
-                iter(board_after.pieces(chess.PAWN, chess.BLACK) or []), None
-            )
+        if (
+            w_rooks == 1
+            and b_rooks == 1
+            and w_pawns + b_pawns == 1
+            and minors + rq <= 2
+        ):
+            pr = next(
+                iter(board_after.pieces(chess.PAWN, chess.WHITE) or []), None
+            ) or next(iter(board_after.pieces(chess.PAWN, chess.BLACK) or []), None)
             if pr is not None:
                 pr_rank = chess.square_rank(pr)
-                if mover == chess.WHITE and pr_rank >= 5:
+                if (mover == chess.WHITE and pr_rank >= 5) or (
+                    mover == chess.BLACK and pr_rank <= 2
+                ):
                     motifs.append(StrategicMotif.LUCENA)
-                elif mover == chess.BLACK and pr_rank <= 2:
-                    motifs.append(StrategicMotif.LUCENA)
-                if mover == chess.WHITE and pr_rank <= 4:
-                    motifs.append(StrategicMotif.PHILIDOR)
-                elif mover == chess.BLACK and pr_rank >= 3:
+                if (mover == chess.WHITE and pr_rank <= 4) or (
+                    mover == chess.BLACK and pr_rank >= 3
+                ):
                     motifs.append(StrategicMotif.PHILIDOR)
 
         if rq == 0 and minors == 0 and w_pawns == 0 and b_pawns == 0:
@@ -367,7 +386,9 @@ def detect_strategic_motifs(
     return _dedupe(motifs)
 
 
-def _is_passed_pawn_middlegame(board: chess.Board, pawn_sq: int, color: chess.Color) -> bool:
+def _is_passed_pawn_middlegame(
+    board: chess.Board, pawn_sq: int, color: chess.Color
+) -> bool:
     """Passed pawn (any file) — middlegame / opening heuristic."""
     enemy = not color
     f = chess.square_file(pawn_sq)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from enum import Enum
-from typing import Any, List, Tuple
+from typing import Any
 
 import chess
 
@@ -19,8 +19,8 @@ class PlanTag(str, Enum):
     EXCHANGE = "exchange"
 
 
-def _uci_seq_from_pv(pv_seq: List[Any]) -> List[str]:
-    out: List[str] = []
+def _uci_seq_from_pv(pv_seq: list[Any]) -> list[str]:
+    out: list[str] = []
     for pm in pv_seq or []:
         u = getattr(pm, "move", None)
         if u:
@@ -28,10 +28,12 @@ def _uci_seq_from_pv(pv_seq: List[Any]) -> List[str]:
     return out
 
 
-def _destination_chain(board: chess.Board, uci_moves: List[str], max_plies: int = 8) -> List[str]:
+def _destination_chain(
+    board: chess.Board, uci_moves: list[str], max_plies: int = 8
+) -> list[str]:
     """Ordered destination squares along the PV (first line)."""
     b = board.copy()
-    out: List[str] = []
+    out: list[str] = []
     for u in uci_moves[:max_plies]:
         try:
             m = chess.Move.from_uci(u)
@@ -44,9 +46,11 @@ def _destination_chain(board: chess.Board, uci_moves: List[str], max_plies: int 
     return out
 
 
-def _targets_from_uci(board: chess.Board, uci_moves: List[str], min_count: int = 2) -> List[str]:
+def _targets_from_uci(
+    board: chess.Board, uci_moves: list[str], min_count: int = 2
+) -> list[str]:
     b = board.copy()
-    dests: List[str] = []
+    dests: list[str] = []
     for u in uci_moves[:12]:
         try:
             m = chess.Move.from_uci(u)
@@ -60,7 +64,9 @@ def _targets_from_uci(board: chess.Board, uci_moves: List[str], min_count: int =
     return [sq for sq, n in c.most_common(8) if n >= min_count]
 
 
-def _side_cluster_label(board: chess.Board, dest_square_names: List[str], mover: chess.Color) -> str:
+def _side_cluster_label(
+    board: chess.Board, dest_square_names: list[str], mover: chess.Color
+) -> str:
     if not dest_square_names:
         return "unclear"
     files = [ord(s[0]) - ord("a") for s in dest_square_names if len(s) >= 2]
@@ -82,12 +88,12 @@ def _side_cluster_label(board: chess.Board, dest_square_names: List[str], mover:
 
 def classify_pv_plan(
     board: chess.Board,
-    uci_moves: List[str],
+    uci_moves: list[str],
     *,
     max_plies: int = 8,
-) -> List[str]:
+) -> list[str]:
     """Classify PV move sequence into named plan tags."""
-    tags: List[str] = []
+    tags: list[str] = []
     b = board.copy()
     pawn_advances_wing = 0
     piece_repositions = 0
@@ -96,7 +102,7 @@ def classify_pv_plan(
     king_walk = 0
     captures = 0
     central_piece_moves = 0
-    dest_files: List[int] = []
+    dest_files: list[int] = []
 
     for uci in uci_moves[:max_plies]:
         try:
@@ -116,9 +122,15 @@ def classify_pv_plan(
         dest_files.append(tf)
 
         if piece.piece_type == chess.PAWN:
-            if ff == tf and ((mover == chess.WHITE and tr > fr) or (mover == chess.BLACK and tr < fr)):
-                if tf >= 5 or tf <= 2:
-                    pawn_advances_wing += 1
+            if (
+                ff == tf
+                and (
+                    (mover == chess.WHITE and tr > fr)
+                    or (mover == chess.BLACK and tr < fr)
+                )
+                and (tf >= 5 or tf <= 2)
+            ):
+                pawn_advances_wing += 1
             if b.is_capture(m):
                 tags.append(PlanTag.PAWN_BREAK.value)
         elif piece.piece_type == chess.ROOK:
@@ -126,10 +138,12 @@ def classify_pv_plan(
                 rook_to_seventh = True
             f = tf
             wpf = any(
-                chess.square(f, r) in b.pieces(chess.PAWN, chess.WHITE) for r in range(8)
+                chess.square(f, r) in b.pieces(chess.PAWN, chess.WHITE)
+                for r in range(8)
             )
             bpf = any(
-                chess.square(f, r) in b.pieces(chess.PAWN, chess.BLACK) for r in range(8)
+                chess.square(f, r) in b.pieces(chess.PAWN, chess.BLACK)
+                for r in range(8)
             )
             if not wpf and not bpf:
                 rook_to_open_file = True
@@ -163,12 +177,11 @@ def classify_pv_plan(
     # Repeated destination region
     if len(dest_files) >= 3:
         c = Counter(dest_files)
-        if c.most_common(1)[0][1] >= 2:
-            if not tags:
-                tags.append(PlanTag.PIECE_MANEUVER.value)
+        if c.most_common(1)[0][1] >= 2 and not tags:
+            tags.append(PlanTag.PIECE_MANEUVER.value)
 
     seen: set[str] = set()
-    out: List[str] = []
+    out: list[str] = []
     for t in tags:
         if t not in seen:
             seen.add(t)
@@ -178,9 +191,9 @@ def classify_pv_plan(
 
 def build_plan_comparison(
     fen_before: str,
-    pvs: List[List[Any]],
+    pvs: list[list[Any]],
     played_uci: str,
-) -> Tuple[List[str], List[str], str, str, List[str], List[str], List[str], List[str]]:
+) -> tuple[list[str], list[str], str, str, list[str], list[str], list[str], list[str]]:
     """
     Returns (played_targets, best_targets, played_seed, best_seed,
              played_recurring_destinations, best_recurring_destinations,
@@ -199,10 +212,10 @@ def build_plan_comparison(
     mover = b0.turn
     best_seed = _side_cluster_label(b0, best_targets, mover)
 
-    played_targets: List[str] = []
+    played_targets: list[str] = []
     played_seed = "unclear"
-    played_chain: List[str] = []
-    played_tags: List[str] = []
+    played_chain: list[str] = []
+    played_tags: list[str] = []
     if best_ucis and played_uci == best_ucis[0]:
         played_targets = best_targets
         played_seed = best_seed

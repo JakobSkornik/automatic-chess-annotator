@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import chess
 
-from app.models.chess_events import FutureLineDelta, MoveCategory, MoveEvent, MoveQuality, StrategicMotif
+from app.models.chess_events import (
+    FutureLineDelta,
+    MoveCategory,
+    MoveEvent,
+    MoveQuality,
+    StrategicMotif,
+)
 
 
 def classify_move_event(
