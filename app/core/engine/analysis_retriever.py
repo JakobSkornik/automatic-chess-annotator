@@ -857,6 +857,13 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         named_motifs: List[str] = []
         primary_motif_label: Optional[str] = None
         rag_refs: List[RagRef] = []
+
+        # Commentary side gate: when a side is selected, the other side's moves
+        # get NO commentary apparatus at all (no comment, facts, dot, charts).
+        _side_sel = (state.metadata.comment_side or "both").lower()
+        _mover_is_white = move_obj.depth % 2 == 1
+        _side_ok = _side_sel == "both" or (_side_sel == "white") == _mover_is_white
+
         try:
             hf_all = analyzed_move.hiddenFeatures or {}
             llm_rr = hf_all.get("_llm") if isinstance(hf_all, dict) else None
@@ -881,7 +888,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                     comment = str(op["comment"])
             except Exception:
                 comment = None
-        if me and me.is_critical:
+        if me and me.is_critical and _side_ok:
             try:
                 hf = analyzed_move.hiddenFeatures or {}
                 llm = hf.get("_llm") if isinstance(hf, dict) else None
@@ -903,9 +910,6 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 comment = None
         # When a comment side is selected, the other side's moves stay silent —
         # no stub or heuristic fallback either.
-        _side_sel = (state.metadata.comment_side or "both").lower()
-        _mover_is_white = move_obj.depth % 2 == 1
-        _side_ok = _side_sel == "both" or (_side_sel == "white") == _mover_is_white
         if _side_ok:
             if (
                 not comment
@@ -993,7 +997,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         # (chart highlights) and the diff tables behind them.
         feature_refs: List[FeatureRef] = []
         feature_diff_out: Optional[Dict[str, Any]] = None
-        facts = me.comment_facts if me else None
+        facts = me.comment_facts if (me and _side_ok) else None
         if facts is not None:
             by_name: Dict[str, int] = {}
             if facts.feature_diff:
@@ -1102,7 +1106,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 move_category=me.move_category.value if me and me.move_category else None,
                 plan_comparison=me.plan_comparison.model_dump() if me and me.plan_comparison else None,
                 is_critical=bool(me.is_critical if me else False),
-                is_key_moment=bool(me and (me.key_moment_type or me.teaching_moment)),
+                is_key_moment=bool(me and (me.key_moment_type or me.teaching_moment) and _side_ok),
                 episode_index=ep_idx,
                 named_motifs=named_motifs,
                 primary_motif_label=primary_motif_label,
