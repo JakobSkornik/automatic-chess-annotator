@@ -14,7 +14,9 @@ class TestPlanExtractor(unittest.TestCase):
     def test_played_matches_best_line(self) -> None:
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         pvs = [[_PM("e2e4")]]
-        pt, bt, ps, bs, pch, bch, ptags, btags = build_plan_comparison(fen, pvs, "e2e4")
+        _pt, _bt, ps, bs, _pch, bch, ptags, btags = build_plan_comparison(
+            fen, pvs, "e2e4"
+        )
         self.assertEqual(ps, bs)
         self.assertTrue(bch)
         self.assertIsInstance(ptags, list)

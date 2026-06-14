@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unittest
-from typing import Any, Dict, Optional
+from typing import Any
 from unittest.mock import AsyncMock
 
 from app.core.commentary.pipeline.move_pipeline import (
@@ -26,7 +26,7 @@ class _StubRAG(RAGRetriever):
         query: RAGQuery,
         top_k: int = 2,
         *,
-        retrieval_debug: Optional[Dict[str, Any]] = None,
+        retrieval_debug: dict[str, Any] | None = None,
     ):  # type: ignore[override]
         _ = retrieval_debug
         return [

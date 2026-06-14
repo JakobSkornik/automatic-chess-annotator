@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Set
-
 import chess
 
 from app.core.commentary.features.tactical_motifs import detect_tactical_motifs
@@ -13,10 +11,10 @@ from app.models.chess_events import TacticalMotif
 def detect_opponent_threats(
     board_after: chess.Board,
     *,
-    best_pv_ucis: Optional[List[str]] = None,
+    best_pv_ucis: list[str] | None = None,
     played_matches_best: bool = False,
     max_legal_scan: int = 40,
-) -> List[TacticalMotif]:
+) -> list[TacticalMotif]:
     """
     Scan what the opponent threatens from ``board_after`` (opponent to move).
 
@@ -26,11 +24,10 @@ def detect_opponent_threats(
     if board_after.is_game_over():
         return []
 
-    enemy = board_after.turn
-    motifs: List[TacticalMotif] = []
-    seen: Set[TacticalMotif] = set()
+    motifs: list[TacticalMotif] = []
+    seen: set[TacticalMotif] = set()
 
-    def _add(found: List[TacticalMotif]) -> None:
+    def _add(found: list[TacticalMotif]) -> None:
         for m in found:
             if m not in seen:
                 seen.add(m)
@@ -70,9 +67,9 @@ def detect_opponent_threats(
 
 
 def threats_prevented(
-    opponent_threats: List[TacticalMotif],
-    played_motifs: List[TacticalMotif],
-) -> List[TacticalMotif]:
+    opponent_threats: list[TacticalMotif],
+    played_motifs: list[TacticalMotif],
+) -> list[TacticalMotif]:
     """
     Heuristic: opponent threats that the played move's prophylaxis may address.
     Returns threats not mirrored as immediate tactical themes on the played move.

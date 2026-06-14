@@ -39,19 +39,25 @@ def test_compact_drops_opening_character_after_ply_20() -> None:
         "turning_points": [],
         "phase_story": [{"phase": "middlegame", "summary": "x"}],
     }
-    ctx = compact_game_context_for_move(digest, current_ply=22, current_phase="middlegame")
+    ctx = compact_game_context_for_move(
+        digest, current_ply=22, current_phase="middlegame"
+    )
     assert "opening_character" not in ctx
 
 
 def test_compact_keeps_phase_story_while_trimming_turning_points() -> None:
     long_why = "noise-" * 55
-    tps = [{"ply": i, "san": "e4", "why": long_why, "motif": "none"} for i in range(1, 17)]
+    tps = [
+        {"ply": i, "san": "e4", "why": long_why, "motif": "none"} for i in range(1, 17)
+    ]
     digest = {
         "strategic_archetype": "other",
         "turning_points": tps,
         "phase_story": [{"phase": "middlegame", "summary": "PHASE_MARKER_UNIQUE_XYZ"}],
     }
-    ctx = compact_game_context_for_move(digest, current_ply=30, current_phase="middlegame")
+    ctx = compact_game_context_for_move(
+        digest, current_ply=30, current_phase="middlegame"
+    )
     summaries = ctx.get("phase_story") or []
     assert summaries and summaries[0].get("summary") == "PHASE_MARKER_UNIQUE_XYZ"
     assert len(ctx.get("turning_points") or []) < len(tps)

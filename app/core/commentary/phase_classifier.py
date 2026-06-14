@@ -10,7 +10,6 @@ Phase definitions (Guid-style pipeline):
 from __future__ import annotations
 
 import os
-from typing import List, Optional
 
 import chess
 
@@ -36,20 +35,20 @@ def minor_major_piece_count(board: chess.Board) -> int:
 class PhaseClassifier:
     """Classifies plies into early/mid/end using only the board and the ECO book."""
 
-    def __init__(self, eco_book: Optional[ECOBook] = None) -> None:
+    def __init__(self, eco_book: ECOBook | None = None) -> None:
         self._eco = eco_book or ECOBook()
 
-    def book_match(self, uci_prefix: List[str]) -> tuple[Optional[OpeningInfo], int]:
+    def book_match(self, uci_prefix: list[str]) -> tuple[OpeningInfo | None, int]:
         return self._eco.match(uci_prefix)
 
-    def in_book(self, uci_prefix: List[str]) -> bool:
+    def in_book(self, uci_prefix: list[str]) -> bool:
         """True while the ECO book covers every ply played so far."""
         if not uci_prefix:
             return False
         info, matched = self._eco.match(uci_prefix)
         return info is not None and matched >= len(uci_prefix)
 
-    def classify(self, board_after: chess.Board, uci_prefix: List[str]) -> str:
+    def classify(self, board_after: chess.Board, uci_prefix: list[str]) -> str:
         if self.in_book(uci_prefix):
             return "early"
         if minor_major_piece_count(board_after) < endgame_piece_threshold():

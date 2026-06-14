@@ -33,7 +33,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.models.comment_facts import BestAlternative, Claim, CommentFacts
 
@@ -59,6 +59,7 @@ def llm_rendering_enabled() -> bool:
 # ---------------------------------------------------------------------------
 # Shared fact tokens
 # ---------------------------------------------------------------------------
+
 
 def eval_token(facts: CommentFacts) -> str:
     if facts.eval_mate is not None:
@@ -100,13 +101,14 @@ def _gerundize(verdict: str) -> str:
     """'leads to equality' -> 'leading to equality' (for 'A better move was X, ...')."""
     for head, ger in (("leads", "leading"), ("gives", "giving"), ("leaves", "leaving")):
         if verdict.startswith(head + " "):
-            return ger + verdict[len(head):]
+            return ger + verdict[len(head) :]
     return verdict
 
 
 # ---------------------------------------------------------------------------
 # Deterministic template (expert fallback / no-LLM rendering)
 # ---------------------------------------------------------------------------
+
 
 def _claim_text(c: Claim, *, prefer_state: bool) -> str:
     if prefer_state and c.text_state:
@@ -122,7 +124,7 @@ def render_facts_template(facts: CommentFacts) -> str:
     ev = eval_token(facts)
     move = _move_label(facts)
 
-    parts: List[str] = []
+    parts: list[str] = []
     if variant == 0:
         head = f"{move} {facts.verdict}"
         if pv:
@@ -148,7 +150,9 @@ def render_facts_template(facts: CommentFacts) -> str:
         merits = [c for c in facts.claims if not c.is_concession]
         concessions = [c for c in facts.claims if c.is_concession]
         if merits:
-            parts.append(" ".join(_claim_text(c, prefer_state=prefer_state) for c in merits))
+            parts.append(
+                " ".join(_claim_text(c, prefer_state=prefer_state) for c in merits)
+            )
         if concessions:
             if facts.concession_mode == "consequence":
                 # Claims start with the side's name, so "Now Black ..." reads
@@ -190,7 +194,7 @@ def render_facts_template(facts: CommentFacts) -> str:
 # LLM rendering — one call, three audience registers
 # ---------------------------------------------------------------------------
 
-SINGLE_LEVEL_SCHEMA: Dict[str, Any] = {
+SINGLE_LEVEL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "text": {"type": "string"},
@@ -229,7 +233,7 @@ GUID_COMPOSER_SYSTEM = (
     "- One paragraph. No lists, no headers, no engine-worship.\n"
 )
 
-AUDIENCE_BLOCKS: Dict[str, str] = {
+AUDIENCE_BLOCKS: dict[str, str] = {
     "expert": (
         "AUDIENCE — expert: register of Chess Informant / grandmaster game "
         "collections. Dry, terse, declarative; ~25-55 words besides tokens. Do "
@@ -263,7 +267,7 @@ ENRICHMENT_RULES = (
 def build_facts_user_prompt(
     facts: CommentFacts,
     *,
-    enrichment: Optional[Dict[str, Any]] = None,
+    enrichment: dict[str, Any] | None = None,
 ) -> str:
     def _claim_line(c: Claim) -> str:
         line = f"- {c.text}"
@@ -278,9 +282,11 @@ def build_facts_user_prompt(
     merit_lines = [_claim_line(c) for c in facts.claims if not c.is_concession]
     concession_lines = [_claim_line(c) for c in facts.claims if c.is_concession]
     if not merit_lines and not concession_lines:
-        merit_lines = ["- (no positional claims fired; comment on verdict and line only)"]
+        merit_lines = [
+            "- (no positional claims fired; comment on verdict and line only)"
+        ]
 
-    blocks: List[str] = [
+    blocks: list[str] = [
         "INVIOLABLE FACTS:",
         f"Move: {_move_label(facts)} (played by {facts.mover}, {facts.phase}game)",
         f"Verdict: this move {facts.verdict}",
@@ -311,13 +317,17 @@ def build_facts_user_prompt(
             *alt_claims,
         ]
     if enrichment:
-        enr_lines: List[str] = []
+        enr_lines: list[str] = []
         for key in ("opening", "episode_theme", "what_happens_later", "master_note"):
             val = enrichment.get(key)
             if val:
                 enr_lines.append(f"{key}: {val}")
         if enr_lines:
-            blocks += ["", "ENRICHMENT (intermediate/beginner only, optional):", *enr_lines]
+            blocks += [
+                "",
+                "ENRICHMENT (intermediate/beginner only, optional):",
+                *enr_lines,
+            ]
     return "\n".join(blocks)
 
 
@@ -332,7 +342,12 @@ def _normalize(s: str) -> str:
     return _WS.sub(" ", s or "").strip()
 
 
-_SCHEMA_MARKERS = ('additionalProperties', '"type":"object"', '"type": "object"', '"properties"')
+_SCHEMA_MARKERS = (
+    "additionalProperties",
+    '"type":"object"',
+    '"type": "object"',
+    '"properties"',
+)
 
 
 def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
@@ -344,7 +359,7 @@ def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
     if not t:
         return False
     # Reject schema echoes and raw JSON objects outright.
-    if t.lstrip().startswith('{') or any(m in t for m in _SCHEMA_MARKERS):
+    if t.lstrip().startswith("{") or any(m in t for m in _SCHEMA_MARKERS):
         return False
     ev = eval_token(facts)
     if ev and ev not in t:
@@ -355,9 +370,7 @@ def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
     alt = facts.better_alternative
     if alt is not None and alt.san and alt.san not in t:
         return False
-    if facts.refutation_san and facts.refutation_san not in t:
-        return False
-    return True
+    return not (facts.refutation_san and facts.refutation_san not in t)
 
 
 _OBJ_RE = re.compile(r"\{(?:[^{}]|\{[^{}]*\})*\}")
@@ -375,7 +388,11 @@ def _parse_text(raw: str) -> str:
     # Happy path: the whole response is the object.
     try:
         obj = json.loads(raw)
-        if isinstance(obj, dict) and isinstance(obj.get("text"), str) and obj["text"].strip():
+        if (
+            isinstance(obj, dict)
+            and isinstance(obj.get("text"), str)
+            and obj["text"].strip()
+        ):
             return obj["text"].strip()
     except Exception:
         pass
@@ -395,8 +412,11 @@ def _parse_text(raw: str) -> str:
         return best
     # Last resort: strip schema-looking lines and surrounding braces.
     cleaned = "\n".join(
-        ln for ln in raw.splitlines()
-        if "additionalProperties" not in ln and '"type"' not in ln and '"properties"' not in ln
+        ln
+        for ln in raw.splitlines()
+        if "additionalProperties" not in ln
+        and '"type"' not in ln
+        and '"properties"' not in ln
     ).strip()
     return cleaned
 
@@ -405,11 +425,11 @@ async def compose_facts_comment(
     service: Any,
     facts: CommentFacts,
     *,
-    model: Optional[str],
+    model: str | None,
     effort: str,
-    enrichment: Optional[Dict[str, Any]] = None,
+    enrichment: dict[str, Any] | None = None,
     level: str = DEFAULT_LEVEL,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Render the facts at the audience level chosen at submit time.
 
     Returns ``{"text": str, "rendering": "llm"|"template", "contract_ok": bool}``;
@@ -424,9 +444,16 @@ async def compose_facts_comment(
     except Exception:
         configured = False
     if not llm_rendering_enabled() or not configured:
-        return {"text": template, "rendering": "template", "contract_ok": True, "level": lvl}
+        return {
+            "text": template,
+            "rendering": "template",
+            "contract_ok": True,
+            "level": lvl,
+        }
 
-    system = GUID_COMPOSER_SYSTEM + "\n" + AUDIENCE_BLOCKS[lvl] + "\n" + ENRICHMENT_RULES
+    system = (
+        GUID_COMPOSER_SYSTEM + "\n" + AUDIENCE_BLOCKS[lvl] + "\n" + ENRICHMENT_RULES
+    )
     user = build_facts_user_prompt(facts, enrichment=enrichment)
     candidate = ""
     try:
@@ -444,7 +471,19 @@ async def compose_facts_comment(
         logger.warning("facts composer LLM call failed (ply %s): %s", facts.ply, e)
 
     if candidate and validate_facts_comment(candidate, facts):
-        return {"text": candidate, "rendering": "llm", "contract_ok": True, "level": lvl}
+        return {
+            "text": candidate,
+            "rendering": "llm",
+            "contract_ok": True,
+            "level": lvl,
+        }
     if candidate:
-        logger.info("facts comment failed contract at ply %s — using template", facts.ply)
-    return {"text": template, "rendering": "template", "contract_ok": False, "level": lvl}
+        logger.info(
+            "facts comment failed contract at ply %s — using template", facts.ply
+        )
+    return {
+        "text": template,
+        "rendering": "template",
+        "contract_ok": False,
+        "level": lvl,
+    }

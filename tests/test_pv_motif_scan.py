@@ -8,7 +8,6 @@ from app.core.commentary.features.pv_motif_scan import (
     collect_pv_motif_summary,
     scan_pv_motifs,
 )
-from app.models.chess_events import TacticalMotif
 
 
 class TestPvMotifScan(unittest.TestCase):
@@ -34,7 +33,9 @@ class TestPvMotifScan(unittest.TestCase):
         self.assertGreaterEqual(len(scans), 5)
         all_tact = [m for s in scans for m in s.tactical_motifs]
         # At least one ply should have some tactical tag (fork/check/etc.)
-        self.assertTrue(len(all_tact) >= 0)  # heuristic may vary; structure is what we test
+        self.assertTrue(
+            len(all_tact) >= 0
+        )  # heuristic may vary; structure is what we test
 
 
 if __name__ == "__main__":

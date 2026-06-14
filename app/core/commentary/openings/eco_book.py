@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
-import json
+from dataclasses import dataclass
+
 import chess
 import chess.pgn
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +15,12 @@ logger = logging.getLogger(__name__)
 class OpeningInfo:
     code: str
     name: str
-    variation: Optional[str] = None
+    variation: str | None = None
 
 
-def mainline_uci_list(game: chess.pgn.Game) -> List[str]:
+def mainline_uci_list(game: chess.pgn.Game) -> list[str]:
     """UCI plies in mainline order."""
-    out: List[str] = []
+    out: list[str] = []
     board = game.board()
     for m in game.mainline_moves():
         out.append(board.uci(m))
@@ -28,10 +28,10 @@ def mainline_uci_list(game: chess.pgn.Game) -> List[str]:
     return out
 
 
-def _fen_lookup_variants(fen: str) -> List[str]:
+def _fen_lookup_variants(fen: str) -> list[str]:
     """Try exact FEN and common normalizations for ECO JSON keys."""
     parts = fen.split()
-    seen: List[str] = []
+    seen: list[str] = []
     for candidate in (
         fen,
         " ".join(parts[:4]) + " 0 1" if len(parts) >= 4 else fen,
@@ -42,7 +42,7 @@ def _fen_lookup_variants(fen: str) -> List[str]:
     return seen
 
 
-def parse_pgn_eco_tag(headers: chess.pgn.Headers) -> Optional[str]:
+def parse_pgn_eco_tag(headers: chess.pgn.Headers) -> str | None:
     """
     Valid ECO codes are A00–E99 (letter + two digits), case-sensitive per PGN convention.
     Returns None and logs a warning if malformed.
@@ -51,7 +51,9 @@ def parse_pgn_eco_tag(headers: chess.pgn.Headers) -> Optional[str]:
     if not raw:
         return None
     if len(raw) != 3 or raw[0] not in "ABCDEabcde" or not raw[1:].isdigit():
-        logger.warning("Invalid ECO PGN tag %r — ignoring; internal book will be used", raw)
+        logger.warning(
+            "Invalid ECO PGN tag %r — ignoring; internal book will be used", raw
+        )
         return None
     return raw.upper()
 
@@ -61,7 +63,7 @@ _ABSENT_OPENING_NAMES = frozenset(
 )
 
 
-def is_absent_opening_header(name: Optional[str]) -> bool:
+def is_absent_opening_header(name: str | None) -> bool:
     if not name:
         return True
     s = name.strip()
@@ -71,10 +73,10 @@ def is_absent_opening_header(name: Optional[str]) -> bool:
 
 
 def merge_opening_with_headers(
-    detected: Optional[OpeningInfo],
+    detected: OpeningInfo | None,
     header_opening: str,
-    header_eco: Optional[str],
-) -> Optional[OpeningInfo]:
+    header_eco: str | None,
+) -> OpeningInfo | None:
     """
     Internal book is source of truth for ECO code when detection succeeds.
     Opening *name* may come from the PGN when it clearly matches the detected family.
@@ -86,7 +88,9 @@ def merge_opening_with_headers(
         var = detected.variation
         if not is_absent_opening_header(ho):
             eco_match = header_eco and header_eco == code
-            prefix_match = header_eco and len(header_eco) >= 2 and code.startswith(header_eco[:2])
+            prefix_match = (
+                header_eco and len(header_eco) >= 2 and code.startswith(header_eco[:2])
+            )
             name_match = ho.lower() in name.lower() or name.lower() in ho.lower()
             if eco_match or prefix_match or name_match:
                 name = ho
@@ -98,7 +102,9 @@ def merge_opening_with_headers(
     return None
 
 
-def detect_opening(game: chess.pgn.Game, book: Optional["ECOBook"] = None) -> Tuple[Optional[OpeningInfo], int]:
+def detect_opening(
+    game: chess.pgn.Game, book: ECOBook | None = None
+) -> tuple[OpeningInfo | None, int]:
     """
     Longest-prefix ECO match for the full mainline (for game-level metadata).
     Returns (OpeningInfo | None, matched_ply_count).
@@ -112,8 +118,8 @@ class ECOBook:
     """ECO lookup: longest UCI-prefix match, then FEN (transposition) fallback."""
 
     def __init__(self) -> None:
-        self._by_uci: Dict[str, OpeningInfo] = {}
-        self._by_fen: Dict[str, OpeningInfo] = {}
+        self._by_uci: dict[str, OpeningInfo] = {}
+        self._by_fen: dict[str, OpeningInfo] = {}
         self._load()
 
     def _load(self) -> None:
@@ -122,7 +128,7 @@ class ECOBook:
             if not filename.endswith(".json"):
                 continue
             path = os.path.join(data_dir, filename)
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             for fen_key, entry in data.items():
                 if not isinstance(entry, dict):
@@ -139,7 +145,7 @@ class ECOBook:
                 self._by_fen[fen_key] = info
                 moves_str = entry.get("moves", "")
                 board = chess.Board()
-                uci_sequence: List[str] = []
+                uci_sequence: list[str] = []
                 try:
                     for san_move in moves_str.split():
                         if "." in san_move:
@@ -158,7 +164,7 @@ class ECOBook:
             len(self._by_fen),
         )
 
-    def match(self, uci_moves: List[str]) -> Tuple[Optional[OpeningInfo], int]:
+    def match(self, uci_moves: list[str]) -> tuple[OpeningInfo | None, int]:
         """Longest matching opening for the given UCI prefix; returns (info, ply_count_matched)."""
         if not uci_moves:
             return None, 0

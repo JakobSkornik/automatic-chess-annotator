@@ -1,19 +1,20 @@
 import asyncio
+import contextlib
+import logging
 import time
 import uuid
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from starlette.websockets import WebSocket
 
-from app.models.job import JobStatus, JobResponse
-from app.models.PgnMetadata import PgnMetadata
 from app.core.io.pgn_reader import PGNReader
+from app.models.job import JobResponse, JobStatus
+from app.models.PgnMetadata import PgnMetadata
 
 logger = logging.getLogger(__name__)
 
 
-def _extract_pgn_snapshot(pgn_string: str) -> tuple[Optional[PgnMetadata], int]:
+def _extract_pgn_snapshot(pgn_string: str) -> tuple[PgnMetadata | None, int]:
     """Parse PGN once at enqueue time for job sidebar / recent list."""
     try:
         game = PGNReader.read_game_from_string(pgn_string)
@@ -24,8 +25,8 @@ def _extract_pgn_snapshot(pgn_string: str) -> tuple[Optional[PgnMetadata], int]:
     h = game.headers
     we = h.get("WhiteElo", "")
     be = h.get("BlackElo", "")
-    white_elo: Optional[int] = None
-    black_elo: Optional[int] = None
+    white_elo: int | None = None
+    black_elo: int | None = None
     try:
         if we and str(we).isdigit():
             white_elo = int(we)
@@ -62,23 +63,25 @@ def _extract_pgn_snapshot(pgn_string: str) -> tuple[Optional[PgnMetadata], int]:
 class QueueManager:
     def __init__(self):
         self.job_queue: asyncio.Queue = asyncio.Queue()
-        self.jobs: Dict[str, Dict] = {}  # job_id -> job dict
-        self.ws_connections: Dict[str, List[WebSocket]] = {}
-        self.commentary_buffer: Dict[str, List[Dict[str, Any]]] = {}
+        self.jobs: dict[str, dict] = {}  # job_id -> job dict
+        self.ws_connections: dict[str, list[WebSocket]] = {}
+        self.commentary_buffer: dict[str, list[dict[str, Any]]] = {}
         self._enqueue_seq: int = 0
 
-    def _compute_queued_ahead(self, job_id: str) -> Optional[int]:
+    def _compute_queued_ahead(self, job_id: str) -> int | None:
         job = self.jobs.get(job_id)
         if not job or job["status"] != JobStatus.WAITING:
             return None
         waiting = [j for j in self.jobs.values() if j["status"] == JobStatus.WAITING]
-        waiting_sorted = sorted(waiting, key=lambda j: (j["created_at"], j.get("enqueue_seq", 0)))
+        waiting_sorted = sorted(
+            waiting, key=lambda j: (j["created_at"], j.get("enqueue_seq", 0))
+        )
         for i, j in enumerate(waiting_sorted):
             if j["id"] == job_id:
                 return i
         return None
 
-    def _job_to_response(self, job: Dict) -> JobResponse:
+    def _job_to_response(self, job: dict) -> JobResponse:
         q_ahead = self._compute_queued_ahead(job["id"])
         qp = (q_ahead + 1) if q_ahead is not None else job.get("queue_position")
         return JobResponse(
@@ -102,10 +105,10 @@ class QueueManager:
     async def add_job(
         self,
         pgn_string: str,
-        llm_provider: Optional[str] = None,
-        llm_effort: Optional[str] = None,
-        commentary_level: Optional[str] = None,
-        comment_side: Optional[str] = None,
+        llm_provider: str | None = None,
+        llm_effort: str | None = None,
+        commentary_level: str | None = None,
+        comment_side: str | None = None,
     ) -> str:
         job_id = str(uuid.uuid4())
         self._enqueue_seq += 1
@@ -127,30 +130,37 @@ class QueueManager:
             "pgn_headers": pgn_headers,
             "move_count": move_count,
             "error": None,
-            "pgn_preview": (pgn_string[:500] + "…") if len(pgn_string) > 500 else pgn_string,
+            "pgn_preview": (pgn_string[:500] + "…")
+            if len(pgn_string) > 500
+            else pgn_string,
         }
         self.jobs[job_id] = job_data
         await self.job_queue.put(job_id)
         logger.info(f"Job {job_id} added to queue.")
         return job_id
 
-    def get_job_status(self, job_id: str) -> Optional[JobResponse]:
+    def get_job_status(self, job_id: str) -> JobResponse | None:
         job = self.jobs.get(job_id)
         if not job:
             return None
         return self._job_to_response(job)
 
-    def list_jobs(self, limit: int = 20) -> List[JobResponse]:
-        items = sorted(self.jobs.values(), key=lambda j: (-j["created_at"], -j.get("enqueue_seq", 0)))
+    def list_jobs(self, limit: int = 20) -> list[JobResponse]:
+        items = sorted(
+            self.jobs.values(),
+            key=lambda j: (-j["created_at"], -j.get("enqueue_seq", 0)),
+        )
         return [self._job_to_response(j) for j in items[:limit]]
 
-    def update_job_status(self, job_id: str, status: JobStatus, progress: float = 0.0, message: str = ""):
+    def update_job_status(
+        self, job_id: str, status: JobStatus, progress: float = 0.0, message: str = ""
+    ):
         if job_id in self.jobs:
             self.jobs[job_id]["status"] = status
             self.jobs[job_id]["progress"] = progress
             self.jobs[job_id]["message"] = message
 
-    def get_job_data(self, job_id: str) -> Optional[Dict]:
+    def get_job_data(self, job_id: str) -> dict | None:
         return self.jobs.get(job_id)
 
     def mark_failed(self, job_id: str, error: str):
@@ -160,12 +170,14 @@ class QueueManager:
             self.jobs[job_id]["message"] = error
             self.jobs[job_id]["error"] = error
 
-    def buffer_commentary(self, job_id: str, msg_type: str, payload: Dict[str, Any]) -> None:
+    def buffer_commentary(
+        self, job_id: str, msg_type: str, payload: dict[str, Any]
+    ) -> None:
         """Store commentary messages for late-connecting WebSocket clients."""
         entry = {"type": msg_type, "payload": payload}
         self.commentary_buffer.setdefault(job_id, []).append(entry)
 
-    def get_buffered_commentary(self, job_id: str) -> List[Dict[str, Any]]:
+    def get_buffered_commentary(self, job_id: str) -> list[dict[str, Any]]:
         return list(self.commentary_buffer.get(job_id, []))
 
     def clear_commentary_buffer(self, job_id: str) -> None:
@@ -178,14 +190,14 @@ class QueueManager:
         conns = self.ws_connections.get(job_id)
         if not conns:
             return
-        try:
+        with contextlib.suppress(ValueError):
             conns.remove(ws)
-        except ValueError:
-            pass
         if not conns:
             self.ws_connections.pop(job_id, None)
 
-    async def broadcast_to_job_ws(self, job_id: str, msg_type: str, payload: Dict[str, Any]) -> None:
+    async def broadcast_to_job_ws(
+        self, job_id: str, msg_type: str, payload: dict[str, Any]
+    ) -> None:
         message = {"type": msg_type, "payload": payload}
         for ws in list(self.ws_connections.get(job_id, [])):
             try:

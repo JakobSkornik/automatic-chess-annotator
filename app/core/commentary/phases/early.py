@@ -12,8 +12,6 @@ Evals are never mentioned: there are none.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
-
 from app.core.commentary.openings.eco_book import ECOBook, OpeningInfo
 from app.models.chess_events import AnalyzedMoveData
 
@@ -34,7 +32,7 @@ _FAMILY_ALIASES = {
 }
 
 
-def _family(info: Optional[OpeningInfo]) -> str:
+def _family(info: OpeningInfo | None) -> str:
     """Normalized opening family: base name before any ':' qualifier."""
     if info is None or not info.name:
         return ""
@@ -45,17 +43,17 @@ def _family(info: Optional[OpeningInfo]) -> str:
 class EarlyGameCommenter:
     """Deterministic opening comments for in-book plies."""
 
-    def __init__(self, eco_book: Optional[ECOBook] = None) -> None:
+    def __init__(self, eco_book: ECOBook | None = None) -> None:
         self._eco = eco_book or ECOBook()
 
     def comments_for_book_plies(
-        self, analyzed_rows: List[AnalyzedMoveData]
-    ) -> Dict[int, str]:
+        self, analyzed_rows: list[AnalyzedMoveData]
+    ) -> dict[int, str]:
         """Map move_index -> opening comment, for in-book rows only."""
-        out: Dict[int, str] = {}
+        out: dict[int, str] = {}
         prev_family = ""
-        uci_prefix: List[str] = []
-        book_rows: List[Tuple[int, AnalyzedMoveData, Optional[OpeningInfo]]] = []
+        uci_prefix: list[str] = []
+        book_rows: list[tuple[int, AnalyzedMoveData, OpeningInfo | None]] = []
 
         for row in analyzed_rows:
             uci_prefix.append(row.uci)
@@ -66,14 +64,14 @@ class EarlyGameCommenter:
                 continue
             book_rows.append((row.index, row, info))
 
-        for pos, (idx, row, info) in enumerate(book_rows):
+        for pos, (idx, _row, info) in enumerate(book_rows):
             family = _family(info)
             is_first = pos == 0
             is_last = pos == len(book_rows) - 1
             changed = family != prev_family
             prev_family = family
 
-            parts: List[str] = []
+            parts: list[str] = []
             if is_first:
                 parts.append(f"The game opens as a {_label(info)}.")
             elif changed:
@@ -91,7 +89,9 @@ class EarlyGameCommenter:
         return out
 
 
-def attach_opening_comments(analyzed_rows: List[AnalyzedMoveData], eco_book: ECOBook) -> None:
+def attach_opening_comments(
+    analyzed_rows: list[AnalyzedMoveData], eco_book: ECOBook
+) -> None:
     """Write opening comments into hiddenFeatures['_opening']['comment'] on book rows."""
     commenter = EarlyGameCommenter(eco_book)
     comments = commenter.comments_for_book_plies(analyzed_rows)

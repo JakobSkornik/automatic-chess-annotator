@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from app.core.commentary.llm_policy import resolve_model
 from app.core.commentary.rag_retriever import RAGResult, build_rag_query
-from app.models.chess_events import AnalyzedMoveData, Episode, GameAnalysisContext, MoveEvent, MoveRationale
+from app.models.chess_events import (
+    AnalyzedMoveData,
+    Episode,
+    GameAnalysisContext,
+    MoveEvent,
+    MoveRationale,
+)
 
 if TYPE_CHECKING:
     from app.core.commentary.advanced_comment_service import AdvancedCommentService
@@ -19,26 +25,26 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MoveCommentaryContext:
     move_event: MoveEvent
-    episode: Optional[Episode]
+    episode: Episode | None
     game_context: GameAnalysisContext
-    analyzed_row: Optional[AnalyzedMoveData]
+    analyzed_row: AnalyzedMoveData | None
     service: AdvancedCommentService
     composer_effort: str
-    key_moment_type: Optional[str]
+    key_moment_type: str | None
     skip: bool = False
-    rag_results: List[RAGResult] = field(default_factory=list)
-    rationale: Optional[MoveRationale] = None
-    user_prompt: Optional[str] = None
-    llm_debug: Dict[str, Any] = field(default_factory=dict)
+    rag_results: list[RAGResult] = field(default_factory=list)
+    rationale: MoveRationale | None = None
+    user_prompt: str | None = None
+    llm_debug: dict[str, Any] = field(default_factory=dict)
     final_text: str = ""
-    fallback_used: Optional[str] = None
-    composer_pass_label: Optional[str] = None
+    fallback_used: str | None = None
+    composer_pass_label: str | None = None
     # Reverse-order generation: what the game already "knows" about its future
-    future_context: Optional[str] = None
+    future_context: str | None = None
     # Audience level the comments are generated at (job parameter)
     commentary_level: str = "intermediate"
     # Rendered text keyed by that level ({level: text})
-    level_texts: Dict[str, str] = field(default_factory=dict)
+    level_texts: dict[str, str] = field(default_factory=dict)
 
 
 class MoveStage(Protocol):
@@ -68,8 +74,8 @@ class RagRetrievalStage:
                 # Enrichment (and thus RAG) only feeds the LLM renderings.
                 return
         from app.core.commentary.advanced_comment_service import (
-            compute_rag_top_k,
             _detail_level_for_key_moment,
+            compute_rag_top_k,
         )
 
         query = build_rag_query(ctx.move_event, ctx.episode)
@@ -100,12 +106,18 @@ class FactsComposeStage:
         from app.core.commentary.forbidden_phrases import scrub_forbidden
         from app.core.commentary.phases.composer import compose_facts_comment
 
-        enrichment: Dict[str, Any] = {}
+        enrichment: dict[str, Any] = {}
         gc = ctx.game_context
         if gc.opening_name or gc.opening_eco:
-            enrichment["opening"] = f"{gc.opening_name or ''} ({gc.opening_eco or ''})".strip()
-        if ctx.episode is not None and (ctx.episode.dominant_theme or ctx.episode.title):
-            enrichment["episode_theme"] = ctx.episode.dominant_theme or ctx.episode.title
+            enrichment["opening"] = (
+                f"{gc.opening_name or ''} ({gc.opening_eco or ''})".strip()
+            )
+        if ctx.episode is not None and (
+            ctx.episode.dominant_theme or ctx.episode.title
+        ):
+            enrichment["episode_theme"] = (
+                ctx.episode.dominant_theme or ctx.episode.title
+            )
         if ctx.future_context:
             enrichment["what_happens_later"] = ctx.future_context
         if ctx.rag_results:
@@ -189,7 +201,9 @@ class LlmCallStage:
             model=model,
             effort=ctx.composer_effort,
             key_moment_type=ctx.key_moment_type or ctx.move_event.key_moment_type,
-            move_category=ctx.move_event.move_category.value if ctx.move_event.move_category else None,
+            move_category=ctx.move_event.move_category.value
+            if ctx.move_event.move_category
+            else None,
             llm_debug=ctx.llm_debug,
             fen_before=ctx.move_event.fen_before,
             fen_after=ctx.move_event.fen_after,
@@ -229,8 +243,8 @@ class FinalizeStage:
 
 class MoveCommentaryPipeline:
     def __init__(self) -> None:
-        self.stages: List[MoveStage] = cast(
-            List[MoveStage],
+        self.stages: list[MoveStage] = cast(
+            list[MoveStage],
             [
                 KeyMomentGateStage(),
                 RagRetrievalStage(),

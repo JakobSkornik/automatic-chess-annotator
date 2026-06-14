@@ -19,20 +19,20 @@ def _minimal_event(**kwargs: object) -> MoveEvent:
     b0 = chess.Board()
     b1 = b0.copy()
     b1.push_san("Nf3")
-    defaults = dict(
-        move_index=0,
-        ply=5,
-        san="Nf3",
-        uci="g1f3",
-        fen_before=b0.fen(),
-        fen_after=b1.fen(),
-        phase="middlegame",
-        eval_before_cp=0,
-        eval_after_cp=20,
-        move_quality=MoveQuality.GOOD,
-        event_type=MoveEventType.QUIET,
-        tactical_motifs=[],
-    )
+    defaults = {
+        "move_index": 0,
+        "ply": 5,
+        "san": "Nf3",
+        "uci": "g1f3",
+        "fen_before": b0.fen(),
+        "fen_after": b1.fen(),
+        "phase": "middlegame",
+        "eval_before_cp": 0,
+        "eval_after_cp": 20,
+        "move_quality": MoveQuality.GOOD,
+        "event_type": MoveEventType.QUIET,
+        "tactical_motifs": [],
+    }
     defaults.update(kwargs)
     return MoveEvent(**defaults)  # type: ignore[arg-type]
 

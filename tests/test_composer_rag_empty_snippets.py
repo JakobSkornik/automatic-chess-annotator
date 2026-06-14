@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import pytest
 
@@ -27,7 +27,7 @@ class _FakeComposerProvider:
         model: str,
         effort: str,
         max_output_tokens: Any = None,
-    ) -> Tuple[str, int]:
+    ) -> tuple[str, int]:
         return "", 0
 
     async def json_schema_call(
@@ -37,10 +37,10 @@ class _FakeComposerProvider:
         *,
         model: str,
         effort: str,
-        schema: Dict[str, Any],
+        schema: dict[str, Any],
         schema_name: str,
         max_output_tokens: Any = None,
-    ) -> Tuple[str, int]:
+    ) -> tuple[str, int]:
         payload = {
             "named_motifs": [],
             "text": "White keeps central tension while developing.",
@@ -63,7 +63,7 @@ def test_rag_applied_false_when_snippets_empty_writes_postcheck(
 
         async def _run() -> None:
             svc = AdvancedCommentService(provider=_FakeComposerProvider())
-            dbg: Dict[str, Any] = {
+            dbg: dict[str, Any] = {
                 "detail_level": "minimal",
                 "game_digest": {"strategic_archetype": "other"},
                 "rag_snippets_used": [],

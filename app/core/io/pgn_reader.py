@@ -1,6 +1,6 @@
 import io
+
 import chess.pgn
-from typing import Optional
 
 
 class PGNReader:
@@ -28,7 +28,7 @@ class PGNReader:
             )
 
     @staticmethod
-    def read_game_from_string(pgn_string: str) -> Optional[chess.pgn.Game]:
+    def read_game_from_string(pgn_string: str) -> chess.pgn.Game | None:
         """
         Reads a game from a PGN string.
 

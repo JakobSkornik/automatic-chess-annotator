@@ -14,7 +14,7 @@ by hand (Guid §5.4.2).
 from __future__ import annotations
 
 import logging
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 import chess
 
@@ -36,16 +36,15 @@ from app.models.comment_facts import (
     BestAlternative,
     Claim,
     CommentFacts,
-    EnvisionedLine,
     FeatureDelta,
     FeatureDiff,
 )
 
 logger = logging.getLogger(__name__)
 
-THRESHOLDS: Dict[str, int] = {
-    "pawn_structure_total": 14,     # Z in the dissertation's pawn rule
-    "pawn_structure_evaluate": 8,   # Y — net EVALUATE_PAWNS shift
+THRESHOLDS: dict[str, int] = {
+    "pawn_structure_total": 14,  # Z in the dissertation's pawn rule
+    "pawn_structure_evaluate": 8,  # Y — net EVALUATE_PAWNS shift
     "doubled_pawns": 12,
     "strong_knight": 15,
     "rook_activity": 15,
@@ -57,8 +56,8 @@ THRESHOLDS: Dict[str, int] = {
     "bishop_color_complex": 12,
     "king_activity_endgame": 10,
     "passer_escort": 8,
-    "min_claim_cp": 8,              # ignore fired rules weaker than this
-    "better_alternative_gap": 50,   # cp loss before the best move is shown
+    "min_claim_cp": 8,  # ignore fired rules weaker than this
+    "better_alternative_gap": 50,  # cp loss before the best move is shown
 }
 
 SIDES = ("WHITE", "BLACK")
@@ -86,7 +85,7 @@ def _benef_opp(side: str) -> str:
 MAX_CONCESSIONS = 2
 
 
-def order_claims_for_mover(claims: List[Claim], mover: str) -> List[Claim]:
+def order_claims_for_mover(claims: list[Claim], mover: str) -> list[Claim]:
     """Mover-perspective ordering: the mover's merits first; claims favoring
     the opponent become explicitly tagged concessions, capped at
     ``MAX_CONCESSIONS`` (strongest kept)."""
@@ -108,9 +107,9 @@ class _Ctx:
         diff: FeatureDiff,
         phase: str,
         mover: str,
-        eval_cp: Optional[int],
-        start_board: Optional[chess.Board] = None,
-        leaf_board: Optional[chess.Board] = None,
+        eval_cp: int | None,
+        start_board: chess.Board | None = None,
+        leaf_board: chess.Board | None = None,
     ) -> None:
         self.phase = phase
         self.mover = mover  # "WHITE" | "BLACK"
@@ -119,14 +118,14 @@ class _Ctx:
         # ("passed pawn on e5") — deterministic, no LLM involved.
         self.start_board = start_board
         self.leaf_board = leaf_board
-        self.by_name: Dict[str, FeatureDelta] = {}
+        self.by_name: dict[str, FeatureDelta] = {}
         for d in list(diff.positive) + list(diff.negative):
             self.by_name[d.name] = d
 
     def color(self, side: str) -> chess.Color:
         return chess.WHITE if side == "WHITE" else chess.BLACK
 
-    def new_squares(self, lookup, side: str) -> List[str]:
+    def new_squares(self, lookup, side: str) -> list[str]:
         """Squares satisfying `lookup` on the leaf board but not at the start."""
         if self.leaf_board is None:
             return []
@@ -140,7 +139,7 @@ class _Ctx:
         d = self.by_name.get(name)
         return d.delta_cp if d else 0
 
-    def flag_change(self, name: str) -> Optional[str]:
+    def flag_change(self, name: str) -> str | None:
         d = self.by_name.get(name)
         if d is None or d.flag_before is None or d.flag_after is None:
             return None
@@ -148,23 +147,24 @@ class _Ctx:
             return None
         return f"{d.flag_before} -> {d.flag_after}"
 
-    def flag_pair(self, name: str) -> Optional[tuple]:
+    def flag_pair(self, name: str) -> tuple | None:
         d = self.by_name.get(name)
         if d is None or d.flag_before is None or d.flag_after is None:
             return None
         return (d.flag_before, d.flag_after)
 
 
-Rule = Callable[[_Ctx], List[Claim]]
+Rule = Callable[[_Ctx], list[Claim]]
 
 
 # ---------------------------------------------------------------------------
 # Rules — each returns zero or more claims
 # ---------------------------------------------------------------------------
 
-def rule_pawn_structure(ctx: _Ctx) -> List[Claim]:
+
+def rule_pawn_structure(ctx: _Ctx) -> list[Claim]:
     """The dissertation's pawn-structure rule (§5.4.1), both sides."""
-    out: List[Claim] = []
+    out: list[Claim] = []
     for side in SIDES:
         feats = [
             f"{side}_PAWN_DOUBLED",
@@ -175,76 +175,92 @@ def rule_pawn_structure(ctx: _Ctx) -> List[Claim]:
         ]
         total = sum(_toward(side, ctx.delta(f)) for f in feats)
         net = _toward(side, ctx.delta("EVALUATE_PAWNS"))
-        if total >= THRESHOLDS["pawn_structure_total"] and net >= THRESHOLDS["pawn_structure_evaluate"]:
-            out.append(Claim(
-                rule_id="pawn_structure_improved",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} has improved the pawn structure.",
-                text_state=f"{_side_label(side)}'s pawn structure is now improved.",
-                features_involved=feats + ["EVALUATE_PAWNS"],
-                delta_cp=total,
-            ))
-        elif -total >= THRESHOLDS["pawn_structure_total"] and -net >= THRESHOLDS["pawn_structure_evaluate"]:
-            out.append(Claim(
-                rule_id="pawn_structure_weakened",
-                beneficiary=_benef_opp(side),
-                text=f"{_side_label(side)}'s pawn structure has been weakened.",
-                text_state=f"{_side_label(side)}'s pawn structure is now weaker.",
-                features_involved=feats + ["EVALUATE_PAWNS"],
-                delta_cp=-total,
-            ))
+        if (
+            total >= THRESHOLDS["pawn_structure_total"]
+            and net >= THRESHOLDS["pawn_structure_evaluate"]
+        ):
+            out.append(
+                Claim(
+                    rule_id="pawn_structure_improved",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} has improved the pawn structure.",
+                    text_state=f"{_side_label(side)}'s pawn structure is now improved.",
+                    features_involved=[*feats, "EVALUATE_PAWNS"],
+                    delta_cp=total,
+                )
+            )
+        elif (
+            -total >= THRESHOLDS["pawn_structure_total"]
+            and -net >= THRESHOLDS["pawn_structure_evaluate"]
+        ):
+            out.append(
+                Claim(
+                    rule_id="pawn_structure_weakened",
+                    beneficiary=_benef_opp(side),
+                    text=f"{_side_label(side)}'s pawn structure has been weakened.",
+                    text_state=f"{_side_label(side)}'s pawn structure is now weaker.",
+                    features_involved=[*feats, "EVALUATE_PAWNS"],
+                    delta_cp=-total,
+                )
+            )
     return out
 
 
-def rule_doubled_pawns(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_doubled_pawns(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_PAWN_DOUBLED"
         pair = ctx.flag_pair(name)
         if pair and pair[1] > pair[0]:
             new_files = ctx.new_squares(doubled_pawn_files, side)
             where = f" {new_files[0]}-pawns" if new_files else " pawns"
-            out.append(Claim(
-                rule_id="doubled_pawns_accepted",
-                beneficiary=_benef_opp(side),
-                text=f"{_side_label(side)} is left with doubled{where}.",
-                text_state=f"{_side_label(side)} now has doubled{where}.",
-                features_involved=[name],
-                delta_cp=abs(ctx.delta(name)),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="doubled_pawns_accepted",
+                    beneficiary=_benef_opp(side),
+                    text=f"{_side_label(side)} is left with doubled{where}.",
+                    text_state=f"{_side_label(side)} now has doubled{where}.",
+                    features_involved=[name],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
         elif pair and pair[1] < pair[0]:
-            out.append(Claim(
-                rule_id="doubled_pawns_resolved",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} gets rid of the doubled pawns.",
-                text_state=f"{_side_label(side)}'s doubled pawns are gone.",
-                features_involved=[name],
-                delta_cp=abs(ctx.delta(name)),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="doubled_pawns_resolved",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} gets rid of the doubled pawns.",
+                    text_state=f"{_side_label(side)}'s doubled pawns are gone.",
+                    features_involved=[name],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
     return out
 
 
-def rule_bishop_pair(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_bishop_pair(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_BISHOP_PAIR"
         pair = ctx.flag_pair(name)
         if pair and pair[0] >= 2 and pair[1] < 2:
-            out.append(Claim(
-                rule_id="bishop_pair_eliminated",
-                beneficiary=_benef_opp(side),
-                text=f"{_side_label(side)} no longer has the advantage of the bishop pair.",
-                features_involved=[name],
-                delta_cp=abs(ctx.delta(name)),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="bishop_pair_eliminated",
+                    beneficiary=_benef_opp(side),
+                    text=f"{_side_label(side)} no longer has the advantage of the bishop pair.",
+                    features_involved=[name],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
     return out
 
 
-def rule_strong_knight(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_strong_knight(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_KNIGHTS_OUTPOSTS"
         cent = f"{side}_KNIGHTS_CENTRALIZATION"
@@ -252,44 +268,54 @@ def rule_strong_knight(ctx: _Ctx) -> List[Claim]:
         if d >= THRESHOLDS["strong_knight"]:
             sqs = ctx.new_squares(outpost_squares, side)
             where = f" on {sqs[0]}" if sqs else ""
-            out.append(Claim(
-                rule_id="strong_knight_established",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} establishes a strong knight{where}.",
-                text_state=f"{_side_label(side)} has a strong knight{where}.",
-                features_involved=[name, cent],
-                delta_cp=d,
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="strong_knight_established",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} establishes a strong knight{where}.",
+                    text_state=f"{_side_label(side)} has a strong knight{where}.",
+                    features_involved=[name, cent],
+                    delta_cp=d,
+                    flag_note=ctx.flag_change(name),
+                )
+            )
         elif -d >= THRESHOLDS["strong_knight"]:
-            out.append(Claim(
-                rule_id="strong_knight_lost",
-                beneficiary=_benef_opp(side),
-                text=f"{_side_label(side)} no longer has a strong knight.",
-                features_involved=[name, cent],
-                delta_cp=-d,
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="strong_knight_lost",
+                    beneficiary=_benef_opp(side),
+                    text=f"{_side_label(side)} no longer has a strong knight.",
+                    features_involved=[name, cent],
+                    delta_cp=-d,
+                    flag_note=ctx.flag_change(name),
+                )
+            )
     return out
 
 
-def rule_bad_bishop(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_bad_bishop(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_BAD_BISHOP"
         pair = ctx.flag_pair(name)
         if pair and pair[1] > pair[0]:
             sqs = ctx.new_squares(bad_bishop_squares, side)
             where = f" on {sqs[0]}" if sqs else ""
-            out.append(Claim(
-                rule_id="bad_bishop_created",
-                beneficiary=_benef_opp(side),
-                text=f"{_side_label(side)} is left with a bad bishop{where}.",
-                text_state=f"{_side_label(side)}'s bishop{where} is now bad.",
-                features_involved=[name, f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR", f"{side}_BISHOPS_MOBILITY"],
-                delta_cp=abs(ctx.delta(name)),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="bad_bishop_created",
+                    beneficiary=_benef_opp(side),
+                    text=f"{_side_label(side)} is left with a bad bishop{where}.",
+                    text_state=f"{_side_label(side)}'s bishop{where} is now bad.",
+                    features_involved=[
+                        name,
+                        f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR",
+                        f"{side}_BISHOPS_MOBILITY",
+                    ],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
         elif pair and pair[1] < pair[0]:
             start_sqs = (
                 bad_bishop_squares(ctx.start_board, ctx.color(side))
@@ -297,70 +323,82 @@ def rule_bad_bishop(ctx: _Ctx) -> List[Claim]:
                 else []
             )
             where = f" on {start_sqs[0]}" if start_sqs else ""
-            out.append(Claim(
-                rule_id="bad_bishop_solved",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} solves the problem of the bad bishop{where}.",
-                text_state=f"{_side_label(side)}'s bad bishop{where} is no longer a problem.",
-                features_involved=[name, f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR", f"{side}_BISHOPS_MOBILITY"],
-                delta_cp=abs(ctx.delta(name)),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="bad_bishop_solved",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} solves the problem of the bad bishop{where}.",
+                    text_state=f"{_side_label(side)}'s bad bishop{where} is no longer a problem.",
+                    features_involved=[
+                        name,
+                        f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR",
+                        f"{side}_BISHOPS_MOBILITY",
+                    ],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
     return out
 
 
-def rule_rook_activity(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_rook_activity(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         seventh = f"{side}_ROOK_ON_SEVENTH"
         pair7 = ctx.flag_pair(seventh)
         if pair7 and pair7[1] > pair7[0]:
             sqs = ctx.new_squares(rooks_on_seventh_squares, side)
             where = f" ({sqs[0]})" if sqs else ""
-            out.append(Claim(
-                rule_id="rook_reaches_seventh",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)}'s rook reaches the seventh rank{where}.",
-                text_state=f"{_side_label(side)} has a rook on the seventh rank{where}.",
-                features_involved=[seventh],
-                delta_cp=abs(ctx.delta(seventh)),
-                flag_note=ctx.flag_change(seventh),
-            ))
+            out.append(
+                Claim(
+                    rule_id="rook_reaches_seventh",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)}'s rook reaches the seventh rank{where}.",
+                    text_state=f"{_side_label(side)} has a rook on the seventh rank{where}.",
+                    features_involved=[seventh],
+                    delta_cp=abs(ctx.delta(seventh)),
+                    flag_note=ctx.flag_change(seventh),
+                )
+            )
             continue
         feats = [f"{side}_ROOK_OPEN_FILE", f"{side}_ROOK_HALF_OPEN_FILE"]
         d = sum(_toward(side, ctx.delta(f)) for f in feats)
         if d >= THRESHOLDS["rook_activity"]:
-            out.append(Claim(
-                rule_id="rooks_activated",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)}'s rooks become more active on the open files.",
-                text_state=f"{_side_label(side)}'s rooks are active on the open files.",
-                features_involved=feats,
-                delta_cp=d,
-            ))
+            out.append(
+                Claim(
+                    rule_id="rooks_activated",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)}'s rooks become more active on the open files.",
+                    text_state=f"{_side_label(side)}'s rooks are active on the open files.",
+                    features_involved=feats,
+                    delta_cp=d,
+                )
+            )
     return out
 
 
-def rule_rook_behind_passer(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_rook_behind_passer(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_ROOK_BEHIND_PASSED_PAWN"
         pair = ctx.flag_pair(name)
         if pair and pair[1] > pair[0]:
-            out.append(Claim(
-                rule_id="rook_behind_passer",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)}'s rook gets behind the passed pawn.",
-                text_state=f"{_side_label(side)}'s rook is behind the passed pawn.",
-                features_involved=[name],
-                delta_cp=abs(ctx.delta(name)),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="rook_behind_passer",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)}'s rook gets behind the passed pawn.",
+                    text_state=f"{_side_label(side)}'s rook is behind the passed pawn.",
+                    features_involved=[name],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
     return out
 
 
-def rule_passed_pawn(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_passed_pawn(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_PAWN_PASSED"
         pair = ctx.flag_pair(name)
@@ -368,186 +406,221 @@ def rule_passed_pawn(ctx: _Ctx) -> List[Claim]:
         if pair and pair[1] > pair[0]:
             sqs = ctx.new_squares(passed_pawn_squares, side)
             where = f" on {sqs[0]}" if sqs else ""
-            out.append(Claim(
-                rule_id="passed_pawn_created",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} obtains a passed pawn{where}.",
-                text_state=f"{_side_label(side)} has a passed pawn{where}.",
-                features_involved=[name],
-                delta_cp=max(d, 0),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="passed_pawn_created",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} obtains a passed pawn{where}.",
+                    text_state=f"{_side_label(side)} has a passed pawn{where}.",
+                    features_involved=[name],
+                    delta_cp=max(d, 0),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
         elif pair and pair[1] == pair[0] and pair[1] > 0 and d >= 15:
-            out.append(Claim(
-                rule_id="passed_pawn_advances",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)}'s passed pawn advances dangerously.",
-                text_state=f"{_side_label(side)}'s passed pawn is far advanced.",
-                features_involved=[name],
-                delta_cp=d,
-            ))
+            out.append(
+                Claim(
+                    rule_id="passed_pawn_advances",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)}'s passed pawn advances dangerously.",
+                    text_state=f"{_side_label(side)}'s passed pawn is far advanced.",
+                    features_involved=[name],
+                    delta_cp=d,
+                )
+            )
     return out
 
 
-def rule_king_safety(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_king_safety(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
-        feats = [f"{side}_KING_SHIELD", f"{side}_KING_ZONE_ATTACKERS", f"{side}_BACK_RANK"]
+        feats = [
+            f"{side}_KING_SHIELD",
+            f"{side}_KING_ZONE_ATTACKERS",
+            f"{side}_BACK_RANK",
+        ]
         d = sum(_toward(side, ctx.delta(f)) for f in feats)
         opp = "BLACK" if side == "WHITE" else "WHITE"
         opp_tropism = _toward(opp, ctx.delta(f"{opp}_KING_TROPISM"))
-        if -d >= THRESHOLDS["king_safety"] and opp_tropism >= THRESHOLDS["king_tropism_corroborate"]:
-            out.append(Claim(
-                rule_id="king_under_pressure",
-                beneficiary=_benef_opp(side),
-                text=f"{_side_label(side)}'s king comes under pressure.",
-                text_state=f"{_side_label(side)}'s king is under pressure.",
-                features_involved=feats + [f"{opp}_KING_TROPISM"],
-                delta_cp=-d,
-            ))
-        elif d >= THRESHOLDS["king_safety"] and -opp_tropism >= THRESHOLDS["king_tropism_corroborate"]:
-            out.append(Claim(
-                rule_id="king_safer",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)}'s king is now safer.",
-                text_state=f"{_side_label(side)}'s king is safe.",
-                features_involved=feats + [f"{opp}_KING_TROPISM"],
-                delta_cp=d,
-            ))
+        if (
+            -d >= THRESHOLDS["king_safety"]
+            and opp_tropism >= THRESHOLDS["king_tropism_corroborate"]
+        ):
+            out.append(
+                Claim(
+                    rule_id="king_under_pressure",
+                    beneficiary=_benef_opp(side),
+                    text=f"{_side_label(side)}'s king comes under pressure.",
+                    text_state=f"{_side_label(side)}'s king is under pressure.",
+                    features_involved=[*feats, f"{opp}_KING_TROPISM"],
+                    delta_cp=-d,
+                )
+            )
+        elif (
+            d >= THRESHOLDS["king_safety"]
+            and -opp_tropism >= THRESHOLDS["king_tropism_corroborate"]
+        ):
+            out.append(
+                Claim(
+                    rule_id="king_safer",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)}'s king is now safer.",
+                    text_state=f"{_side_label(side)}'s king is safe.",
+                    features_involved=[*feats, f"{opp}_KING_TROPISM"],
+                    delta_cp=d,
+                )
+            )
     return out
 
 
-def rule_back_rank(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_back_rank(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_BACK_RANK"
         pair = ctx.flag_pair(name)
         if pair and pair[0] == 0 and pair[1] == 1:
-            out.append(Claim(
-                rule_id="back_rank_weakness",
-                beneficiary=_benef_opp(side),
-                text=f"{_side_label(side)}'s back rank becomes vulnerable.",
-                text_state=f"{_side_label(side)}'s back rank is vulnerable.",
-                features_involved=[name],
-                delta_cp=abs(ctx.delta(name)),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="back_rank_weakness",
+                    beneficiary=_benef_opp(side),
+                    text=f"{_side_label(side)}'s back rank becomes vulnerable.",
+                    text_state=f"{_side_label(side)}'s back rank is vulnerable.",
+                    features_involved=[name],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
     return out
 
 
-def rule_piece_activity(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_piece_activity(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_PIECE_ACTIVITY"
         d = _toward(side, ctx.delta(name))
         if d >= THRESHOLDS["piece_activity"]:
-            out.append(Claim(
-                rule_id="activity_improved",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} has improved the activity of the pieces.",
-                text_state=f"{_side_label(side)}'s pieces are actively placed.",
-                features_involved=[name],
-                delta_cp=d,
-            ))
+            out.append(
+                Claim(
+                    rule_id="activity_improved",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} has improved the activity of the pieces.",
+                    text_state=f"{_side_label(side)}'s pieces are actively placed.",
+                    features_involved=[name],
+                    delta_cp=d,
+                )
+            )
         elif -d >= THRESHOLDS["piece_activity"]:
-            out.append(Claim(
-                rule_id="activity_reduced",
-                beneficiary=_benef_opp(side),
-                text=f"{_side_label(side)}'s pieces become more passive.",
-                text_state=f"{_side_label(side)}'s pieces are passive.",
-                features_involved=[name],
-                delta_cp=-d,
-            ))
+            out.append(
+                Claim(
+                    rule_id="activity_reduced",
+                    beneficiary=_benef_opp(side),
+                    text=f"{_side_label(side)}'s pieces become more passive.",
+                    text_state=f"{_side_label(side)}'s pieces are passive.",
+                    features_involved=[name],
+                    delta_cp=-d,
+                )
+            )
     return out
 
 
-def rule_center_and_space(ctx: _Ctx) -> List[Claim]:
-    out: List[Claim] = []
+def rule_center_and_space(ctx: _Ctx) -> list[Claim]:
+    out: list[Claim] = []
     for side in SIDES:
         c = _toward(side, ctx.delta(f"{side}_CENTER_CONTROL"))
         s = _toward(side, ctx.delta(f"{side}_SPACE"))
         if c >= THRESHOLDS["center_control"]:
-            out.append(Claim(
-                rule_id="center_control",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} takes control of the center.",
-                text_state=f"{_side_label(side)} controls the center.",
-                features_involved=[f"{side}_CENTER_CONTROL"],
-                delta_cp=c,
-            ))
+            out.append(
+                Claim(
+                    rule_id="center_control",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} takes control of the center.",
+                    text_state=f"{_side_label(side)} controls the center.",
+                    features_involved=[f"{side}_CENTER_CONTROL"],
+                    delta_cp=c,
+                )
+            )
         elif s >= THRESHOLDS["space"]:
-            out.append(Claim(
-                rule_id="space_gained",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} gains space.",
-                text_state=f"{_side_label(side)} has a space advantage.",
-                features_involved=[f"{side}_SPACE"],
-                delta_cp=s,
-            ))
+            out.append(
+                Claim(
+                    rule_id="space_gained",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} gains space.",
+                    text_state=f"{_side_label(side)} has a space advantage.",
+                    features_involved=[f"{side}_SPACE"],
+                    delta_cp=s,
+                )
+            )
     return out
 
 
 # --- endgame pack ---
 
-def rule_king_activity(ctx: _Ctx) -> List[Claim]:
+
+def rule_king_activity(ctx: _Ctx) -> list[Claim]:
     if ctx.phase != "end":
         return []
-    out: List[Claim] = []
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_KING_ACTIVITY"
         d = _toward(side, ctx.delta(name))
         if d >= THRESHOLDS["king_activity_endgame"]:
-            out.append(Claim(
-                rule_id="king_activated",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)}'s king becomes active.",
-                text_state=f"{_side_label(side)}'s king is active.",
-                features_involved=[name],
-                delta_cp=d,
-            ))
+            out.append(
+                Claim(
+                    rule_id="king_activated",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)}'s king becomes active.",
+                    text_state=f"{_side_label(side)}'s king is active.",
+                    features_involved=[name],
+                    delta_cp=d,
+                )
+            )
     return out
 
 
-def rule_outside_passer(ctx: _Ctx) -> List[Claim]:
+def rule_outside_passer(ctx: _Ctx) -> list[Claim]:
     if ctx.phase != "end":
         return []
-    out: List[Claim] = []
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_OUTSIDE_PASSER"
         pair = ctx.flag_pair(name)
         if pair and pair[1] > pair[0]:
-            out.append(Claim(
-                rule_id="outside_passer",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)} obtains an outside passed pawn.",
-                text_state=f"{_side_label(side)} has an outside passed pawn.",
-                features_involved=[name],
-                delta_cp=abs(ctx.delta(name)),
-                flag_note=ctx.flag_change(name),
-            ))
+            out.append(
+                Claim(
+                    rule_id="outside_passer",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} obtains an outside passed pawn.",
+                    text_state=f"{_side_label(side)} has an outside passed pawn.",
+                    features_involved=[name],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
     return out
 
 
-def rule_passer_escort(ctx: _Ctx) -> List[Claim]:
+def rule_passer_escort(ctx: _Ctx) -> list[Claim]:
     if ctx.phase != "end":
         return []
-    out: List[Claim] = []
+    out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_PASSER_KING_ESCORT"
         d = _toward(side, ctx.delta(name))
         if d >= THRESHOLDS["passer_escort"]:
-            out.append(Claim(
-                rule_id="king_escorts_passer",
-                beneficiary=_benef(side),
-                text=f"{_side_label(side)}'s king escorts the passed pawn forward.",
-                text_state=f"{_side_label(side)}'s king supports the passed pawn.",
-                features_involved=[name, f"{side}_KING_ACTIVITY"],
-                delta_cp=d,
-            ))
+            out.append(
+                Claim(
+                    rule_id="king_escorts_passer",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)}'s king escorts the passed pawn forward.",
+                    text_state=f"{_side_label(side)}'s king supports the passed pawn.",
+                    features_involved=[name, f"{side}_KING_ACTIVITY"],
+                    delta_cp=d,
+                )
+            )
     return out
 
 
-ALL_RULES: List[Rule] = [
+ALL_RULES: list[Rule] = [
     rule_pawn_structure,
     rule_doubled_pawns,
     rule_bishop_pair,
@@ -573,19 +646,23 @@ def run_rules(
     *,
     phase: str,
     mover: str,
-    eval_cp: Optional[int] = None,
-    start_board: Optional[chess.Board] = None,
-    leaf_board: Optional[chess.Board] = None,
-) -> List[Claim]:
+    eval_cp: int | None = None,
+    start_board: chess.Board | None = None,
+    leaf_board: chess.Board | None = None,
+) -> list[Claim]:
     """Fire all rules; keep the strongest few claims."""
-    ctx = _Ctx(diff, phase, mover, eval_cp, start_board=start_board, leaf_board=leaf_board)
-    claims: List[Claim] = []
+    ctx = _Ctx(
+        diff, phase, mover, eval_cp, start_board=start_board, leaf_board=leaf_board
+    )
+    claims: list[Claim] = []
     for rule in ALL_RULES:
         try:
             claims.extend(rule(ctx))
         except Exception as e:
             logger.warning("rule %s failed: %s", getattr(rule, "__name__", rule), e)
-    claims = [c for c in claims if c.delta_cp >= THRESHOLDS["min_claim_cp"] or c.flag_note]
+    claims = [
+        c for c in claims if c.delta_cp >= THRESHOLDS["min_claim_cp"] or c.flag_note
+    ]
     claims.sort(key=lambda c: -c.delta_cp)
     return claims[:MAX_CLAIMS_PER_MOVE]
 
@@ -594,7 +671,8 @@ def run_rules(
 # Verdict (qualitative assessment of the eval)
 # ---------------------------------------------------------------------------
 
-def _adv_bracket(cp: int) -> Optional[str]:
+
+def _adv_bracket(cp: int) -> str | None:
     """Advantage label for |cp| >= 25, else None (equality)."""
     mag = abs(cp)
     if mag < 25:
@@ -609,9 +687,9 @@ def _adv_bracket(cp: int) -> Optional[str]:
 
 
 def verdict_for_transition(
-    before_cp: Optional[int],
-    after_cp: Optional[int],
-    eval_mate: Optional[int],
+    before_cp: int | None,
+    after_cp: int | None,
+    eval_mate: int | None,
     mover: str,
 ) -> str:
     """Verdict phrased as the eval *story* of the move from the mover's seat:
@@ -629,7 +707,7 @@ def verdict_for_transition(
     a = sign * int(after_cp)
     d = a - b
     a_lab = _adv_bracket(a)
-    b_lab = _adv_bracket(b)
+    _adv_bracket(b)
 
     if abs(d) < 35:  # nothing really changed
         if a_lab is None:
@@ -661,7 +739,7 @@ def verdict_for_transition(
     return f"fights back, though {opp} keeps {_adv_bracket(-a)}"
 
 
-def verdict_for_eval(eval_cp: Optional[int], eval_mate: Optional[int] = None) -> str:
+def verdict_for_eval(eval_cp: int | None, eval_mate: int | None = None) -> str:
     if eval_mate is not None:
         side = "White" if eval_mate > 0 else "Black"
         return f"leads to forced mate for {side}"
@@ -688,7 +766,7 @@ def verdict_for_eval(eval_cp: Optional[int], eval_mate: Optional[int] = None) ->
 _MATE_SCORE = 1000000
 
 
-def _decode_eval(cp: Optional[int]) -> tuple:
+def _decode_eval(cp: int | None) -> tuple:
     """Split a mate-encoded engine score into (cp, mate)."""
     if cp is None:
         return None, None
@@ -698,12 +776,12 @@ def _decode_eval(cp: Optional[int]) -> tuple:
     return int(cp), None
 
 
-def _line_feature_series(start_fen: str, fens: List[str], names: List[str]) -> dict:
+def _line_feature_series(start_fen: str, fens: list[str], names: list[str]) -> dict:
     """Per-point White-POV cp series for `names` along a line (point 0 = start
     position, then one per kept ply). Engine-free."""
     if not names:
         return {}
-    points = [start_fen] + list(fens)
+    points = [start_fen, *list(fens)]
     series: dict = {name: [] for name in names}
     for fen in points:
         if not fen:
@@ -727,7 +805,7 @@ def build_comment_facts(
     me: MoveEvent,
     *,
     depth: int = 16,
-) -> Optional[CommentFacts]:
+) -> CommentFacts | None:
     """Assemble the move's inviolable facts from data the engine pass already paid for."""
     phase_raw = row.phase_raw or "mid"
     if phase_raw == "early":
@@ -765,11 +843,13 @@ def build_comment_facts(
     # For dubious moves, opponent-favoring claims are not trade-offs — they ARE
     # the explanation of the eval swing.
     mq = me.move_quality.value if me.move_quality else ""
-    concession_mode = "consequence" if mq in ("inaccuracy", "mistake", "blunder") else "tradeoff"
+    concession_mode = (
+        "consequence" if mq in ("inaccuracy", "mistake", "blunder") else "tradeoff"
+    )
 
     # The opponent's punishing reply (board-level "why it is bad"). Only for
     # real mistakes — calling a routine recapture a "punishment" reads wrong.
-    refutation_san: Optional[str] = None
+    refutation_san: str | None = None
     if mq in ("mistake", "blunder") and len(played_line.line_san) >= 2:
         refutation_san = played_line.line_san[1]
 
@@ -793,7 +873,7 @@ def build_comment_facts(
 
         mat_delta = mover_sign * (_net_material(leaf_vec) - _net_material(start_vec))
         best_san = me.best_move_san
-        fb: Optional[Claim] = None
+        fb: Claim | None = None
         if mat_delta <= -100:
             txt = f"{mover} loses material"
             if best_san:
@@ -819,7 +899,7 @@ def build_comment_facts(
 
     # Better alternative (Guid's option 3): only when the played move measurably
     # loses ground against the engine's preference.
-    better: Optional[BestAlternative] = None
+    better: BestAlternative | None = None
     if (
         me.best_move_uci
         and me.best_move_uci != me.uci
@@ -829,9 +909,11 @@ def build_comment_facts(
         gap = me.best_move_eval_cp - me.eval_after_cp
         gap_for_mover = gap if mover == "White" else -gap
         if gap_for_mover >= THRESHOLDS["better_alternative_gap"]:
-            best_pv_uci: List[str] = []
+            best_pv_uci: list[str] = []
             if row.pvs and row.pvs[0]:
-                best_pv_uci = [str(m.move) for m in row.pvs[0] if getattr(m, "move", None)]
+                best_pv_uci = [
+                    str(m.move) for m in row.pvs[0] if getattr(m, "move", None)
+                ]
             best_cp, best_mate = _decode_eval(me.best_move_eval_cp)
             best_line = envisioned_for_best_move(
                 me.fen_before,
@@ -854,7 +936,8 @@ def build_comment_facts(
             main_texts = {c.text for c in claims}
             mover_key = mover.lower()
             best_claims = [
-                c for c in best_claims
+                c
+                for c in best_claims
                 if c.beneficiary in (mover_key, None) and c.text not in main_texts
             ][:2]
             better = BestAlternative(
@@ -872,11 +955,16 @@ def build_comment_facts(
         {f for c in claims for f in c.features_involved} | {"MATERIAL_BALANCE"}
     )
     played_line = played_line.model_copy(
-        update={"feature_series": _line_feature_series(me.fen_before, played_line.fens, feat_names)}
+        update={
+            "feature_series": _line_feature_series(
+                me.fen_before, played_line.fens, feat_names
+            )
+        }
     )
     if better is not None and better.display_line is not None:
         alt_names = sorted(
-            {f for c in better.claims for f in c.features_involved} | {"MATERIAL_BALANCE"}
+            {f for c in better.claims for f in c.features_involved}
+            | {"MATERIAL_BALANCE"}
         )
         better = better.model_copy(
             update={

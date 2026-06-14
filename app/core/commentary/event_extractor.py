@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import chess
 import chess.pgn
-from typing import Any, Dict, List, Optional
 
 from app.core.commentary.features.delta_to_motif import infer_motifs_from_deltas
 from app.core.commentary.features.move_category import classify_move_event
@@ -19,7 +20,6 @@ from app.core.commentary.features.strategic_motifs import detect_strategic_motif
 from app.core.commentary.features.tactical_motifs import detect_tactical_motifs
 from app.core.commentary.key_moment_detector import KeyMomentDetector
 from app.core.commentary.openings.eco_book import ECOBook
-from app.models.Move import Move
 from app.models.chess_events import (
     AnalyzedMoveData,
     MoveEvent,
@@ -27,6 +27,7 @@ from app.models.chess_events import (
     MoveQuality,
     PlanComparison,
 )
+from app.models.Move import Move
 
 
 def _map_phase(raw: str) -> str:
@@ -65,24 +66,24 @@ class ChessEventExtractor:
 
     def __init__(
         self,
-        eco_book: Optional[ECOBook] = None,
-        key_moment_detector: Optional[KeyMomentDetector] = None,
+        eco_book: ECOBook | None = None,
+        key_moment_detector: KeyMomentDetector | None = None,
     ) -> None:
         self._eco = eco_book or ECOBook()
         self._key_moment_detector = key_moment_detector or KeyMomentDetector()
-        self._prev_pawn_center: Optional[str] = None
+        self._prev_pawn_center: str | None = None
 
     def extract_events(
         self,
         game: chess.pgn.Game,
-        analyzed_rows: List[AnalyzedMoveData],
+        analyzed_rows: list[AnalyzedMoveData],
         *,
-        previous_engine_move: Optional[Move] = None,
-    ) -> List[MoveEvent]:
+        previous_engine_move: Move | None = None,
+    ) -> list[MoveEvent]:
         mainline = list(game.mainline_moves())
-        events: List[MoveEvent] = []
-        prev_move_obj: Optional[Move] = previous_engine_move
-        score_history: List[int] = []
+        events: list[MoveEvent] = []
+        prev_move_obj: Move | None = previous_engine_move
+        score_history: list[int] = []
 
         for i, row in enumerate(analyzed_rows):
             idx = row.index
@@ -98,13 +99,19 @@ class ChessEventExtractor:
 
             analyzed = row.analyzed_move
             pvs = row.pvs if isinstance(row.pvs, list) else []
-            prev_score = prev_move_obj.score if prev_move_obj and prev_move_obj.score is not None else None
-            cur_score = analyzed.score if analyzed and analyzed.score is not None else None
+            prev_score = (
+                prev_move_obj.score
+                if prev_move_obj and prev_move_obj.score is not None
+                else None
+            )
+            cur_score = (
+                analyzed.score if analyzed and analyzed.score is not None else None
+            )
 
-            best_uci: Optional[str] = None
-            best_san: Optional[str] = None
-            best_eval: Optional[int] = None
-            pv_lines: List[Dict[str, Any]] = []
+            best_uci: str | None = None
+            best_san: str | None = None
+            best_eval: int | None = None
+            pv_lines: list[dict[str, Any]] = []
             if pvs and pvs[0]:
                 first = pvs[0][0]
                 if getattr(first, "move", None):
@@ -122,8 +129,10 @@ class ChessEventExtractor:
                     continue
                 fm = pv_seq[0]
                 sc = fm.score if fm.score is not None else None
-                uci_moves = [str(m.move) for m in pv_seq[:8] if getattr(m, "move", None)]
-                san_line: List[str] = []
+                uci_moves = [
+                    str(m.move) for m in pv_seq[:8] if getattr(m, "move", None)
+                ]
+                san_line: list[str] = []
                 bb = board_before.copy()
                 for u in uci_moves:
                     try:
@@ -140,7 +149,7 @@ class ChessEventExtractor:
                 loss = _eval_loss_white_pov(board_before, best_eval, cur_score)
             mq = _move_quality_from_loss(loss, played_is_best)
 
-            swing: Optional[int] = None
+            swing: int | None = None
             if prev_score is not None and cur_score is not None:
                 swing = cur_score - prev_score
 
@@ -153,24 +162,36 @@ class ChessEventExtractor:
             )
 
             hf = row.hidden_features if isinstance(row.hidden_features, dict) else {}
-            ps = (hf.get("pawnStructure") or {}) if isinstance(hf.get("pawnStructure"), dict) else {}
+            ps = (
+                (hf.get("pawnStructure") or {})
+                if isinstance(hf.get("pawnStructure"), dict)
+                else {}
+            )
             pawn_type = ps.get("centerType") if isinstance(ps, dict) else None
             mat = hf.get("material") if isinstance(hf.get("material"), dict) else None
-            wk = (hf.get("white") or {}).get("kingExposure") if isinstance(hf.get("white"), dict) else None
-            bk = (hf.get("black") or {}).get("kingExposure") if isinstance(hf.get("black"), dict) else None
+            wk = (
+                (hf.get("white") or {}).get("kingExposure")
+                if isinstance(hf.get("white"), dict)
+                else None
+            )
+            bk = (
+                (hf.get("black") or {}).get("kingExposure")
+                if isinstance(hf.get("black"), dict)
+                else None
+            )
             king_safety = None
             if isinstance(wk, (int, float)) and isinstance(bk, (int, float)):
                 king_safety = {"white": float(wk), "black": float(bk)}
 
-            seq_uci: List[str] = []
+            seq_uci: list[str] = []
             bb2 = game.board()
             for j, gm in enumerate(mainline):
                 if j > idx:
                     break
                 seq_uci.append(bb2.uci(gm))
                 bb2.push(gm)
-            opening_name: Optional[str] = None
-            opening_eco: Optional[str] = None
+            opening_name: str | None = None
+            opening_eco: str | None = None
             if seq_uci:
                 info, _matched_ply = self._eco.match(seq_uci)
                 if info:
@@ -186,7 +207,7 @@ class ChessEventExtractor:
                 # opening commenter — never as key moments.
                 km = None
 
-            eval_instability_cp: Optional[int] = None
+            eval_instability_cp: int | None = None
             ead = row.eval_at_depth or {}
             if len(ead) >= 2:
                 vals = list(ead.values())
@@ -204,11 +225,13 @@ class ChessEventExtractor:
             elif not km and mq == MoveQuality.MISTAKE:
                 km = "mistake"
 
-            analyzed_rows[i] = analyzed_rows[i].model_copy(update={"key_moment_type": km})
+            analyzed_rows[i] = analyzed_rows[i].model_copy(
+                update={"key_moment_type": km}
+            )
 
             phase = _map_phase(row.phase_raw or (analyzed.phase or "mid"))
 
-            pv_ucis: List[str] = []
+            pv_ucis: list[str] = []
             if pvs and pvs[0]:
                 for pm in pvs[0]:
                     u = getattr(pm, "move", None)
@@ -278,15 +301,19 @@ class ChessEventExtractor:
                 event_type = MoveEventType.MISSED_TACTIC
             elif km == "critical_decision":
                 event_type = MoveEventType.CRITICAL_DECISION
-            elif pawn_type and self._prev_pawn_center and pawn_type != self._prev_pawn_center:
+            elif (
+                pawn_type
+                and self._prev_pawn_center
+                and pawn_type != self._prev_pawn_center
+            ):
                 event_type = MoveEventType.STRUCTURAL_CHANGE
             elif played_is_best and loss <= 20:
                 event_type = MoveEventType.BEST_MOVE_PLAYED
             elif loss >= 100 and not played_is_best:
                 event_type = MoveEventType.POSITIONAL_CONCESSION
-            elif swing is not None and abs(swing) >= self.EVAL_SWING_CRITICAL:
-                event_type = MoveEventType.EVAL_SWING
-            elif km in ("blunder", "mistake", "inaccuracy"):
+            elif (
+                swing is not None and abs(swing) >= self.EVAL_SWING_CRITICAL
+            ) or km in ("blunder", "mistake", "inaccuracy"):
                 event_type = MoveEventType.EVAL_SWING
             self._prev_pawn_center = pawn_type or self._prev_pawn_center
 

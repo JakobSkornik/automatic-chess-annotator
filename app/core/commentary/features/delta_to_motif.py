@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List, Set
-
 import chess
 
 from app.models.chess_events import PvHorizonDiff, StrategicMotif
@@ -28,7 +26,7 @@ def infer_motifs_from_deltas(
     *,
     mover: chess.Color | None = None,
     phase: str = "middlegame",
-) -> List[StrategicMotif]:
+) -> list[StrategicMotif]:
     """
     Translate scalar/list deltas from a PV horizon walk into strategic motif tags.
     ``mover`` is the side that played the move at the root (for directional interpretation).
@@ -36,8 +34,8 @@ def infer_motifs_from_deltas(
     if diff is None:
         return []
 
-    motifs: List[StrategicMotif] = []
-    seen: Set[StrategicMotif] = set()
+    motifs: list[StrategicMotif] = []
+    seen: set[StrategicMotif] = set()
     scalars = diff.scalar_deltas or {}
     lists = diff.list_deltas or {}
 

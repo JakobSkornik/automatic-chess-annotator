@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
 
 from app.models.Move import Move
 
@@ -12,7 +11,7 @@ logger = logging.getLogger(__name__)
 # Priority tiers – lower number = higher priority.
 # When multiple triggers fire on the same move the highest-priority one wins.
 # ---------------------------------------------------------------------------
-KEY_MOMENT_PRIORITY: Dict[str, int] = {
+KEY_MOMENT_PRIORITY: dict[str, int] = {
     "brilliant": 1,
     "blunder": 1,
     "critical_decision": 2,
@@ -39,8 +38,8 @@ class KeyMomentDetector:
     """
 
     def __init__(self) -> None:
-        self._prev_phase: Optional[str] = None
-        self._prev_pawn_structure_type: Optional[str] = None
+        self._prev_phase: str | None = None
+        self._prev_pawn_structure_type: str | None = None
         self._last_book_depth: int = 0  # ply of last detected opening/book move
         self._fired_opening_transition: bool = False
         self._fired_endgame_transition: bool = False
@@ -52,24 +51,33 @@ class KeyMomentDetector:
     def detect(
         self,
         current_move: Move,
-        previous_move: Optional[Move],
-        pvs_for_move: Optional[List[List[Move]]],
+        previous_move: Move | None,
+        pvs_for_move: list[list[Move]] | None,
         *,
         pv1_change_count: int = 0,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Return the highest-priority key moment type, or *None*."""
-        candidates: List[str] = []
+        candidates: list[str] = []
 
         # --- Score-based triggers (require both moves to have scores) ---
-        if previous_move and current_move.score is not None and previous_move.score is not None:
+        if (
+            previous_move
+            and current_move.score is not None
+            and previous_move.score is not None
+        ):
             candidates.extend(
                 self._score_based(
-                    current_move, previous_move, pvs_for_move, pv1_change_count=pv1_change_count
+                    current_move,
+                    previous_move,
+                    pvs_for_move,
+                    pv1_change_count=pv1_change_count,
                 )
             )
 
         # --- Feature / strategic triggers ---
-        candidates.extend(self._strategic_triggers(current_move, previous_move, pvs_for_move))
+        candidates.extend(
+            self._strategic_triggers(current_move, previous_move, pvs_for_move)
+        )
 
         if not candidates:
             # Update tracking state even when no trigger fires
@@ -78,7 +86,9 @@ class KeyMomentDetector:
 
         # Pick the highest-priority (lowest number) candidate
         best = min(candidates, key=lambda c: KEY_MOMENT_PRIORITY.get(c, 99))
-        logger.info(f"Move {current_move.depth}: key moment = {best} (candidates: {candidates})")
+        logger.info(
+            f"Move {current_move.depth}: key moment = {best} (candidates: {candidates})"
+        )
 
         self._update_tracking(current_move)
         return best
@@ -91,11 +101,11 @@ class KeyMomentDetector:
         self,
         current_move: Move,
         previous_move: Move,
-        pvs_for_move: Optional[List[List[Move]]],
+        pvs_for_move: list[list[Move]] | None,
         *,
         pv1_change_count: int = 0,
-    ) -> List[str]:
-        results: List[str] = []
+    ) -> list[str]:
+        results: list[str] = []
 
         is_white_move = current_move.depth % 2 == 1
         score_change = current_move.score - previous_move.score  # type: ignore[operator]
@@ -103,7 +113,9 @@ class KeyMomentDetector:
         # Adjust for mover's perspective (both scores are White POV after each ply)
         perspective_change = score_change if is_white_move else -score_change
         prev_hf = (previous_move.hiddenFeatures or {}) if previous_move else {}
-        curr_hf = (current_move.hiddenFeatures or {}) if current_move.hiddenFeatures else {}
+        curr_hf = (
+            (current_move.hiddenFeatures or {}) if current_move.hiddenFeatures else {}
+        )
 
         log_msg = (
             f"Move {current_move.depth} ({'White' if is_white_move else 'Black'}): "
@@ -145,7 +157,8 @@ class KeyMomentDetector:
         # -- Brilliant: best move + material sacrifice + engine instability (non-obvious) --
         if pvs_for_move and pvs_for_move[0]:
             played_is_best = (
-                pvs_for_move[0][0] and getattr(pvs_for_move[0][0], "move", None) == current_move.move
+                pvs_for_move[0][0]
+                and getattr(pvs_for_move[0][0], "move", None) == current_move.move
             )
             if played_is_best and pv1_change_count >= 1:
                 material_before = self._get_material_diff(previous_move)
@@ -176,7 +189,12 @@ class KeyMomentDetector:
         if pvs_for_move and len(pvs_for_move) >= 2:
             pv1_first = pvs_for_move[0][0] if pvs_for_move[0] else None
             pv2_first = pvs_for_move[1][0] if pvs_for_move[1] else None
-            if pv1_first and pv2_first and pv1_first.score is not None and pv2_first.score is not None:
+            if (
+                pv1_first
+                and pv2_first
+                and pv1_first.score is not None
+                and pv2_first.score is not None
+            ):
                 gap = abs(pv1_first.score - pv2_first.score)
                 if gap <= 20:
                     ps1 = self._pawn_structure_type(pv1_first)
@@ -185,7 +203,9 @@ class KeyMomentDetector:
                     for clr in ("white", "black"):
                         pe = (prev_hf.get(clr) or {}).get("kingExposure")
                         ce = (curr_hf.get(clr) or {}).get("kingExposure")
-                        if isinstance(pe, (int, float)) and isinstance(ce, (int, float)):
+                        if isinstance(pe, (int, float)) and isinstance(
+                            ce, (int, float)
+                        ):
                             if abs(ce - pe) >= 2:
                                 king_brk = True
                     mat_brk = False
@@ -219,10 +239,10 @@ class KeyMomentDetector:
     def _strategic_triggers(
         self,
         current_move: Move,
-        previous_move: Optional[Move],
-        pvs_for_move: Optional[List[List[Move]]],
-    ) -> List[str]:
-        results: List[str] = []
+        previous_move: Move | None,
+        pvs_for_move: list[list[Move]] | None,
+    ) -> list[str]:
+        results: list[str] = []
         curr_hf = current_move.hiddenFeatures or {}
         prev_hf = (previous_move.hiddenFeatures if previous_move else None) or {}
 
@@ -231,7 +251,11 @@ class KeyMomentDetector:
 
         # -- Structural transformation: pawn structure type changed --
         curr_ps = (curr_hf.get("pawnStructure") or {}).get("centerType")
-        if self._prev_pawn_structure_type and curr_ps and curr_ps != self._prev_pawn_structure_type:
+        if (
+            self._prev_pawn_structure_type
+            and curr_ps
+            and curr_ps != self._prev_pawn_structure_type
+        ):
             results.append("structural_transformation")
 
         # -- King safety crisis: exposure score jumps >= 3 --
@@ -246,7 +270,10 @@ class KeyMomentDetector:
         prev_mobility = (prev_hf.get(side) or {}).get("mobility")
         curr_attacking = (curr_hf.get(side) or {}).get("attackingPieces")
         prev_attacking = (prev_hf.get(side) or {}).get("attackingPieces")
-        if all(v is not None for v in [curr_mobility, prev_mobility, curr_attacking, prev_attacking]):
+        if all(
+            v is not None
+            for v in [curr_mobility, prev_mobility, curr_attacking, prev_attacking]
+        ):
             mob_delta = curr_mobility - prev_mobility  # type: ignore[operator]
             atk_delta = curr_attacking - prev_attacking  # type: ignore[operator]
             if mob_delta >= 8 and atk_delta >= 2:
@@ -272,16 +299,26 @@ class KeyMomentDetector:
 
         # -- Endgame transition: phase changes from mid to end (once per game) --
         if (
-            self._prev_phase
+            (
+                self._prev_phase
+                and current_move.phase
+                and not self._fired_endgame_transition
+            )
+            and self._prev_phase
+            in (
+                "opening",
+                "mid",
+                "middlegame",
+                "early",
+            )
             and current_move.phase
-            and not self._fired_endgame_transition
-        ):
-            if self._prev_phase in ("opening", "mid", "middlegame", "early") and current_move.phase in (
+            in (
                 "end",
                 "endgame",
-            ):
-                results.append("endgame_transition")
-                self._fired_endgame_transition = True
+            )
+        ):
+            results.append("endgame_transition")
+            self._fired_endgame_transition = True
 
         return results
 
@@ -298,7 +335,7 @@ class KeyMomentDetector:
             self._prev_pawn_structure_type = ps.get("centerType")
 
     @staticmethod
-    def _get_material_diff(move: Move) -> Optional[float]:
+    def _get_material_diff(move: Move) -> float | None:
         """Get total material difference from hiddenFeatures."""
         hf = move.hiddenFeatures
         if not isinstance(hf, dict):
@@ -312,7 +349,7 @@ class KeyMomentDetector:
         return diff.get("total")
 
     @staticmethod
-    def _pawn_structure_type(move: Move) -> Optional[str]:
+    def _pawn_structure_type(move: Move) -> str | None:
         """Extract pawn structure center type from a move's hiddenFeatures."""
         hf = move.hiddenFeatures
         if not isinstance(hf, dict):

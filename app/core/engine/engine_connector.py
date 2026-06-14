@@ -6,10 +6,10 @@ This module provides the EngineConnector class, a thin wrapper around a UCI ches
 """
 
 import atexit
-import chess.engine
 import os
 import platform
-from typing import Optional
+
+import chess.engine
 
 MULTIPV = 3
 
@@ -39,17 +39,25 @@ class EngineConnector:
         """
         try:
             engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
-            engine.configure({"Hash": self.hash_size, "Threads": self.threads, "Use NNUE": self.use_nnue })
+            engine.configure(
+                {
+                    "Hash": self.hash_size,
+                    "Threads": self.threads,
+                    "Use NNUE": self.use_nnue,
+                }
+            )
             return engine
         except Exception as e:
-            raise RuntimeError(f"Failed to start engine at {self.engine_path}: {e}")
+            raise RuntimeError(
+                f"Failed to start engine at {self.engine_path}: {e}"
+            ) from e
 
     def analyse(
         self,
         board: chess.Board,
-        depth: Optional[int] = None,
-        time_limit: Optional[float] = None,
-        multiPv: Optional[int] = 1,
+        depth: int | None = None,
+        time_limit: float | None = None,
+        multiPv: int | None = 1,
     ) -> dict:
         """
         Analyzes a given board position using the chess engine.
@@ -107,7 +115,7 @@ stockfish_path = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..", stockfish_executable)
 )
 
-_global_engine_connector: Optional[EngineConnector] = None
+_global_engine_connector: EngineConnector | None = None
 
 
 def _shutdown_global_engine() -> None:

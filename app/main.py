@@ -1,25 +1,27 @@
-import logging
 import asyncio
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import logging
 from contextlib import asynccontextmanager
 
-from app.routes import jobs
-from app.core.worker import analysis_worker
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.core.cleanup import cleanup_old_files
+from app.core.worker import analysis_worker
+from app.routes import jobs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Start worker and cleanup tasks
     worker_task = asyncio.create_task(analysis_worker())
     cleanup_task = asyncio.create_task(cleanup_old_files("data/games"))
-    
+
     yield
-    
+
     # Shutdown
     worker_task.cancel()
     cleanup_task.cancel()
@@ -28,6 +30,7 @@ async def lifespan(app: FastAPI):
         await cleanup_task
     except asyncio.CancelledError:
         pass
+
 
 app = FastAPI(title="Annotator API", version="0.1.0", lifespan=lifespan)
 
@@ -41,6 +44,7 @@ app.add_middleware(
 )
 
 app.include_router(jobs.router)
+
 
 @app.get("/")
 def read_root():

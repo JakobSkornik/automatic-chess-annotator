@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from typing import List
-
 from app.models.chess_events import Episode, MoveEvent, TacticalMotif
 
 
-def _theme_from_events(events: List[MoveEvent]) -> str:
+def _theme_from_events(events: list[MoveEvent]) -> str:
     if not events:
         return "maneuvering"
     types = [e.event_type.value for e in events]
@@ -23,12 +21,12 @@ class EpisodeSegmenter:
     MAX_EPISODE_LENGTH = 10
     ADVANTAGE_FLIP_CP = 100
 
-    def segment(self, events: List[MoveEvent]) -> List[Episode]:
+    def segment(self, events: list[MoveEvent]) -> list[Episode]:
         if not events:
             return []
 
-        raw_chunks: List[List[MoveEvent]] = []
-        current: List[MoveEvent] = []
+        raw_chunks: list[list[MoveEvent]] = []
+        current: list[MoveEvent] = []
         prev_phase: str | None = None
         prev_eval: int | None = None
 
@@ -37,14 +35,12 @@ class EpisodeSegmenter:
             if current and prev_phase and ev.phase != prev_phase:
                 should_split = True
             if (
-                current
-                and prev_eval is not None
-                and ev.eval_after_cp is not None
+                (current and prev_eval is not None and ev.eval_after_cp is not None)
+                and (prev_eval > self.ADVANTAGE_FLIP_CP)
+                != (ev.eval_after_cp > self.ADVANTAGE_FLIP_CP)
+                and abs(ev.eval_after_cp - prev_eval) > 150
             ):
-                if (prev_eval > self.ADVANTAGE_FLIP_CP) != (
-                    ev.eval_after_cp > self.ADVANTAGE_FLIP_CP
-                ) and abs(ev.eval_after_cp - prev_eval) > 150:
-                    should_split = True
+                should_split = True
 
             if current and should_split:
                 raw_chunks.append(current)
@@ -57,7 +53,7 @@ class EpisodeSegmenter:
         if current:
             raw_chunks.append(current)
 
-        chunks: List[List[MoveEvent]] = []
+        chunks: list[list[MoveEvent]] = []
         for chunk in raw_chunks:
             start = 0
             while start < len(chunk):
@@ -65,10 +61,10 @@ class EpisodeSegmenter:
                 chunks.append(chunk[start:end])
                 start = end
 
-        episodes: List[Episode] = []
+        episodes: list[Episode] = []
         for j, chunk in enumerate(chunks):
             evals = [e.eval_after_cp for e in chunk if e.eval_after_cp is not None]
-            motifs: List[TacticalMotif] = []
+            motifs: list[TacticalMotif] = []
             for e in chunk:
                 for m in e.tactical_motifs:
                     if m not in motifs:

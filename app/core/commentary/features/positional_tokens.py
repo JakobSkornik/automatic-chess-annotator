@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import chess
 
 ENCODER_VERSION = "2"
 
-PIECE_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
+PIECE_VALUES = {
+    chess.PAWN: 1,
+    chess.KNIGHT: 3,
+    chess.BISHOP: 3,
+    chess.ROOK: 5,
+    chess.QUEEN: 9,
+    chess.KING: 0,
+}
 
 
 def _chebyshev(a: int, b: int) -> int:
@@ -17,9 +24,9 @@ def _chebyshev(a: int, b: int) -> int:
     return max(abs(af - bf), abs(ar - br))
 
 
-def _naive_piece_tokens(board: chess.Board) -> List[str]:
+def _naive_piece_tokens(board: chess.Board) -> list[str]:
     """Piece type + square from a1..h8 (white's view), paper §4.2.1."""
-    out: List[str] = []
+    out: list[str] = []
     for sq in chess.SQUARES:
         p = board.piece_at(sq)
         if p:
@@ -27,9 +34,9 @@ def _naive_piece_tokens(board: chess.Board) -> List[str]:
     return out
 
 
-def _reachable_weighted_tokens(board: chess.Board) -> List[str]:
+def _reachable_weighted_tokens(board: chess.Board) -> list[str]:
     """Piece + target square + Chebyshev distance weight, paper §2.2.2."""
-    out: List[str] = []
+    out: list[str] = []
     for sq in chess.SQUARES:
         p = board.piece_at(sq)
         if not p:
@@ -43,10 +50,10 @@ def _reachable_weighted_tokens(board: chess.Board) -> List[str]:
     return out
 
 
-def _attack_defense_tokens(board: chess.Board) -> Tuple[List[str], List[str]]:
+def _attack_defense_tokens(board: chess.Board) -> tuple[list[str], list[str]]:
     """Attacks and defenses between pieces, paper §2.2.3."""
-    attacks: List[str] = []
-    defenses: List[str] = []
+    attacks: list[str] = []
+    defenses: list[str] = []
     for sq in chess.SQUARES:
         p = board.piece_at(sq)
         if not p:
@@ -68,8 +75,8 @@ def _attack_defense_tokens(board: chess.Board) -> Tuple[List[str], List[str]]:
     return attacks, defenses
 
 
-def _pawn_files(board: chess.Board, color: chess.Color) -> Dict[int, List[int]]:
-    files: Dict[int, List[int]] = {}
+def _pawn_files(board: chess.Board, color: chess.Color) -> dict[int, list[int]]:
+    files: dict[int, list[int]] = {}
     for sq in board.pieces(chess.PAWN, color):
         fi = chess.square_file(sq)
         files.setdefault(fi, []).append(sq)
@@ -92,9 +99,9 @@ def _is_passed(board: chess.Board, pawn_sq: int, color: chess.Color) -> bool:
     return True
 
 
-def _pawn_structure_tokens(board: chess.Board) -> List[str]:
+def _pawn_structure_tokens(board: chess.Board) -> list[str]:
     """Pawn structure tags (paper Table 2.2, simplified)."""
-    tags: List[str] = []
+    tags: list[str] = []
     for color in (chess.WHITE, chess.BLACK):
         prefix = "w" if color == chess.WHITE else "b"
         pf = _pawn_files(board, color)
@@ -118,9 +125,13 @@ def _pawn_structure_tokens(board: chess.Board) -> List[str]:
             has_l = (f - 1) in pf
             has_r = (f + 1) in pf
             if color == chess.WHITE:
-                blocked = r > 0 and board.piece_at(chess.square(f, r - 1)) == chess.Piece(chess.PAWN, chess.BLACK)
+                blocked = r > 0 and board.piece_at(
+                    chess.square(f, r - 1)
+                ) == chess.Piece(chess.PAWN, chess.BLACK)
             else:
-                blocked = r < 7 and board.piece_at(chess.square(f, r + 1)) == chess.Piece(chess.PAWN, chess.WHITE)
+                blocked = r < 7 and board.piece_at(
+                    chess.square(f, r + 1)
+                ) == chess.Piece(chess.PAWN, chess.WHITE)
             if blocked and not has_l and not has_r:
                 tags.append(f"backward_{prefix}{chess.square_name(sq)}")
     return tags[:80]
@@ -169,12 +180,19 @@ def king_placement_signature(board: chess.Board) -> str:
 
 def imbalance_signature(board: chess.Board) -> str:
     """Material / structure imbalance tags for retrieval."""
-    parts: List[str] = []
+    parts: list[str] = []
     for c, tag in ((chess.WHITE, "w"), (chess.BLACK, "b")):
         if len(board.pieces(chess.BISHOP, c)) >= 2:
             parts.append(f"bishop_pair_{tag}")
-    wq = len(board.pieces(chess.QUEEN, chess.WHITE)) + len(board.pieces(chess.QUEEN, chess.BLACK))
-    if wq == 0 and len(board.pieces(chess.PAWN, chess.WHITE)) + len(board.pieces(chess.PAWN, chess.BLACK)) <= 6:
+    wq = len(board.pieces(chess.QUEEN, chess.WHITE)) + len(
+        board.pieces(chess.QUEEN, chess.BLACK)
+    )
+    if (
+        wq == 0
+        and len(board.pieces(chess.PAWN, chess.WHITE))
+        + len(board.pieces(chess.PAWN, chess.BLACK))
+        <= 6
+    ):
         parts.append("queenless_endgame")
     return " ".join(parts)
 
@@ -189,9 +207,9 @@ def _material_value(board: chess.Board, color: chess.Color) -> int:
     return s
 
 
-def _dynamic_general_from_pv(board: chess.Board, pv_san: List[str]) -> List[str]:
+def _dynamic_general_from_pv(board: chess.Board, pv_san: list[str]) -> list[str]:
     """High-level events from PV (captures, checks, promotions)."""
-    tags: List[str] = []
+    tags: list[str] = []
     b = board.copy()
     for san in pv_san[:12]:
         if not san:
@@ -213,9 +231,9 @@ def _dynamic_general_from_pv(board: chess.Board, pv_san: List[str]) -> List[str]
     return list(dict.fromkeys(tags))  # dedupe preserve order
 
 
-def _dynamic_solution_tokens(board: chess.Board, pv_san: List[str]) -> List[str]:
+def _dynamic_solution_tokens(board: chess.Board, pv_san: list[str]) -> list[str]:
     """SAN sequence with $ prefix; first 5 plies; paper §4.2.2 / §7.1."""
-    out: List[str] = []
+    out: list[str] = []
     b = board.copy()
     for san in pv_san[:5]:
         if not san:
@@ -233,7 +251,7 @@ def _dynamic_solution_tokens(board: chess.Board, pv_san: List[str]) -> List[str]
     return out
 
 
-def encode_position(board: chess.Board, pv_san: List[str]) -> Dict[str, Any]:
+def encode_position(board: chess.Board, pv_san: list[str]) -> dict[str, Any]:
     """
     Return the five BM25 text fields plus metadata for Tantivy indexing.
 
@@ -270,7 +288,9 @@ def encode_position(board: chess.Board, pv_san: List[str]) -> Dict[str, Any]:
     }
 
 
-def encode_position_strings_only(board: chess.Board, pv_san: List[str]) -> Dict[str, str]:
+def encode_position_strings_only(
+    board: chess.Board, pv_san: list[str]
+) -> dict[str, str]:
     """Same as encode_position but only the five indexed string fields."""
     d = encode_position(board, pv_san)
     return {

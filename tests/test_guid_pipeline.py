@@ -13,16 +13,18 @@ from app.core.commentary.features.guid_features import (
     vector_from_plain,
     vector_to_plain,
 )
+from app.core.commentary.phase_classifier import (
+    PhaseClassifier,
+    minor_major_piece_count,
+)
 from app.core.commentary.phases.composer import (
     eval_token,
     render_facts_template,
     validate_facts_comment,
 )
 from app.core.commentary.phases.early import EarlyGameCommenter
-from app.core.commentary.phase_classifier import PhaseClassifier, minor_major_piece_count
 from app.core.commentary.rules.engine import run_rules, verdict_for_eval
 from app.models.comment_facts import Claim, CommentFacts, EnvisionedLine
-
 
 START = chess.STARTING_FEN
 
@@ -71,7 +73,9 @@ def test_envisioned_line_trims_forcing_tail():
 
 def test_diff_vectors_bishop_pair_flag():
     before = compute_feature_vector(
-        chess.Board("r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4")
+        chess.Board(
+            "r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4"
+        )
     )
     # White exchanged on c6 (Bxc6 bxc6): the light-squared bishop is gone.
     after = compute_feature_vector(
@@ -86,7 +90,9 @@ def test_diff_vectors_bishop_pair_flag():
 
 def test_rules_fire_on_bishop_pair_loss():
     before = compute_feature_vector(
-        chess.Board("r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4")
+        chess.Board(
+            "r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4"
+        )
     )
     after = compute_feature_vector(
         chess.Board("r1bqk1nr/1ppp1ppp/p1n5/4p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5")
@@ -114,12 +120,19 @@ def _facts() -> CommentFacts:
         eval_cp=12,
         depth=16,
         display_line=EnvisionedLine(
-            start_fen=START, line_san=["Nc3", "Bd6"], line_uci=["b1c3", "f8d6"],
-            fens=[START, START], leaf_fen=START,
+            start_fen=START,
+            line_san=["Nc3", "Bd6"],
+            line_uci=["b1c3", "f8d6"],
+            fens=[START, START],
+            leaf_fen=START,
         ),
         claims=[
-            Claim(rule_id="x", text="White has improved the pawn structure.",
-                  features_involved=["EVALUATE_PAWNS"], delta_cp=15),
+            Claim(
+                rule_id="x",
+                text="White has improved the pawn structure.",
+                features_involved=["EVALUATE_PAWNS"],
+                delta_cp=15,
+            ),
         ],
     )
 
@@ -137,7 +150,9 @@ def test_contract_validation():
     facts = _facts()
     good = render_facts_template(facts)
     assert validate_facts_comment(good, facts)
-    assert not validate_facts_comment(good.replace(eval_token(facts), "(about a pawn)"), facts)
+    assert not validate_facts_comment(
+        good.replace(eval_token(facts), "(about a pawn)"), facts
+    )
     assert not validate_facts_comment("", facts)
 
 
@@ -163,10 +178,17 @@ def test_early_commenter_density():
     for i, u in enumerate(ucis):
         fb = b.fen()
         b.push_uci(u)
-        rows.append(AnalyzedMoveData(
-            index=i, ply=i + 1, san="x", uci=u, fen_before=fb, fen_after=b.fen(),
-            phase_raw="early",
-        ))
+        rows.append(
+            AnalyzedMoveData(
+                index=i,
+                ply=i + 1,
+                san="x",
+                uci=u,
+                fen_before=fb,
+                fen_after=b.fen(),
+                phase_raw="early",
+            )
+        )
     comments = EarlyGameCommenter().comments_for_book_plies(rows)
     assert 0 in comments  # first book ply
     assert len(comments) <= len(rows)  # not every ply
@@ -180,28 +202,39 @@ def test_pgn_writer_roundtrip():
 
     from app.core.io.pgn_writer import game_json_to_pgn
     from app.models.GameJson import (
-        AnalysisInfo, GameJson, GameMetadata, GameMove, MoveScore,
+        AnalysisInfo,
+        GameJson,
+        GameMetadata,
+        GameMove,
+        MoveScore,
     )
 
     b = chess.Board()
     moves = []
     for u, q in (("e2e4", None), ("e7e5", None), ("g1f3", "mistake")):
-        fb = b.fen()
+        b.fen()
         mv = chess.Move.from_uci(u)
         san = b.san(mv)
         b.push(mv)
-        moves.append(GameMove(
-            mn=(len(moves) // 2) + 1,
-            color="w" if len(moves) % 2 == 0 else "b",
-            san=san, uci=u, fen=b.fen(), phase="mid",
-            score=MoveScore(cp=10),
-            move_quality=q,
-            comment=("Solid. [pv:" + san + " d6]" if q else None),
-        ))
+        moves.append(
+            GameMove(
+                mn=(len(moves) // 2) + 1,
+                color="w" if len(moves) % 2 == 0 else "b",
+                san=san,
+                uci=u,
+                fen=b.fen(),
+                phase="mid",
+                score=MoveScore(cp=10),
+                move_quality=q,
+                comment=("Solid. [pv:" + san + " d6]" if q else None),
+            )
+        )
     gj = GameJson(
         metadata=GameMetadata(id="t", white="W", black="B", result="*"),
         moves=moves,
-        analysis_info=AnalysisInfo(engine="Stockfish", depth=16, multipv=3, timestamp=0.0),
+        analysis_info=AnalysisInfo(
+            engine="Stockfish", depth=16, multipv=3, timestamp=0.0
+        ),
     )
     pgn = game_json_to_pgn(gj)
     g2 = chess.pgn.read_game(io.StringIO(pgn))
@@ -235,9 +268,18 @@ def test_pgn_language_selection():
     from app.models.GameJson import GameMove
 
     mv = GameMove(
-        mn=1, color="w", san="e4", uci="e2e4", fen="x", phase="mid",
+        mn=1,
+        color="w",
+        san="e4",
+        uci="e2e4",
+        fen="x",
+        phase="mid",
         comment="intermediate text",
-        comments={"expert": "dry text", "intermediate": "intermediate text", "beginner": "simple text"},
+        comments={
+            "expert": "dry text",
+            "intermediate": "intermediate text",
+            "beginner": "simple text",
+        },
     )
     assert _comment_for_language(mv, "expert") == "dry text"
     assert _comment_for_language(mv, "beginner") == "simple text"
@@ -251,14 +293,24 @@ def test_state_form_claims_in_template():
     long_line = EnvisionedLine(
         start_fen=START,
         line_san=["Nc3", "Bd6", "Be3", "b6", "a4", "a5", "Nb5"],
-        line_uci=["x"] * 7, fens=[START] * 7, leaf_fen=START,
+        line_uci=["x"] * 7,
+        fens=[START] * 7,
+        leaf_fen=START,
     )
-    facts = _facts().model_copy(update={
-        "display_line": long_line,
-        "claims": [Claim(rule_id="x", text="White has improved the pawn structure.",
-                         text_state="White's pawn structure is now improved.",
-                         features_involved=["EVALUATE_PAWNS"], delta_cp=15)],
-    })
+    facts = _facts().model_copy(
+        update={
+            "display_line": long_line,
+            "claims": [
+                Claim(
+                    rule_id="x",
+                    text="White has improved the pawn structure.",
+                    text_state="White's pawn structure is now improved.",
+                    features_involved=["EVALUATE_PAWNS"],
+                    delta_cp=15,
+                )
+            ],
+        }
+    )
     text = render_facts_template(facts)
     # long quiescent line -> envisioned-state phrasing
     assert "White's pawn structure is now improved." in text
@@ -266,7 +318,9 @@ def test_state_form_claims_in_template():
 
 def test_claims_carry_beneficiary():
     before = compute_feature_vector(
-        chess.Board("r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4")
+        chess.Board(
+            "r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4"
+        )
     )
     # Only WHITE's light-squared bishop is gone; Black keeps both bishops.
     after = compute_feature_vector(
@@ -298,14 +352,25 @@ def test_mover_perspective_ordering_and_concession_cap():
 
 
 def test_template_concession_framing():
-    facts = _facts().model_copy(update={
-        "claims": [
-            Claim(rule_id="m", text="White's pieces are actively placed.",
-                  beneficiary="white", delta_cp=18),
-            Claim(rule_id="x", text="Black solves the problem of the bad bishop.",
-                  beneficiary="black", delta_cp=20, is_concession=True),
-        ],
-    })
+    facts = _facts().model_copy(
+        update={
+            "claims": [
+                Claim(
+                    rule_id="m",
+                    text="White's pieces are actively placed.",
+                    beneficiary="white",
+                    delta_cp=18,
+                ),
+                Claim(
+                    rule_id="x",
+                    text="Black solves the problem of the bad bishop.",
+                    beneficiary="black",
+                    delta_cp=20,
+                    is_concession=True,
+                ),
+            ],
+        }
+    )
     text = render_facts_template(facts)  # ply 21 -> variant 1
     assert "White's pieces are actively placed." in text
     assert "On the other hand, Black solves the problem of the bad bishop." in text
@@ -337,17 +402,19 @@ def test_eval_token_shows_transition():
     from app.core.commentary.phases.composer import eval_token
 
     f = _facts().model_copy(update={"eval_before_cp": 77, "eval_cp": -43})
-    assert "(+0.77 → -0.43, Stockfish:16)" == eval_token(f)
+    assert eval_token(f) == "(+0.77 → -0.43, Stockfish:16)"
     # small drift -> plain token
     f2 = _facts().model_copy(update={"eval_before_cp": 10, "eval_cp": 12})
     assert eval_token(f2) == "(+0.12, Stockfish:16)"
 
 
 def test_refutation_in_template_and_contract():
-    f = _facts().model_copy(update={
-        "refutation_san": "Bxg2+",
-        "concession_mode": "consequence",
-    })
+    f = _facts().model_copy(
+        update={
+            "refutation_san": "Bxg2+",
+            "concession_mode": "consequence",
+        }
+    )
     text = render_facts_template(f)
     assert "punished by Bxg2+" in text
     assert validate_facts_comment(text, f)
@@ -355,20 +422,39 @@ def test_refutation_in_template_and_contract():
 
 
 def test_concessions_join_single_sentence():
-    f = _facts().model_copy(update={
-        "ply": 22,  # variant 0 -> "In return, "
-        "claims": [
-            Claim(rule_id="m", text="Black gains space.", beneficiary="black", delta_cp=12),
-            Claim(rule_id="c1", text="White's bad bishop is no longer a problem.",
-                  beneficiary="white", delta_cp=20, is_concession=True),
-            Claim(rule_id="c2", text="White's pieces are actively placed.",
-                  beneficiary="white", delta_cp=10, is_concession=True),
-        ],
-        "mover": "Black",
-    })
+    f = _facts().model_copy(
+        update={
+            "ply": 22,  # variant 0 -> "In return, "
+            "claims": [
+                Claim(
+                    rule_id="m",
+                    text="Black gains space.",
+                    beneficiary="black",
+                    delta_cp=12,
+                ),
+                Claim(
+                    rule_id="c1",
+                    text="White's bad bishop is no longer a problem.",
+                    beneficiary="white",
+                    delta_cp=20,
+                    is_concession=True,
+                ),
+                Claim(
+                    rule_id="c2",
+                    text="White's pieces are actively placed.",
+                    beneficiary="white",
+                    delta_cp=10,
+                    is_concession=True,
+                ),
+            ],
+            "mover": "Black",
+        }
+    )
     text = render_facts_template(f)
-    assert ("In return, White's bad bishop is no longer a problem and "
-            "White's pieces are actively placed.") in text
+    assert (
+        "In return, White's bad bishop is no longer a problem and "
+        "White's pieces are actively placed."
+    ) in text
 
 
 def test_grounded_passed_pawn_square():
@@ -386,7 +472,10 @@ def test_parse_text_extracts_from_schema_blob():
         '"required":["text"],"additionalProperties":false}\n\n'
         '{"text":"21...Nc5 leaves White with a decisive advantage (+5.31, Stockfish:16)."}'
     )
-    assert _parse_text(blob) == "21...Nc5 leaves White with a decisive advantage (+5.31, Stockfish:16)."
+    assert (
+        _parse_text(blob)
+        == "21...Nc5 leaves White with a decisive advantage (+5.31, Stockfish:16)."
+    )
     # plain object still works
     assert _parse_text('{"text":"hello"}') == "hello"
     # last valid object wins on concatenation
@@ -410,7 +499,9 @@ def test_line_feature_series_shape():
     for u in ("e2e4", "e7e5", "g1f3"):
         b.push_uci(u)
         fens.append(b.fen())
-    series = _line_feature_series(start, fens, ["MATERIAL_BALANCE", "WHITE_PIECE_ACTIVITY"])
+    series = _line_feature_series(
+        start, fens, ["MATERIAL_BALANCE", "WHITE_PIECE_ACTIVITY"]
+    )
     # one point for the start position plus one per ply
     assert len(series["MATERIAL_BALANCE"]) == len(fens) + 1
     assert all(isinstance(v, int) for v in series["WHITE_PIECE_ACTIVITY"])

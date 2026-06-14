@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -13,32 +13,32 @@ from app.models.chess_events import Episode, MoveEvent
 class RAGQuery(BaseModel):
     """Structured query built from MoveEvent features."""
 
-    pawn_structure_type: Optional[str] = None
-    phase: Optional[str] = None
-    eco: Optional[str] = None
-    opening_name: Optional[str] = None
-    ply: Optional[int] = None
-    eco_prefix: Optional[str] = None
-    tactical_motifs: List[str] = Field(default_factory=list)
-    material_imbalance: Optional[str] = None
-    eval_swing_direction: Optional[str] = None
-    theme_hint: Optional[str] = None
+    pawn_structure_type: str | None = None
+    phase: str | None = None
+    eco: str | None = None
+    opening_name: str | None = None
+    ply: int | None = None
+    eco_prefix: str | None = None
+    tactical_motifs: list[str] = Field(default_factory=list)
+    material_imbalance: str | None = None
+    eval_swing_direction: str | None = None
+    theme_hint: str | None = None
     # BM25 / Tantivy: position after the move + PV SAN from that position (matches corpus build)
-    fen: Optional[str] = None
-    pv_san: Optional[List[str]] = None
+    fen: str | None = None
+    pv_san: list[str] | None = None
 
 
 class RAGResult(BaseModel):
     """A single retrieved annotated example."""
 
     source: str
-    fen: Optional[str] = None
+    fen: str | None = None
     annotation_text: str
-    relevance_tags: Dict[str, str] = Field(default_factory=dict)
-    similarity_score: Optional[float] = None
+    relevance_tags: dict[str, str] = Field(default_factory=dict)
+    similarity_score: float | None = None
 
 
-def _classify_imbalance(material: Optional[Dict[str, Any]]) -> Optional[str]:
+def _classify_imbalance(material: dict[str, Any] | None) -> str | None:
     if not material or not isinstance(material, dict):
         return None
     diff = material.get("diff")
@@ -57,13 +57,15 @@ def _classify_imbalance(material: Optional[Dict[str, Any]]) -> Optional[str]:
 
 def build_rag_query(
     move_event: MoveEvent,
-    episode: Optional[Episode] = None,
+    episode: Episode | None = None,
 ) -> RAGQuery:
     """Build a structured RAG query from a MoveEvent."""
     eco_full = (move_event.opening_eco or "").strip()
-    eco_prefix = eco_full[:2] if len(eco_full) >= 2 else (eco_full if eco_full else None)
+    eco_prefix = (
+        eco_full[:2] if len(eco_full) >= 2 else (eco_full if eco_full else None)
+    )
 
-    swing_dir: Optional[str] = None
+    swing_dir: str | None = None
     if move_event.eval_swing_cp is not None:
         s = move_event.eval_swing_cp
         if s < -80:
@@ -94,28 +96,25 @@ class RAGRetriever(ABC):
         query: RAGQuery,
         top_k: int = 2,
         *,
-        retrieval_debug: Optional[Dict[str, Any]] = None,
-    ) -> List[RAGResult]:
-        ...
+        retrieval_debug: dict[str, Any] | None = None,
+    ) -> list[RAGResult]: ...
 
 
-def rag_results_to_ws_refs(results: List[RAGResult]) -> List[Dict[str, Any]]:
+def rag_results_to_ws_refs(results: list[RAGResult]) -> list[dict[str, Any]]:
     """Serialize RAG results for WebSocket `data.rag_refs` (FE + debugging)."""
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for r in results:
         tags = r.relevance_tags or {}
-        eco = (
-            tags.get("opening_eco")
-            or tags.get("eco")
-            or ""
-        )
+        eco = tags.get("opening_eco") or tags.get("eco") or ""
         oname = tags.get("opening_name") or tags.get("opening") or ""
         out.append(
             {
                 "source": r.source,
                 "fen": r.fen or "",
                 "text": r.annotation_text[:300],
-                "score": float(r.similarity_score) if r.similarity_score is not None else 0.0,
+                "score": float(r.similarity_score)
+                if r.similarity_score is not None
+                else 0.0,
                 "san": (tags.get("san") or ""),
                 "phase": (tags.get("phase") or ""),
                 "opening_eco": eco,

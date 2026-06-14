@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import chess
 
@@ -18,9 +18,11 @@ def primary_motif_label(me: MoveEvent) -> str:
     return "none"
 
 
-def prompt_projection(rationale: MoveRationale, *, detail: str = "minimal") -> Dict[str, Any]:
+def prompt_projection(
+    rationale: MoveRationale, *, detail: str = "minimal"
+) -> dict[str, Any]:
     """Slim dict for MOVE_RATIONALE_JSON in prompts (full MoveRationale stays in llm_debug)."""
-    out: Dict[str, Any] = {
+    out: dict[str, Any] = {
         "eval_change_cp": rationale.eval_change_cp,
     }
     if rationale.immediate_effect:
@@ -54,7 +56,9 @@ def build_rationale(
 
     tactical_keys = [m.value for m in me.tactical_motifs]
     strategic_keys = [m.value for m in me.strategic_motifs]
-    glossary_phrasings = {k: glossary_phrase_for(k) for k in tactical_keys + strategic_keys}
+    glossary_phrasings = {
+        k: glossary_phrase_for(k) for k in tactical_keys + strategic_keys
+    }
 
     immediate = ""
     narrative_template = ""
@@ -73,10 +77,14 @@ def build_rationale(
             immediate = f"Check with the {mover_sym} to {dest}."
             narrative_template = immediate
         elif me.tactical_motifs:
-            immediate = f"Tactical theme: {me.tactical_motifs[0].value.replace('_', ' ')}."
+            immediate = (
+                f"Tactical theme: {me.tactical_motifs[0].value.replace('_', ' ')}."
+            )
             narrative_template = immediate
         elif me.strategic_motifs:
-            immediate = f"Strategic idea: {me.strategic_motifs[0].value.replace('_', ' ')}."
+            immediate = (
+                f"Strategic idea: {me.strategic_motifs[0].value.replace('_', ' ')}."
+            )
             narrative_template = immediate
         else:
             ba = chess.Board(me.fen_after)
@@ -108,11 +116,15 @@ def build_rationale(
 
     pv_summary = collect_pv_motif_summary(me.pv_motifs or [])
     if pv_summary:
-        future_eff = (future_eff + " | PV motifs: " + "; ".join(pv_summary[:3])).strip(" |")
+        future_eff = (future_eff + " | PV motifs: " + "; ".join(pv_summary[:3])).strip(
+            " |"
+        )
 
     if me.opponent_threats:
         threat_labels = ", ".join(t.value for t in me.opponent_threats[:3])
-        future_eff = (future_eff + f" | Opponent threatens: {threat_labels}").strip(" |")
+        future_eff = (future_eff + f" | Opponent threatens: {threat_labels}").strip(
+            " |"
+        )
 
     motif: str | None = None
     if me.tactical_motifs:
@@ -129,7 +141,9 @@ def build_rationale(
             f"(fits the plan pressure better when the game arc calls for it)."
         )
     if future_delta and future_delta.best_line_san:
-        counterfactual = (counterfactual or "") + f" Sample best line: {' '.join(future_delta.best_line_san[:5])}."
+        counterfactual = (
+            counterfactual or ""
+        ) + f" Sample best line: {' '.join(future_delta.best_line_san[:5])}."
 
     played_plan = None
     best_plan = None
@@ -141,7 +155,9 @@ def build_rationale(
             best_plan = pc.best_plan_seed
         if pc.played_plan_tags:
             tag_str = ", ".join(pc.played_plan_tags[:3])
-            played_plan = f"{played_plan or 'n/a'} ({tag_str})" if played_plan else tag_str
+            played_plan = (
+                f"{played_plan or 'n/a'} ({tag_str})" if played_plan else tag_str
+            )
         if pc.best_plan_tags:
             tag_str = ", ".join(pc.best_plan_tags[:3])
             best_plan = f"{best_plan or 'n/a'} ({tag_str})" if best_plan else tag_str
@@ -188,4 +204,3 @@ def build_rationale(
         narrative_template=narrative_template.strip(),
         coach_scratchpad=coach_scratchpad,
     )
-

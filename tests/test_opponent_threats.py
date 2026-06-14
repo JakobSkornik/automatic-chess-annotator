@@ -5,12 +5,13 @@ import unittest
 import chess
 
 from app.core.commentary.features.opponent_threats import detect_opponent_threats
-from app.models.chess_events import TacticalMotif
 
 
 class TestOpponentThreats(unittest.TestCase):
     def test_game_over_returns_empty(self) -> None:
-        board = chess.Board("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3")
+        board = chess.Board(
+            "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
+        )
         self.assertTrue(board.is_game_over())
         self.assertEqual(detect_opponent_threats(board), [])
 

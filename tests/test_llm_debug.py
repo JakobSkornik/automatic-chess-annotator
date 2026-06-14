@@ -63,7 +63,9 @@ class TestLlmDebug(unittest.TestCase):
             key_moment_type="great_move",
         )
         for provider_key in ("openai", "anthropic"):
-            svc = AdvancedCommentService(rag_retriever=_StubRAG(), provider_key=provider_key)
+            svc = AdvancedCommentService(
+                rag_retriever=_StubRAG(), provider_key=provider_key
+            )
             self.assertEqual(svc.provider_name, provider_key)
         svc = AdvancedCommentService(rag_retriever=_StubRAG(), provider_key="openai")
         ctx = GameAnalysisContext()

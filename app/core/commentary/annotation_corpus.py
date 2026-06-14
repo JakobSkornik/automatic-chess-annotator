@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, Optional
 
 import chess.pgn
 
@@ -17,16 +16,14 @@ def is_junk_comment(text: str) -> bool:
         return True
     if _JUNK_SYMBOLS.match(t):
         return True
-    if t.upper() in {"D", "RR", "TN", "N"}:
-        return True
-    return False
+    return t.upper() in {"D", "RR", "TN", "N"}
 
 
 def nearest_annotation_distance(
     ply_to_comment: dict[int, str],
     current_ply: int,
     max_delta: int = 4,
-) -> Optional[int]:
+) -> int | None:
     """Smallest Δ in [0, max_delta] with a non-junk comment at ply+Δ."""
     for d in range(0, max_delta + 1):
         txt = ply_to_comment.get(current_ply + d)
@@ -35,12 +32,12 @@ def nearest_annotation_distance(
     return None
 
 
-def ply_to_comment_map_from_game(game: chess.pgn.Game) -> Dict[int, str]:
+def ply_to_comment_map_from_game(game: chess.pgn.Game) -> dict[int, str]:
     """
     Map half-move ply -> non-junk comment text from PGN {...} comments.
     Ply counts half-moves from the start (1 after the first half-move).
     """
-    out: Dict[int, str] = {}
+    out: dict[int, str] = {}
     root_comment = (game.comment or "").strip()
     if root_comment and not is_junk_comment(root_comment):
         out[0] = root_comment

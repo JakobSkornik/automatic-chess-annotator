@@ -12,7 +12,6 @@ from __future__ import annotations
 import io
 import logging
 import re
-from typing import Any, Dict, List, Optional, Tuple
 
 import chess
 import chess.pgn
@@ -35,9 +34,9 @@ _QUALITY_NAGS = {
 }
 
 
-def _flatten_tokens(text: str) -> Tuple[str, List[List[str]]]:
+def _flatten_tokens(text: str) -> tuple[str, list[list[str]]]:
     """Strip interactive tokens; return (plain_text, pv_lines_as_san_lists)."""
-    pv_lines: List[List[str]] = []
+    pv_lines: list[list[str]] = []
 
     # "... after [pv:x y z] (+0.12, ...)" -> drop the connective with the token;
     # the line itself becomes a PGN variation instead.
@@ -73,7 +72,7 @@ def _eval_tag(move: GameMove) -> str:
     return ""
 
 
-def _nag_for_move(move: GameMove) -> Optional[int]:
+def _nag_for_move(move: GameMove) -> int | None:
     if move.classification in _CLASSIFICATION_NAGS:
         return _CLASSIFICATION_NAGS[move.classification]
     if move.move_quality in _QUALITY_NAGS:
@@ -94,7 +93,7 @@ def _feature_note(move: GameMove, max_items: int = 4) -> str:
 def _try_add_line(
     start_board: chess.Board,
     node: chess.pgn.GameNode,
-    sans: List[str],
+    sans: list[str],
 ) -> None:
     """Attach a SAN line as a variation from ``node`` (position = start_board)."""
     board = start_board.copy(stack=False)
@@ -111,11 +110,15 @@ def _try_add_line(
                 continue
             cursor = cursor.add_variation(mv)
         else:
-            cursor = cursor.add_variation(mv) if not cursor.has_variation(mv) else cursor.variation(mv)
+            cursor = (
+                cursor.add_variation(mv)
+                if not cursor.has_variation(mv)
+                else cursor.variation(mv)
+            )
         board.push(mv)
 
 
-def _comment_for_language(move: GameMove, language: Optional[str]) -> Optional[str]:
+def _comment_for_language(move: GameMove, language: str | None) -> str | None:
     if language and move.comments:
         text = move.comments.get(language)
         if text:
@@ -127,7 +130,7 @@ def game_json_to_pgn(
     gj: GameJson,
     *,
     include_features: bool = False,
-    language: Optional[str] = "expert",
+    language: str | None = "expert",
 ) -> str:
     game = chess.pgn.Game()
     md = gj.metadata
@@ -152,7 +155,7 @@ def game_json_to_pgn(
     # Continuation lines from comments that so far match the actual game:
     # they only become variations at the ply where they diverge (otherwise
     # they would duplicate the mainline, e.g. "4. Nf3 (4. Nf3 e6 ...)").
-    pending_continuations: List[List[str]] = []
+    pending_continuations: list[list[str]] = []
     for move in gj.moves:
         try:
             mv = chess.Move.from_uci(move.uci)
@@ -160,12 +163,14 @@ def game_json_to_pgn(
             logger.warning("PGN export: bad uci %s — stopping", move.uci)
             break
         if mv not in board.legal_moves:
-            logger.warning("PGN export: illegal %s at %s — stopping", move.uci, board.fen())
+            logger.warning(
+                "PGN export: illegal %s at %s — stopping", move.uci, board.fen()
+            )
             break
         board_before = board.copy(stack=False)
         parent = node
 
-        still_matching: List[List[str]] = []
+        still_matching: list[list[str]] = []
         for cont in pending_continuations:
             if cont and cont[0] == move.san:
                 rest = cont[1:]
@@ -184,7 +189,7 @@ def game_json_to_pgn(
         if nag:
             node.nags.add(nag)
 
-        comment_bits: List[str] = []
+        comment_bits: list[str] = []
         ev = _eval_tag(move)
         if ev:
             comment_bits.append(ev)

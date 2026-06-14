@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 import chess
 
-from app.core.commentary.openings.eco_book import ECOBook, OpeningInfo, mainline_uci_list
+from app.core.commentary.openings.eco_book import (
+    ECOBook,
+    OpeningInfo,
+    mainline_uci_list,
+)
 
 # Align with engine: early game through full move 10; endgame by minor+major count.
 _EARLY_FULLMOVE_CUTOFF = 10
-_MINOR_MAJOR_END_THRESHOLD = 7  # < this count => "end" (endgame) when past opening window
+_MINOR_MAJOR_END_THRESHOLD = (
+    7  # < this count => "end" (endgame) when past opening window
+)
 
 # Corpus schema version (independent of positional ENCODER_VERSION)
 CORPUS_VERSION = "2"
@@ -31,8 +36,8 @@ def _minor_major_count(board: chess.Board) -> int:
 def _engine_raw_phase(
     board: chess.Board,
     *,
-    opening_matched_ply: Optional[int] = None,
-    uci_plies_played: Optional[int] = None,
+    opening_matched_ply: int | None = None,
+    uci_plies_played: int | None = None,
 ) -> str:
     """Mirror engine phase values: early while still in ECO book when known; else legacy cutoff."""
     book_context = (
@@ -53,8 +58,8 @@ def _engine_raw_phase(
 
 
 def in_opening_book(
-    uci_prefix: List[str], eco_book: Optional[ECOBook] = None
-) -> Tuple[bool, int]:
+    uci_prefix: list[str], eco_book: ECOBook | None = None
+) -> tuple[bool, int]:
     """
     True when the full UCI prefix is covered by a book hit (longest match length >= len(prefix)).
     Returns (in_book, matched_ply_count_of_longest_hit).
@@ -77,8 +82,8 @@ def map_engine_phase_to_rag(raw: str) -> RagPhase:
 def classify_rag_phase(
     board: chess.Board,
     *,
-    opening_matched_ply: Optional[int] = None,
-    uci_plies_played: Optional[int] = None,
+    opening_matched_ply: int | None = None,
+    uci_plies_played: int | None = None,
 ) -> RagPhase:
     """
     Classify the position into opening / middlegame / endgame.
@@ -141,8 +146,8 @@ def _prefix2(eco: str) -> str:
 
 
 def opening_info_from_uci_list(
-    uci_prefix: List[str], eco_book: Optional[ECOBook] = None, header_eco: str = ""
-) -> Tuple[Optional[OpeningInfo], int, str]:
+    uci_prefix: list[str], eco_book: ECOBook | None = None, header_eco: str = ""
+) -> tuple[OpeningInfo | None, int, str]:
     """
     Longest-prefix ECO match for the UCI list up to the current position.
     Returns (info, matched_ply_count, effective_eco_string).
@@ -151,8 +156,14 @@ def opening_info_from_uci_list(
     info, n = b.match(uci_prefix)
     he = _norm_eco(header_eco)
     code = (info.code if info else "") or he
-    name = (info.name if info else "")
-    if info is None and he and len(he) >= 3 and he[0].upper() in "ABCDE" and he[1:3].isdigit():
+    name = info.name if info else ""
+    if (
+        info is None
+        and he
+        and len(he) >= 3
+        and he[0].upper() in "ABCDE"
+        and he[1:3].isdigit()
+    ):
         code3 = he[:3].upper()
         info = OpeningInfo(code=code3, name=name or "HeaderECO", variation=None)
         n = 0
@@ -161,12 +172,15 @@ def opening_info_from_uci_list(
 
 
 def build_opening_tags(
-    uci_prefix: List[str], ply: int, eco_book: Optional[ECOBook] = None, header_eco: str = ""
+    uci_prefix: list[str],
+    ply: int,
+    eco_book: ECOBook | None = None,
+    header_eco: str = "",
 ) -> OpeningTags:
     info, matched_ply, _ = opening_info_from_uci_list(uci_prefix, eco_book, header_eco)
     code = (info.code if info else "") or _norm_eco(header_eco) or ""
     name = (info.name if info else "")[:120]
-    prefix = _prefix2(code) if code else ( _prefix2(header_eco) if header_eco else "" )
+    prefix = _prefix2(code) if code else (_prefix2(header_eco) if header_eco else "")
     return OpeningTags(
         opening_eco=code[:16],
         opening_name=name,
@@ -176,7 +190,7 @@ def build_opening_tags(
     )
 
 
-def material_tuple(board: chess.Board) -> Tuple[int, ...]:
+def material_tuple(board: chess.Board) -> tuple[int, ...]:
     return tuple(
         len(board.pieces(pt, c))
         for c in (chess.WHITE, chess.BLACK)
@@ -186,10 +200,16 @@ def material_tuple(board: chess.Board) -> Tuple[int, ...]:
 
 def _side_material_str(board: chess.Board, color: chess.Color) -> str:
     order = (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN)
-    parts: List[str] = ["K"]
+    parts: list[str] = ["K"]
     for pt in order:
         n = len(board.pieces(pt, color))
-        sym = {chess.QUEEN: "Q", chess.ROOK: "R", chess.BISHOP: "B", chess.KNIGHT: "N", chess.PAWN: "P"}[pt]
+        sym = {
+            chess.QUEEN: "Q",
+            chess.ROOK: "R",
+            chess.BISHOP: "B",
+            chess.KNIGHT: "N",
+            chess.PAWN: "P",
+        }[pt]
         parts.extend([sym] * n)
     return "".join(parts)
 
@@ -202,7 +222,10 @@ def material_signature(board: chess.Board) -> str:
 
 def material_bucket(board: chess.Board) -> str:
     mm = _minor_major_count(board)
-    wq, bq = len(board.pieces(chess.QUEEN, chess.WHITE)), len(board.pieces(chess.QUEEN, chess.BLACK))
+    wq, bq = (
+        len(board.pieces(chess.QUEEN, chess.WHITE)),
+        len(board.pieces(chess.QUEEN, chess.BLACK)),
+    )
     if mm < _MINOR_MAJOR_END_THRESHOLD:
         return "endgame_sharp"
     if wq == 0 and bq == 0:
@@ -221,12 +244,24 @@ def endgame_signature(board: chess.Board) -> str:
     """
     Space-separated tags for endgame RAG: material class, simple patterns, pawn wing.
     """
-    tags: List[str] = []
+    tags: list[str] = []
     tags.append(f"mat_sig:{material_signature(board)}")
-    wq, bq = len(board.pieces(chess.QUEEN, chess.WHITE)), len(board.pieces(chess.QUEEN, chess.BLACK))
-    wr, br = len(board.pieces(chess.ROOK, chess.WHITE)), len(board.pieces(chess.ROOK, chess.BLACK))
-    wb, bb = len(board.pieces(chess.BISHOP, chess.WHITE)), len(board.pieces(chess.BISHOP, chess.BLACK))
-    wn, bn = len(board.pieces(chess.KNIGHT, chess.WHITE)), len(board.pieces(chess.KNIGHT, chess.BLACK))
+    wq, bq = (
+        len(board.pieces(chess.QUEEN, chess.WHITE)),
+        len(board.pieces(chess.QUEEN, chess.BLACK)),
+    )
+    wr, br = (
+        len(board.pieces(chess.ROOK, chess.WHITE)),
+        len(board.pieces(chess.ROOK, chess.BLACK)),
+    )
+    wb, bb = (
+        len(board.pieces(chess.BISHOP, chess.WHITE)),
+        len(board.pieces(chess.BISHOP, chess.BLACK)),
+    )
+    wn, bn = (
+        len(board.pieces(chess.KNIGHT, chess.WHITE)),
+        len(board.pieces(chess.KNIGHT, chess.BLACK)),
+    )
     if wq == 0 and bq == 0 and wr + br >= 1:
         tags.append("pattern:rook_ending")
     if wq == 0 and bq == 0 and wn + bn >= 1 and wr + br == 0:
@@ -238,20 +273,23 @@ def endgame_signature(board: chess.Board) -> str:
             tags.append("pattern:opposite_bishops")
         else:
             tags.append("pattern:same_color_bishops")
-    if wq + bq == 0 and len(list(board.pieces(chess.PAWN, chess.WHITE))) + len(
-        list(board.pieces(chess.PAWN, chess.BLACK))
-    ) <= 4:
+    if (
+        wq + bq == 0
+        and len(list(board.pieces(chess.PAWN, chess.WHITE)))
+        + len(list(board.pieces(chess.PAWN, chess.BLACK)))
+        <= 4
+    ):
         tags.append("pattern:pawn_light")
 
     wk, bk = board.king(chess.WHITE), board.king(chess.BLACK)
     if wk is not None and bk is not None:
         kd = chess.square_distance(wk, bk)
         if kd <= 2:
-            tags.append(f"king_prox:touching")
+            tags.append("king_prox:touching")
         elif kd <= 4:
-            tags.append(f"king_prox:close")
+            tags.append("king_prox:close")
         else:
-            tags.append(f"king_prox:far")
+            tags.append("king_prox:far")
 
     # Pawn on kingside/queenside majority (coarse)
     wpf = [chess.square_file(sq) for sq in board.pieces(chess.PAWN, chess.WHITE)]
@@ -280,21 +318,26 @@ def middlegame_strategic_tags(board: chess.Board) -> str:
     """
     Extra lexical tokens (whitespace) for middlegame BM25, beyond positional encoder fields.
     """
-    parts: List[str] = []
-    wc, bc = board.has_kingside_castling_rights(chess.WHITE), board.has_queenside_castling_rights(
-        chess.WHITE
+    parts: list[str] = []
+    wc, bc = (
+        board.has_kingside_castling_rights(chess.WHITE),
+        board.has_queenside_castling_rights(chess.WHITE),
     )
-    wc2, bc2 = board.has_kingside_castling_rights(chess.BLACK), board.has_queenside_castling_rights(
-        chess.BLACK
+    wc2, bc2 = (
+        board.has_kingside_castling_rights(chess.BLACK),
+        board.has_queenside_castling_rights(chess.BLACK),
     )
     if not (wc or wc2 or bc or bc2):
         parts.append("castle:none_available")
     wk, bk = board.king(chess.WHITE), board.king(chess.BLACK)
     if wk is not None and bk is not None:
         wf, bf = chess.square_file(wk), chess.square_file(bk)
-        if wf <= 3 and bf >= 6 or (wf >= 6 and bf <= 3):
+        if (wf <= 3 and bf >= 6) or (wf >= 6 and bf <= 3):
             parts.append("castling_pattern:opposite_side")
-        elif abs(wf - bf) <= 2 and abs(chess.square_rank(wk) - chess.square_rank(bk)) >= 3:
+        elif (
+            abs(wf - bf) <= 2
+            and abs(chess.square_rank(wk) - chess.square_rank(bk)) >= 3
+        ):
             parts.append("castling_pattern:same_side")
     for f in (2, 3, 4, 5, 6):
         parts.append(f"file{chess.FILE_NAMES[f]}:{_file_openness(board, f)}")
@@ -322,6 +365,6 @@ def pawn_structure_fingerprint(board: chess.Board) -> str:
     return f"wf:{w_s}_bf:{b_s}"
 
 
-def uci_list_from_pgn_start(game: chess.pgn.Game, plies: int) -> List[str]:
+def uci_list_from_pgn_start(game: chess.pgn.Game, plies: int) -> list[str]:
     """UCI plies of the first `plies` mainline half-moves from the start position."""
     return mainline_uci_list(game)[: int(max(0, plies))]

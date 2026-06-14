@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import chess
 
-from app.core.engine.engine_connector import EngineConnector
 from app.core.commentary.features.positional_features import compute_hidden_features
+from app.core.engine.engine_connector import EngineConnector
 from app.models.chess_events import FutureLineDelta
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 MATE_SCORE = 1_000_000
 
 
-def _info_to_white_cp(info: Any) -> Optional[int]:
+def _info_to_white_cp(info: Any) -> int | None:
     if not isinstance(info, dict):
         return None
     sc = info.get("score")
@@ -29,7 +29,7 @@ def _info_to_white_cp(info: Any) -> Optional[int]:
         return None
 
 
-def _normalize_info(info: Any) -> Optional[dict]:
+def _normalize_info(info: Any) -> dict | None:
     if isinstance(info, list) and info:
         info = info[0]
     return info if isinstance(info, dict) else None
@@ -37,14 +37,14 @@ def _normalize_info(info: Any) -> Optional[dict]:
 
 def _pv_moves_from_info(
     engine: EngineConnector, board: chess.Board, depth: int, max_plies: int
-) -> Tuple[List[chess.Move], Optional[int]]:
+) -> tuple[list[chess.Move], int | None]:
     """Return PV line as chess.Move list and root eval (White POV cp)."""
     info = _normalize_info(engine.analyse(board, depth=depth, multiPv=1))
     if not info:
         return [], None
     root_cp = _info_to_white_cp(info)
     pv = info.get("pv") or []
-    moves: List[chess.Move] = []
+    moves: list[chess.Move] = []
     b = board.copy()
     for m in pv[:max_plies]:
         if m not in b.legal_moves:
@@ -55,8 +55,8 @@ def _pv_moves_from_info(
 
 
 def _leaf_eval_after_line(
-    engine: EngineConnector, start: chess.Board, moves: List[chess.Move], depth: int
-) -> Optional[int]:
+    engine: EngineConnector, start: chess.Board, moves: list[chess.Move], depth: int
+) -> int | None:
     """Evaluate position after playing `moves` from `start` (White POV cp)."""
     b = start.copy()
     for m in moves:
@@ -67,11 +67,11 @@ def _leaf_eval_after_line(
     return _info_to_white_cp(info) if info else None
 
 
-def _flatten_numeric_features(feat: Dict[str, Any]) -> Dict[str, float]:
+def _flatten_numeric_features(feat: dict[str, Any]) -> dict[str, float]:
     """Extract comparable numeric scalars for delta (both sides + pawn center)."""
-    out: Dict[str, float] = {}
+    out: dict[str, float] = {}
 
-    def _coerce_numeric(side: Dict[str, Any], k: str) -> Optional[float]:
+    def _coerce_numeric(side: dict[str, Any], k: str) -> float | None:
         v = side.get(k)
         if isinstance(v, (int, float)):
             return float(v)
@@ -104,7 +104,9 @@ def _flatten_numeric_features(feat: Dict[str, Any]) -> Dict[str, float]:
     return out
 
 
-def feature_deltas_between_fens(fen_a: str, fen_b: str, limit: int = 6) -> Dict[str, float]:
+def feature_deltas_between_fens(
+    fen_a: str, fen_b: str, limit: int = 6
+) -> dict[str, float]:
     """Public helper for tests: compare hidden features at two positions."""
     try:
         fa = compute_hidden_features(chess.Board(fen_a))
@@ -115,12 +117,12 @@ def feature_deltas_between_fens(fen_a: str, fen_b: str, limit: int = 6) -> Dict[
 
 
 def _top_feature_deltas(
-    played_feat: Dict[str, Any], best_feat: Dict[str, Any], limit: int = 6
-) -> Dict[str, float]:
+    played_feat: dict[str, Any], best_feat: dict[str, Any], limit: int = 6
+) -> dict[str, float]:
     a = _flatten_numeric_features(played_feat)
     b = _flatten_numeric_features(best_feat)
     keys = set(a) | set(b)
-    deltas: List[Tuple[str, float]] = []
+    deltas: list[tuple[str, float]] = []
     for k in keys:
         va = a.get(k, 0.0)
         vb = b.get(k, 0.0)
@@ -129,7 +131,7 @@ def _top_feature_deltas(
     return {k: round(v, 3) for k, v in deltas[:limit]}
 
 
-def _destination_targets(moves: List[chess.Move], min_count: int = 2) -> List[str]:
+def _destination_targets(moves: list[chess.Move], min_count: int = 2) -> list[str]:
     dests = [chess.square_name(m.to_square) for m in moves]
     c = Counter(dests)
     return [sq for sq, n in c.most_common(8) if n >= min_count]
@@ -139,12 +141,12 @@ def compare_played_vs_best_future_lines(
     engine: EngineConnector,
     fen_before: str,
     fen_after_played: str,
-    best_move_uci: Optional[str],
+    best_move_uci: str | None,
     played_move_uci: str,
     *,
     depth: int = 18,
     n_plies: int = 6,
-) -> Optional[FutureLineDelta]:
+) -> FutureLineDelta | None:
     """
     From positions after the played move and after the engine best first move,
     run multipv=1 PVs and compare leaf features after n_plies plies along each line.
@@ -213,9 +215,9 @@ def compare_played_vs_best_future_lines(
     )
 
 
-def _moves_to_san(start: chess.Board, moves: List[chess.Move]) -> List[str]:
+def _moves_to_san(start: chess.Board, moves: list[chess.Move]) -> list[str]:
     b = start.copy()
-    out: List[str] = []
+    out: list[str] = []
     for m in moves:
         if m not in b.legal_moves:
             break

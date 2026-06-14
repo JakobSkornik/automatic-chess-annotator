@@ -1,6 +1,6 @@
-from pydantic import BaseModel
-from typing import Optional
 from enum import Enum
+
+from pydantic import BaseModel
 
 from app.models.PgnMetadata import PgnMetadata
 
@@ -16,16 +16,16 @@ class JobStatus(str, Enum):
 class JobResponse(BaseModel):
     job_id: str
     status: JobStatus
-    queue_position: Optional[int] = None
-    progress: Optional[float] = None
-    message: Optional[str] = None
+    queue_position: int | None = None
+    progress: float | None = None
+    message: str | None = None
     created_at: float
-    pgn_headers: Optional[PgnMetadata] = None
-    move_count: Optional[int] = None
-    llm_provider: Optional[str] = None
-    llm_effort: Optional[str] = None
-    commentary_level: Optional[str] = None
-    comment_side: Optional[str] = None
-    error: Optional[str] = None
-    queued_ahead: Optional[int] = None
-    pgn_preview: Optional[str] = None
+    pgn_headers: PgnMetadata | None = None
+    move_count: int | None = None
+    llm_provider: str | None = None
+    llm_effort: str | None = None
+    commentary_level: str | None = None
+    comment_side: str | None = None
+    error: str | None = None
+    queued_ahead: int | None = None
+    pgn_preview: str | None = None

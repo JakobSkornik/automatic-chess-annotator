@@ -1,10 +1,11 @@
 from pydantic import BaseModel
-from typing import Dict, Optional
+
 
 class AnalysisStage:
     SHALLOW = "shallow"
     DEEP = "deep"
     FINAL = "final"
+
 
 class Move(BaseModel):
     id: int
@@ -14,10 +15,10 @@ class Move(BaseModel):
     depth: int
     isAnalyzed: bool
     piece: str
-    score: Optional[float] = None
-    phase: Optional[str] = None
-    capturedByWhite: Optional[Dict[str, int]] = None
-    capturedByBlack: Optional[Dict[str, int]] = None
-    analysisStage: Optional[str] = None  # AnalysisStage
-    analysisVersion: Optional[int] = None
-    hiddenFeatures: Optional[Dict] = None
+    score: float | None = None
+    phase: str | None = None
+    capturedByWhite: dict[str, int] | None = None
+    capturedByBlack: dict[str, int] | None = None
+    analysisStage: str | None = None  # AnalysisStage
+    analysisVersion: int | None = None
+    hiddenFeatures: dict | None = None

@@ -15,7 +15,6 @@ engine pass already paid for.
 from __future__ import annotations
 
 import os
-from typing import List, Optional, Tuple
 
 import chess
 
@@ -63,9 +62,7 @@ def is_quiescent(board: chess.Board) -> bool:
             continue
         defenders = board.attackers(victim_color, sq)
         victim_v = _SEE_VALUES[piece.piece_type]
-        cheapest = min(
-            _SEE_VALUES[board.piece_at(a).piece_type] for a in attackers
-        )
+        cheapest = min(_SEE_VALUES[board.piece_at(a).piece_type] for a in attackers)
         if cheapest < victim_v:
             return False
         if not defenders and piece.piece_type != chess.PAWN:
@@ -84,21 +81,21 @@ def _is_forcing(board_before: chess.Board, move: chess.Move) -> bool:
 
 def build_envisioned_line(
     start_fen: str,
-    line_uci: List[str],
+    line_uci: list[str],
     *,
-    root_eval_cp: Optional[int] = None,
-    depth: Optional[int] = None,
-    max_plies: Optional[int] = None,
+    root_eval_cp: int | None = None,
+    depth: int | None = None,
+    max_plies: int | None = None,
 ) -> EnvisionedLine:
     """Walk the PV, cap its length, trim the non-quiescent tail."""
     cap = max_plies if max_plies is not None else max_display_plies()
     board = chess.Board(start_fen)
     start_q = is_quiescent(board)
 
-    moves: List[chess.Move] = []
-    sans: List[str] = []
-    fens: List[str] = []
-    boards_before: List[chess.Board] = []
+    moves: list[chess.Move] = []
+    sans: list[str] = []
+    fens: list[str] = []
+    boards_before: list[chess.Board] = []
     for uci in line_uci[:cap]:
         try:
             mv = chess.Move.from_uci(uci)
@@ -159,8 +156,8 @@ def diff_vectors(
     *,
     min_abs_cp: int = 1,
 ) -> FeatureDiff:
-    positive: List[FeatureDelta] = []
-    negative: List[FeatureDelta] = []
+    positive: list[FeatureDelta] = []
+    negative: list[FeatureDelta] = []
     for name in leaf_vec:
         before = start_vec.get(name)
         after = leaf_vec.get(name)
@@ -197,15 +194,15 @@ def diff_vectors(
 def envisioned_for_played_move(
     fen_before: str,
     played_uci: str,
-    after_pv_uci: List[str],
+    after_pv_uci: list[str],
     *,
-    played_eval_cp: Optional[int],
-    depth: Optional[int],
+    played_eval_cp: int | None,
+    depth: int | None,
 ) -> EnvisionedLine:
     """Envisioned line for the played move: played move + engine continuation."""
     return build_envisioned_line(
         fen_before,
-        [played_uci] + list(after_pv_uci or []),
+        [played_uci, *list(after_pv_uci or [])],
         root_eval_cp=played_eval_cp,
         depth=depth,
     )
@@ -213,10 +210,10 @@ def envisioned_for_played_move(
 
 def envisioned_for_best_move(
     fen_before: str,
-    best_pv_uci: List[str],
+    best_pv_uci: list[str],
     *,
-    best_eval_cp: Optional[int],
-    depth: Optional[int],
+    best_eval_cp: int | None,
+    depth: int | None,
 ) -> EnvisionedLine:
     """Envisioned line for the engine's best move: PV1 from the pre-move position."""
     return build_envisioned_line(
