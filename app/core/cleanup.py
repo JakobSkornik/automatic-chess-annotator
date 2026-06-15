@@ -5,8 +5,13 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# Default retention for analyzed games: 3 months.
+DEFAULT_MAX_AGE_SECONDS = 90 * 24 * 60 * 60
 
-async def cleanup_old_files(directory: str, max_age_seconds: int = 3600):
+
+async def cleanup_old_files(
+    directory: str, max_age_seconds: int = DEFAULT_MAX_AGE_SECONDS
+):
     """
     Deletes files in directory older than max_age_seconds.
     Runs indefinitely with a sleep interval.
