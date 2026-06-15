@@ -20,3 +20,4 @@ data/cbh
 data/pgn
 
 logs/
+.cursor/

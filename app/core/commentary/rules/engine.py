@@ -776,27 +776,35 @@ def _decode_eval(cp: int | None) -> tuple:
     return int(cp), None
 
 
-def _line_feature_series(start_fen: str, fens: list[str], names: list[str]) -> dict:
-    """Per-point White-POV cp series for `names` along a line (point 0 = start
-    position, then one per kept ply). Engine-free."""
+def _line_feature_series(
+    start_fen: str, fens: list[str], names: list[str] | None = None
+) -> dict:
+    """Per-point White-POV cp series along a line (point 0 = start position, then
+    one per kept ply). Engine-free. ``names=None`` emits every feature so each
+    chart in the navigator has both the game and the along-the-line curve."""
+    points = [start_fen, *list(fens)]
+    vecs = []
+    for fen in points:
+        try:
+            vecs.append(compute_feature_vector_fen(fen) if fen else None)
+        except Exception:
+            vecs.append(None)
+    if names is None:
+        keys: set[str] = set()
+        for vec in vecs:
+            if vec:
+                keys.update(vec.keys())
+        names = sorted(keys)
     if not names:
         return {}
-    points = [start_fen, *list(fens)]
     series: dict = {name: [] for name in names}
-    for fen in points:
-        if not fen:
-            for name in names:
-                series[name].append(series[name][-1] if series[name] else 0)
-            continue
-        try:
-            vec = compute_feature_vector_fen(fen)
-        except Exception:
-            for name in names:
-                series[name].append(series[name][-1] if series[name] else 0)
-            continue
+    for vec in vecs:
         for name in names:
-            fv = vec.get(name)
-            series[name].append(fv.value_cp if fv is not None else 0)
+            fv = vec.get(name) if vec else None
+            if fv is not None:
+                series[name].append(fv.value_cp)
+            else:
+                series[name].append(series[name][-1] if series[name] else 0)
     return series
 
 
@@ -949,29 +957,19 @@ def build_comment_facts(
                 claims=best_claims,
             )
 
-    # Feature progression along the displayed line, for the features the comment
-    # is grounded in (always include MATERIAL_BALANCE so material is chartable).
-    feat_names = sorted(
-        {f for c in claims for f in c.features_involved} | {"MATERIAL_BALANCE"}
-    )
+    # Feature progression along the displayed lines: emit every feature so the
+    # navigator can chart the game-vs-line curve for all of them, not just the
+    # fired-rule ones (the per-point vector is computed in full regardless).
     played_line = played_line.model_copy(
-        update={
-            "feature_series": _line_feature_series(
-                me.fen_before, played_line.fens, feat_names
-            )
-        }
+        update={"feature_series": _line_feature_series(me.fen_before, played_line.fens)}
     )
     if better is not None and better.display_line is not None:
-        alt_names = sorted(
-            {f for c in better.claims for f in c.features_involved}
-            | {"MATERIAL_BALANCE"}
-        )
         better = better.model_copy(
             update={
                 "display_line": better.display_line.model_copy(
                     update={
                         "feature_series": _line_feature_series(
-                            me.fen_before, better.display_line.fens, alt_names
+                            me.fen_before, better.display_line.fens
                         )
                     }
                 )
