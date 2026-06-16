@@ -56,6 +56,9 @@ THRESHOLDS: dict[str, int] = {
     "bishop_color_complex": 12,
     "king_activity_endgame": 10,
     "passer_escort": 8,
+    "material": 90,  # ~a pawn of net material won/lost along the line
+    "bad_bishop": 25,  # min |delta| before a bad-bishop change is worth stating
+    "connected_rooks": 10,
     "min_claim_cp": 8,  # ignore fired rules weaker than this
     "better_alternative_gap": 50,  # cp loss before the best move is shown
 }
@@ -160,6 +163,54 @@ Rule = Callable[[_Ctx], list[Claim]]
 # ---------------------------------------------------------------------------
 # Rules — each returns zero or more claims
 # ---------------------------------------------------------------------------
+
+
+def rule_material(ctx: _Ctx) -> list[Claim]:
+    """Net material won/lost along the line — the most important feature, so it
+    leads the claim list. Fires only on a settled swing of ~a pawn or more
+    (the envisioned line is quiescence-trimmed, so quiet positions net ~0)."""
+    d = ctx.delta("MATERIAL_BALANCE")  # White-POV centipawns
+    if abs(d) < THRESHOLDS["material"]:
+        return []
+    side = "WHITE" if d > 0 else "BLACK"
+    pawns = abs(d) / 100.0
+    amount = f"{pawns:.1f}".rstrip("0").rstrip(".")
+    unit = "pawn" if amount in ("1", "0") else "pawns"
+    return [
+        Claim(
+            rule_id="material_won",
+            beneficiary=_benef(side),
+            text=f"{_side_label(side)} wins material (about {amount} {unit}).",
+            text_state=f"{_side_label(side)} is up material.",
+            features_involved=["MATERIAL_BALANCE"],
+            delta_cp=abs(d),
+        )
+    ]
+
+
+def rule_connected_rooks(ctx: _Ctx) -> list[Claim]:
+    """Rooks become connected on the back rank / a file."""
+    out: list[Claim] = []
+    for side in SIDES:
+        name = f"{side}_ROOKS_CONNECTED"
+        pair = ctx.flag_pair(name)
+        if (
+            pair
+            and pair[1] > pair[0]
+            and abs(ctx.delta(name)) >= THRESHOLDS["connected_rooks"]
+        ):
+            out.append(
+                Claim(
+                    rule_id="rooks_connected",
+                    beneficiary=_benef(side),
+                    text=f"{_side_label(side)} connects the rooks.",
+                    text_state=f"{_side_label(side)}'s rooks are connected.",
+                    features_involved=[name],
+                    delta_cp=abs(ctx.delta(name)),
+                    flag_note=ctx.flag_change(name),
+                )
+            )
+    return out
 
 
 def rule_pawn_structure(ctx: _Ctx) -> list[Claim]:
@@ -298,6 +349,10 @@ def rule_bad_bishop(ctx: _Ctx) -> list[Claim]:
     for side in SIDES:
         name = f"{side}_BAD_BISHOP"
         pair = ctx.flag_pair(name)
+        # Require a meaningful swing — the flag flickers as pawns leave the
+        # bishop's colour along best play, which over-reported "solved".
+        if pair and abs(ctx.delta(name)) < THRESHOLDS["bad_bishop"]:
+            continue
         if pair and pair[1] > pair[0]:
             sqs = ctx.new_squares(bad_bishop_squares, side)
             where = f" on {sqs[0]}" if sqs else ""
@@ -495,6 +550,10 @@ def rule_back_rank(ctx: _Ctx) -> list[Claim]:
 
 def rule_piece_activity(ctx: _Ctx) -> list[Claim]:
     out: list[Claim] = []
+    # When material changed, the mobility swing is mostly a side effect of the
+    # capture, not a genuine activity gain — let rule_material speak instead.
+    if abs(ctx.delta("MATERIAL_BALANCE")) >= 100:
+        return out
     for side in SIDES:
         name = f"{side}_PIECE_ACTIVITY"
         d = _toward(side, ctx.delta(name))
@@ -539,7 +598,8 @@ def rule_center_and_space(ctx: _Ctx) -> list[Claim]:
                     delta_cp=c,
                 )
             )
-        elif s >= THRESHOLDS["space"]:
+        # Independent of center — center no longer masks a real space gain.
+        if s >= THRESHOLDS["space"]:
             out.append(
                 Claim(
                     rule_id="space_gained",
@@ -621,6 +681,7 @@ def rule_passer_escort(ctx: _Ctx) -> list[Claim]:
 
 
 ALL_RULES: list[Rule] = [
+    rule_material,
     rule_pawn_structure,
     rule_doubled_pawns,
     rule_bishop_pair,
@@ -633,6 +694,7 @@ ALL_RULES: list[Rule] = [
     rule_back_rank,
     rule_piece_activity,
     rule_center_and_space,
+    rule_connected_rooks,
     rule_king_activity,
     rule_outside_passer,
     rule_passer_escort,
@@ -660,9 +722,9 @@ def run_rules(
             claims.extend(rule(ctx))
         except Exception as e:
             logger.warning("rule %s failed: %s", getattr(rule, "__name__", rule), e)
-    claims = [
-        c for c in claims if c.delta_cp >= THRESHOLDS["min_claim_cp"] or c.flag_note
-    ]
+    # Every claim must clear the magnitude floor — a flag flip alone (e.g. a
+    # routine bishop trade) is no longer enough to earn a sentence.
+    claims = [c for c in claims if c.delta_cp >= THRESHOLDS["min_claim_cp"]]
     claims.sort(key=lambda c: -c.delta_cp)
     return claims[:MAX_CLAIMS_PER_MOVE]
 

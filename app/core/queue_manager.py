@@ -50,6 +50,7 @@ def _extract_pgn_snapshot(pgn_string: str) -> tuple[PgnMetadata | None, int]:
         blackElo=black_elo,
         event=h.get("Event", ""),
         opening=opening,
+        eco=eco or None,
         result=h.get("Result", "*"),
     )
     n = 0

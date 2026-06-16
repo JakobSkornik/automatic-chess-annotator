@@ -1359,7 +1359,23 @@ async def run_engine_analysis_to_json(
     from app.core.commentary.rules import build_comment_facts
 
     CLAIM_DEDUP_WINDOW_PLIES = int(os.environ.get("CLAIM_DEDUP_WINDOW_PLIES", "6"))
-    last_claim_ply: dict[str, int] = {}
+    # Structural facts describe a state (a lost bishop pair, a weak back rank),
+    # not an event — they should be stated once, not re-announced whenever best
+    # play recreates them. Dedup them over a much wider window, keyed by rule.
+    STRUCTURAL_RULE_IDS = {
+        "bishop_pair_eliminated",
+        "back_rank_weakness",
+        "bad_bishop_created",
+        "bad_bishop_solved",
+        "strong_knight_established",
+        "strong_knight_lost",
+        "rook_reaches_seventh",
+        "rooks_connected",
+        "passed_pawn_created",
+        "outside_passer",
+    }
+    STRUCTURAL_WINDOW_PLIES = int(os.environ.get("STRUCTURAL_DEDUP_WINDOW_PLIES", "24"))
+    last_claim_ply: dict[tuple[str | None, str | None], int] = {}
     for mi, me in enumerate(move_events):
         row = (
             analyzed_rows[me.move_index]
@@ -1379,11 +1395,17 @@ async def run_engine_analysis_to_json(
             kept = []
             muted: list[str] = []
             for c in facts.claims:
-                prev = last_claim_ply.get(c.text)
-                if prev is not None and (me.ply - prev) <= CLAIM_DEDUP_WINDOW_PLIES:
+                key = (c.rule_id, c.beneficiary)
+                window = (
+                    STRUCTURAL_WINDOW_PLIES
+                    if c.rule_id in STRUCTURAL_RULE_IDS
+                    else CLAIM_DEDUP_WINDOW_PLIES
+                )
+                prev = last_claim_ply.get(key)
+                if prev is not None and (me.ply - prev) <= window:
                     muted.append(c.text)
                     continue
-                last_claim_ply[c.text] = me.ply
+                last_claim_ply[key] = me.ply
                 kept.append(c)
             facts = facts.model_copy(update={"claims": kept, "muted_claims": muted})
             move_events[mi] = me.model_copy(update={"comment_facts": facts})
