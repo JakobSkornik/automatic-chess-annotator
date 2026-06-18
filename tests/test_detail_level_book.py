@@ -6,7 +6,7 @@ import unittest
 
 import chess
 
-from app.core.commentary.advanced_comment_service import _detail_level_for_key_moment
+from app.core.commentary.composer_tiers import detail_level_for_key_moment
 from app.models.chess_events import MoveEvent, MoveEventType, MoveQuality
 
 
@@ -32,7 +32,7 @@ class TestDetailLevelBook(unittest.TestCase):
             key_moment_type=None,
             best_move_uci="e2e4",
         )
-        self.assertEqual(_detail_level_for_key_moment(me), "book")
+        self.assertEqual(detail_level_for_key_moment(me), "book")
 
     def test_opening_brilliant_not_book(self) -> None:
         b0 = chess.Board()
@@ -55,7 +55,7 @@ class TestDetailLevelBook(unittest.TestCase):
             key_moment_type="brilliant",
             best_move_uci="e2e4",
         )
-        self.assertEqual(_detail_level_for_key_moment(me), "full")
+        self.assertEqual(detail_level_for_key_moment(me), "full")
 
 
 if __name__ == "__main__":

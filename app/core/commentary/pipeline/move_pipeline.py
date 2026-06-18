@@ -73,13 +73,13 @@ class RagRetrievalStage:
             if not llm_rendering_enabled():
                 # Enrichment (and thus RAG) only feeds the LLM renderings.
                 return
-        from app.core.commentary.advanced_comment_service import (
-            _detail_level_for_key_moment,
+        from app.core.commentary.composer_tiers import (
             compute_rag_top_k,
+            detail_level_for_key_moment,
         )
 
         query = build_rag_query(ctx.move_event, ctx.episode)
-        detail_pre = _detail_level_for_key_moment(ctx.move_event)
+        detail_pre = detail_level_for_key_moment(ctx.move_event)
         if detail_pre == "book":
             ctx.rag_results = []
             return

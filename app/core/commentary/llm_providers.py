@@ -20,6 +20,8 @@ from typing import (
 
 from openai import AsyncOpenAI
 
+from app.core.commentary.json_utils import strip_json_fence
+
 logger = logging.getLogger(__name__)
 
 # Lazy-import targets for CursorProvider (patchable in tests).
@@ -113,18 +115,6 @@ def _strip_sentinel_for_openai(user_text: str) -> str:
     if DYNAMIC_SECTION_SENTINEL not in user_text:
         return user_text
     return user_text.replace(DYNAMIC_SECTION_SENTINEL, "\n\n")
-
-
-def _strip_json_fence(s: str) -> str:
-    t = (s or "").strip()
-    if t.startswith("```"):
-        lines = t.split("\n")
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        t = "\n".join(lines)
-    return t.strip()
 
 
 def _usage_total_cursor(result: Any) -> int:
@@ -469,7 +459,7 @@ class CursorProvider:
         )
         prompt = f"{system.strip()}\n\n{schema_hint}\n\n{user.strip()}".strip()
         raw, usage = await self._prompt(prompt, model=model)
-        return _strip_json_fence(raw), usage
+        return strip_json_fence(raw), usage
 
 
 def make_llm_provider(provider_key: str | None = None) -> LlmProvider:

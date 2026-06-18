@@ -5,7 +5,6 @@ import logging
 import os
 import re
 import time
-import unicodedata
 from typing import Any
 
 import chess
@@ -20,10 +19,17 @@ from app.core.commentary.composer_prompts import (
     composer_role_key,
     composer_system_prompt,
 )
+from app.core.commentary.composer_tiers import (
+    KEY_MOMENT_TIERS,
+    TIER_SINGLE,
+    compute_rag_top_k,
+    detail_level_for_key_moment,
+)
 from app.core.commentary.forbidden_phrases import (
     forbidden_hit_count,
     forbidden_hit_strings,
 )
+from app.core.commentary.json_utils import strip_json_fence
 from app.core.commentary.llm_call_log import append_postcheck
 from app.core.commentary.llm_call_log import log_call as log_llm_call
 from app.core.commentary.llm_policy import resolve_model
@@ -34,6 +40,12 @@ from app.core.commentary.llm_providers import (
 )
 from app.core.commentary.motif_phrases import glossary_phrase_for
 from app.core.commentary.move_rationale import build_rationale, prompt_projection
+from app.core.commentary.rag_filtering import (
+    rag_annotation_passes_filters,
+    rag_idea_overlap_tokens,
+    rag_min_score,
+    truncate_annotation_at_sentence,
+)
 from app.core.commentary.rag_retriever import (
     RAGResult,
     RAGRetriever,
@@ -46,7 +58,6 @@ from app.models.chess_events import (
     GameAnalysisContext,
     MoveCategory,
     MoveEvent,
-    MoveQuality,
     MoveRationale,
 )
 
@@ -95,56 +106,6 @@ def sanitize_text(text: str) -> str:
     return text
 
 
-# ---------------------------------------------------------------------------
-# Tier definitions – map key moment types to pipeline depth & effort
-# ---------------------------------------------------------------------------
-TIER_FULL_HIGH = {"steps": 1, "effort": "medium", "max_tokens": 900}
-TIER_FULL_LOW = {"steps": 1, "effort": "low", "max_tokens": 700}
-TIER_SINGLE = {"steps": 1, "effort": "low", "max_tokens": 500}
-
-KEY_MOMENT_TIERS: dict[str, dict[str, Any]] = {
-    "brilliant": TIER_FULL_HIGH,
-    "blunder": TIER_FULL_HIGH,
-    "critical_decision": TIER_FULL_HIGH,
-    "mistake": TIER_FULL_LOW,
-    "structural_transformation": TIER_FULL_LOW,
-    "king_safety_crisis": TIER_FULL_LOW,
-    "hidden_inflection": TIER_SINGLE,
-    "great_move": TIER_SINGLE,
-    "inaccuracy": TIER_SINGLE,
-    "good_defense": TIER_SINGLE,
-    "initiative_shift": TIER_SINGLE,
-    "piece_activation": TIER_SINGLE,
-    "missed_opportunity": TIER_SINGLE,
-    "opening_transition": TIER_SINGLE,
-    "endgame_transition": TIER_SINGLE,
-}
-
-
-def _detail_level_for_key_moment(move_event: MoveEvent) -> str:
-    km = move_event.key_moment_type or ""
-    if km in ("brilliant", "blunder", "critical_decision"):
-        return "full"
-    if km in ("mistake", "structural_transformation", "king_safety_crisis"):
-        return "compact"
-    ph = (move_event.phase or "").strip().lower()
-    if (
-        ph == "opening"
-        and move_event.move_index <= 14
-        and move_event.move_quality in (MoveQuality.BEST, MoveQuality.EXCELLENT)
-        and km not in ("blunder", "mistake", "critical_decision", "brilliant")
-    ):
-        return "book"
-    if (
-        not km
-        and move_event.best_move_uci
-        and move_event.uci == move_event.best_move_uci
-        and abs(move_event.eval_swing_cp or 0) < 15
-    ):
-        return "book"
-    return "minimal"
-
-
 def _composer_forcing_pv_bracket(move_event: MoveEvent) -> str | None:
     """Bracket snippet for prompts / post-check when captures or checks need a short PV."""
     try:
@@ -165,33 +126,6 @@ def _composer_forcing_pv_bracket(move_event: MoveEvent) -> str | None:
             frag = " ".join(line[:3])
             return f"[pv:{frag}]"
     return None
-
-
-def compute_rag_top_k(detail: str, phase: str | None) -> int:
-    """Per-phase Top-K defaults; overridden by RAG_TOP_K_PHASE or global RAG_TOP_K."""
-    if detail == "book":
-        return 0
-    ph_raw = (phase or "middlegame").strip().lower()
-    if ph_raw in ("end", "endgame"):
-        env_key = "RAG_TOP_K_ENDGAME"
-    elif ph_raw == "opening":
-        env_key = "RAG_TOP_K_OPENING"
-    else:
-        env_key = "RAG_TOP_K_MIDDLEGAME"
-    for key in (env_key, "RAG_TOP_K"):
-        raw = os.environ.get(key, "").strip()
-        if raw:
-            try:
-                return max(1, min(8, int(raw)))
-            except ValueError:
-                break
-    if ph_raw in ("opening", "end", "endgame"):
-        return 3 if detail != "minimal" else 2
-    if detail == "full":
-        return 3
-    if detail == "compact":
-        return 2
-    return 1
 
 
 STRATEGIC_MOTIF_CONTRADICTIONS: tuple[frozenset, ...] = (
@@ -246,86 +180,6 @@ def format_motif_digest_lines(keys: list[str]) -> str:
     if not keys:
         return "(none)"
     return "\n".join(f"- {k}: {glossary_phrase_for(k)}" for k in keys)
-
-
-def _non_ascii_letter_ratio(s: str) -> float:
-    letters = [c for c in s if unicodedata.category(c).startswith("L")]
-    if not letters:
-        return 0.0
-    return sum(1 for c in letters if ord(c) > 127) / len(letters)
-
-
-_SPANISH_HINT_RE = re.compile(
-    r"\b(que|las|los|del|por|para|una|unos|muy|como|esta|está|fueron|decidieron|fin)\b",
-    re.I,
-)
-
-
-def _looks_like_section_header_line(line: str) -> bool:
-    t = line.strip()
-    if not t:
-        return False
-    if re.match(r"^[AB]\)\s*\d", t):
-        return True
-    low = t.lower()
-    return bool(low.startswith("now we will look") or low.startswith("here are two"))
-
-
-def _rag_annotation_passes_filters(text: str) -> bool:
-    raw = (text or "").strip()
-    if not raw:
-        return False
-    words = raw.split()
-    if len(words) < 20:
-        return False
-    lines = raw.splitlines()
-    if lines and _looks_like_section_header_line(lines[0]):
-        return False
-    if _non_ascii_letter_ratio(raw) > 0.03:
-        return False
-    if len(_SPANISH_HINT_RE.findall(raw)) >= 3:
-        return False
-    san_like = sum(
-        1
-        for w in words
-        if re.match(r"^[NBRQK]?[a-h]?x?[a-h][1-8](?:=[NBRQ])?[+#]?$", w)
-        or re.match(r"^[1-9]\d*\.\.\.?$", w)
-    )
-    return not san_like >= len(words) * 0.6
-
-
-def _truncate_annotation_at_sentence(raw: str, cap: int) -> str:
-    if len(raw) <= cap:
-        return raw
-    chunk = raw[:cap]
-    for sep in ("\n", ". ", "! ", "? "):
-        idx = chunk.rfind(sep)
-        if idx > cap // 4:
-            if sep == "\n":
-                return chunk[:idx].rstrip()
-            return chunk[: idx + 1].rstrip()
-    return chunk.rstrip()
-
-
-def _rag_min_score() -> float:
-    raw = os.environ.get("RAG_MIN_SCORE", "").strip()
-    if raw:
-        try:
-            return float(raw)
-        except ValueError:
-            pass
-    return 0.62
-
-
-def _rag_idea_overlap_tokens(idea: str, snippets: list[str]) -> bool:
-    blob = " ".join(snippets).lower()
-    idea_tokens = {
-        t for t in re.findall(r"[a-zA-Z0-9]+", (idea or "").lower()) if len(t) >= 3
-    }
-    if len(idea_tokens) < 3:
-        return False
-    blob_tokens = {t for t in re.findall(r"[a-zA-Z0-9]+", blob) if len(t) >= 3}
-    return len(idea_tokens & blob_tokens) >= 3
 
 
 def compact_game_context_for_move(
@@ -440,18 +294,6 @@ def build_planned_llm_passes_and_system_prompts(
         {"name": composer_name, "text": composer_prompt}
     ]
     return passes, system_prompts
-
-
-def _strip_json_fence(s: str) -> str:
-    t = (s or "").strip()
-    if t.startswith("```"):
-        lines = t.split("\n")
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        t = "\n".join(lines)
-    return t.strip()
 
 
 class AdvancedCommentService:
@@ -623,7 +465,7 @@ class AdvancedCommentService:
         if not results:
             return "", []
         cap = max(80, int(max_chars))
-        min_sc = _rag_min_score()
+        min_sc = rag_min_score()
         lines = [
             "MASTER ANNOTATIONS — these excerpts come from strongly annotated GM/IM games "
             "in tactically or structurally similar positions.",
@@ -637,9 +479,9 @@ class AdvancedCommentService:
             if sc is not None and sc < min_sc:
                 continue
             ann_raw = (r.annotation_text or "").strip()
-            if not _rag_annotation_passes_filters(ann_raw):
+            if not rag_annotation_passes_filters(ann_raw):
                 continue
-            ann = _truncate_annotation_at_sentence(ann_raw, cap)
+            ann = truncate_annotation_at_sentence(ann_raw, cap)
             if len(ann.split()) < 12:
                 continue
             shown += 1
@@ -725,7 +567,7 @@ class AdvancedCommentService:
         rationale_override: MoveRationale | None = None,
     ) -> tuple[str, list[RAGResult], dict[str, Any]]:
         query = build_rag_query(move_event, episode)
-        detail = _detail_level_for_key_moment(move_event)
+        detail = detail_level_for_key_moment(move_event)
         rag_top_k = compute_rag_top_k(detail, query.phase)
 
         rationale_pre = (
@@ -1202,7 +1044,7 @@ class AdvancedCommentService:
                 )
                 last_raw = raw
                 if raw:
-                    text = _strip_json_fence(raw)
+                    text = strip_json_fence(raw)
                     obj = json.loads(text)
                     named_raw = obj.get("named_motifs") or []
                     named = [
@@ -1226,7 +1068,7 @@ class AdvancedCommentService:
                         extras["rag_applied"] = False
                         extras["rag_idea_used"] = ""
                     if rag_list and extras.get("rag_applied"):
-                        if not _rag_idea_overlap_tokens(
+                        if not rag_idea_overlap_tokens(
                             extras.get("rag_idea_used", ""), rag_list
                         ):
                             extras["rag_applied"] = False
@@ -1268,7 +1110,7 @@ class AdvancedCommentService:
         plen = last_plain_len
         if plen is None and last_raw:
             try:
-                t2 = _strip_json_fence(last_raw)
+                t2 = strip_json_fence(last_raw)
                 o2 = json.loads(t2)
                 plen = len(str(o2.get("text") or "").strip())
             except Exception:
