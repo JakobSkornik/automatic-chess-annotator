@@ -290,12 +290,6 @@ class AnalysisRetriever:
 
         return moves
 
-    def get_analysis_stages(self) -> list[float]:  # Corrected type hint
-        """
-        Returns the analysis stages for the engine.
-        """
-        return self.analysis_stages
-
     def analyze_book_move(self, main_move_obj: Move) -> tuple[Move, list[list[Move]]]:
         """Opening-book ply: static features and metadata only — no engine calls at all."""
         board_after_move = chess.Board(main_move_obj.position)

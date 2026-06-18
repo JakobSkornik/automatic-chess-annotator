@@ -11,6 +11,15 @@ from typing import Any
 import chess
 
 from app.core.commentary.annotation_tokens import auto_tokenize
+from app.core.commentary.composer_prompts import (
+    COMPOSER_OUTPUT_SCHEMA,
+    COMPOSER_ROLE_PROMPTS,
+    EPISODE_COMMENTARY_SCHEMA,
+    EPISODE_NARRATIVE_PROMPT,
+    POSITIONAL_PLAN_COMPOSER_PROMPT,
+    composer_role_key,
+    composer_system_prompt,
+)
 from app.core.commentary.forbidden_phrases import (
     forbidden_hit_count,
     forbidden_hit_strings,
@@ -39,8 +48,6 @@ from app.models.chess_events import (
     MoveEvent,
     MoveQuality,
     MoveRationale,
-    StrategicMotif,
-    TacticalMotif,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,54 +120,6 @@ KEY_MOMENT_TIERS: dict[str, dict[str, Any]] = {
     "endgame_transition": TIER_SINGLE,
 }
 
-ARCHETYPE_IDEAS: dict[str, list[str]] = {
-    "opposite_side_race": [
-        "Tempo on the attacker's wing beats material.",
-        "Open lines toward the enemy king decide races.",
-        "Central breaks can defuse a wing attack.",
-    ],
-    "iqp": [
-        "The IQP side seeks piece activity and open files.",
-        "Blockading the IQP is a key defensive plan.",
-    ],
-    "minority_attack": [
-        "Create a weakness on the minority wing with pawn levers.",
-        "Rooks belong on the open file toward the target.",
-    ],
-    "hedgehog": [
-        "Elastic pawn chain; breaks with b5 or f5 come later.",
-        "Pieces re-route behind the pawns before the rupture.",
-    ],
-    "closed_maneuvering": [
-        "Regroup knights to better squares; avoid pawn tension.",
-        "Probe for weaknesses before committing a break.",
-    ],
-    "endgame_technique": [
-        "Activate the king; create passed pawns with tempo.",
-        "Opposition and zugzwang motifs decide many endings.",
-    ],
-    "king_hunt": [
-        "Forcing checks drive the king into the open.",
-        "Sacrifices clear escape squares.",
-    ],
-    "simplification_endgame": [
-        "Trade into a won or holdable ending.",
-        "Remove the opponent's active pieces first.",
-    ],
-    "maroczy_bind": [
-        "Space clamp on d5; knights hop to ideal squares.",
-        "Black seeks c5 or f5 breaks under restraint.",
-    ],
-    "carlsbad": [
-        "Minority attack on the queenside is a main plan.",
-        "The exchange variation changes pawn structure goals.",
-    ],
-    "other": [
-        "Connect rooks and improve the worst piece.",
-        "Match plans to the pawn structure center type.",
-    ],
-}
-
 
 def _detail_level_for_key_moment(move_event: MoveEvent) -> str:
     km = move_event.key_moment_type or ""
@@ -184,12 +143,6 @@ def _detail_level_for_key_moment(move_event: MoveEvent) -> str:
     ):
         return "book"
     return "minimal"
-
-
-def _digest_turning_point_motif_enum() -> list[str]:
-    vals = {m.value for m in TacticalMotif} | {m.value for m in StrategicMotif}
-    vals.add("none")
-    return sorted(vals)
 
 
 def _composer_forcing_pv_bracket(move_event: MoveEvent) -> str | None:
@@ -375,155 +328,6 @@ def _rag_idea_overlap_tokens(idea: str, snippets: list[str]) -> bool:
     return len(idea_tokens & blob_tokens) >= 3
 
 
-def composer_role_key(category_value: str | None) -> str:
-    """Collapse MoveCategory routing to four composer roles."""
-    c = (category_value or MoveCategory.POSITIONAL.value).strip().lower()
-    if c == MoveCategory.BOOK.value:
-        return "book"
-    if c in (
-        MoveCategory.TACTICAL.value,
-        MoveCategory.FORCING.value,
-        MoveCategory.DEFENSIVE.value,
-    ):
-        return "tactical_forcing"
-    if c in (MoveCategory.INACCURACY.value, MoveCategory.CRITICAL.value):
-        return "mistake_explainer"
-    return "positional_plan"
-
-
-# ---------------------------------------------------------------------------
-# System prompts
-# ---------------------------------------------------------------------------
-
-EPISODE_NARRATIVE_PROMPT = (
-    "You are a grandmaster chess commentator narrating the story of a game phase.\n"
-    "Input begins with STRATEGIC THEMES aggregated for the episode; then each move line is:\n"
-    "SAN | eval | move_quality | key_moment | tactical_motifs (strategic motifs are omitted per-move).\n"
-    "Write 2-4 sentences on plans, how the phase evolved, and the critical idea. Name motifs only when "
-    "they change the story.\n"
-    "Open with a concrete board observation (a piece, square, file, or pawn break)—do NOT begin with "
-    '"In this phase", "During this", "This phase is marked by", or "In this complex".\n'
-    "Cite only squares and pieces verifiable from the move list. Do NOT invent specific diagonals, "
-    "files, pins, or piece placements not implied by the SAN sequence.\n"
-    'Output strictly valid JSON: {"commentary": "2-4 sentences"}'
-)
-
-GAME_NARRATIVE_PROMPT = (
-    "You are a grandmaster chess commentator. Input includes RESULT, Elos, episode summaries, "
-    "digest turning points (ply, san, why, motif), and strategic_archetype.\n"
-    "Write 3-5 sentences: opening character, critical phase, how the result arose. No move-by-move dump.\n"
-    'Output strictly valid JSON: {"commentary": "3-5 sentences"}'
-)
-
-GAME_DIGEST_PROMPT = (
-    "You are a chess coach. Given a compact move log with evaluations and key-moment tags, produce a "
-    "structured digest of the whole game. Output strict JSON; no markdown. Be specific but compact.\n"
-    "Pick strategic_archetype from the enum that best fits the game.\n"
-    "For each turning point, motif must echo the strongest tactical/strategic tag from the move line "
-    '(or "none" if absent). Use only enum values for motif — never move-quality words '
-    "(inaccuracy, mistake, blunder, excellent, best).\n"
-)
-
-GAME_DIGEST_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "overall_story": {"type": "string"},
-        "opening_character": {"type": "string"},
-        "strategic_archetype": {
-            "type": "string",
-            "enum": [
-                "opposite_side_race",
-                "iqp",
-                "minority_attack",
-                "hedgehog",
-                "closed_maneuvering",
-                "endgame_technique",
-                "king_hunt",
-                "simplification_endgame",
-                "maroczy_bind",
-                "carlsbad",
-                "other",
-            ],
-        },
-        "phase_story": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "phase": {"type": "string"},
-                    "summary": {"type": "string"},
-                },
-                "required": ["phase", "summary"],
-                "additionalProperties": False,
-            },
-        },
-        "turning_points": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "ply": {"type": "integer"},
-                    "san": {"type": "string"},
-                    "why": {"type": "string"},
-                    "motif": {
-                        "type": "string",
-                        "enum": _digest_turning_point_motif_enum(),
-                    },
-                },
-                "required": ["ply", "san", "why", "motif"],
-                "additionalProperties": False,
-            },
-        },
-        "winning_side_plan": {"type": "string"},
-        "losing_side_mistakes": {"type": "string"},
-    },
-    "required": [
-        "overall_story",
-        "opening_character",
-        "strategic_archetype",
-        "phase_story",
-        "turning_points",
-        "winning_side_plan",
-        "losing_side_mistakes",
-    ],
-    "additionalProperties": False,
-}
-
-
-def build_game_digest_input(context: GameAnalysisContext) -> str:
-    """Compact text for whole-game digest LLM pass."""
-    hdr = context.metadata or {}
-    w = hdr.get("white") or hdr.get("White", "?")
-    b = hdr.get("black") or hdr.get("Black", "?")
-    res = hdr.get("result") or hdr.get("Result", "*")
-    we = hdr.get("whiteElo")
-    be = hdr.get("blackElo")
-    elo_w = f" ({we})" if we is not None else ""
-    elo_b = f" ({be})" if be is not None else ""
-    lines: list[str] = [
-        f"WHITE: {w}{elo_w} vs BLACK: {b}{elo_b}",
-        f"RESULT: {res}  OPENING: {context.opening_name or ''} ({context.opening_eco or ''})",
-        "MOVES (ply san eval_before->eval_after swing key_moment/category motifs):",
-    ]
-    for me in context.move_events:
-        eb = (
-            f"{me.eval_before_cp / 100.0:+.2f}"
-            if me.eval_before_cp is not None
-            else "?"
-        )
-        ea = f"{me.eval_after_cp / 100.0:+.2f}" if me.eval_after_cp is not None else "?"
-        sw = f"{me.eval_swing_cp / 100.0:+.2f}" if me.eval_swing_cp is not None else ""
-        km = me.key_moment_type or ""
-        cat = me.move_category.value if me.move_category else ""
-        mot = ",".join(m.value for m in me.tactical_motifs[:3])
-        mq = me.move_quality.value if me.move_quality else ""
-        line = (
-            f"{me.ply:>3} {me.san:<7} {eb}->{ea} {sw} {km}/{cat} mq={mq} {mot}".rstrip()
-        )
-        lines.append(line)
-    return "\n".join(lines)
-
-
 def compact_game_context_for_move(
     digest: dict[str, Any],
     current_ply: int,
@@ -570,160 +374,6 @@ def compact_game_context_for_move(
     while approx_tokens(out) > 250 and out.get("phase_story"):
         out["phase_story"] = []
     return out
-
-
-STYLE_GUIDE_BLOCK = (
-    "AUDIENCE ~1500–2000: explain WHY in plain chess language, not motif laundry lists.\n"
-    "VOICE — coach, not engine dump.\n"
-    '- Prefer at most one explicit eval number in the whole comment; otherwise use words (~"about a pawn").\n'
-    "- Motifs: only name a motif key from MOTIF HINTS if you can state the exact attacker square, target square, "
-    "and (for pin/skewer) the piece behind; otherwise use named_motifs=[] and plain English.\n"
-    "- For captures, lead with what was captured (piece + square). Do NOT frame your own capture as "
-    '"eliminating a threat" unless the POSITION block explicitly states the captured piece was attacking '
-    "one of your pieces.\n"
-    "- On captures or checks, include a short forcing line as [pv:san1 san2 ...] (2-3 plies).\n"
-    '- Opponent-aware phrasing ("Black can now ...").\n'
-    "- In openings still in theory, cite opening name/code and typical plans when known.\n"
-    "- Endgames: name the decisive element (king, passed pawn, bishop colour, etc.).\n"
-    "- Keep prose tight: ~50 words for low-effort tiers; up to ~90 for medium.\n"
-    '- One short paragraph only; no labeled lists. Never start with "Immediate:", "Future:", "Counterfactual:".\n'
-)
-
-EXPLAIN_WHY_BLOCK = (
-    "WORKFLOW\n"
-    "1) Identify the concrete idea this move embodies (attacks, frees a line, fixes a weakness, prepares a break).\n"
-    "   NEVER describe the opponent's refutation/PV continuation as if it were the played move.\n"
-    "2) Say why this is desirable or costly for side to move AFTER the ply, referencing alternatives when useful.\n"
-    "   For mistakes: name the refutation idea IN WORDS before the [pv:...] snippet.\n"
-    "3) Compare briefly to engine best-move when PLAYED differs from BEST (POSITION block), unless BOOK tier.\n"
-    "4) Only after (1)-(3): optionally attach ONE motif hint from MOTIF HINTS if genuinely expressed with the "
-    "attacker/target/(piece behind) squares named in prose.\n\n"
-    "RAG MASTER ANNOTATIONS block (when present):\n"
-    "- If one idea obviously applies here, summarize it once in prose (do NOT quote verbatim).\n"
-    "- Populate rag_applied=true and rag_idea_used with ONE sentence naming that idea.\n"
-    '- If none apply, rag_applied=false and rag_idea_used="".\n'
-)
-
-PLAIN_OUTPUT_INSTRUCTIONS = (
-    "\nOUTPUT: JSON only (no markdown).\n"
-    '- "named_motifs": array of 0–1 motif keys you anchored in prose (subset of MOTIF HINTS).\n'
-    '- "text": plain prose paragraph (SAN tokens plain; forcing lines as [pv:san san ...]).\n'
-    '  When the user message includes "Forcing line ready:" with a [pv:...] token, copy that '
-    '[pv:...] snippet verbatim into "text".\n'
-    '- "better_alternative": one sentence-ready clause (Better was … / Instead … with reason), or "" if irrelevant.\n'
-    "  REQUIRED for inaccuracies/mistakes/blunders/critical classifications; optional otherwise.\n"
-    '- "rag_idea_used": one sentence naming the reused master-note idea (or "").\n'
-    '- "rag_applied": boolean — true iff MASTER ANNOTATIONS influenced your explanation.\n'
-)
-
-
-def _archetype_texture_system_block(archetype: str) -> str:
-    arch = (archetype or "other").strip() or "other"
-    ideas = ARCHETYPE_IDEAS.get(arch, ARCHETYPE_IDEAS["other"])
-    return (
-        "STRATEGIC ARCHETYPE TEXTURE (background only; do not quote verbatim; "
-        "ground plans in these ideas):\n"
-        f"Archetype: {arch}\n" + "\n".join(f"- {line}" for line in ideas)
-    )
-
-
-COMPOSER_ROLE_BODIES: dict[str, str] = {
-    "book": (
-        "ROLE: BOOK / theory — openings where development and tabiya still matter.\n"
-        "- 1 crisp sentence tying the SAN to typical plans.\n"
-        "- Reference opening name/code when MOTIF hints or POSITION mention them.\n"
-        '- better_alternative "" unless theory clearly rejects the move.\n'
-    ),
-    "tactical_forcing": (
-        "ROLE: TACTICAL / FORCING / DEFENCE — captures, checks, tactical shots, tactical defence.\n"
-        "- Lead with forcing consequences and concrete squares.\n"
-        "- Mention defence only when STOPPING a direct threat matters.\n"
-    ),
-    "positional_plan": (
-        "ROLE: POSITIONAL PLAN / PROPHYLAXIS — structure, slow manoeuvres, quiet improvements.\n"
-        "- Name files, pawn breaks, weaknesses, timing — not jargon stacks.\n"
-    ),
-    "mistake_explainer": (
-        "ROLE: MISTAKE & CRITICAL MOMENTS — eval swings, dubious choices, decisive branches.\n"
-        "- Mandatory better_alternative whenever BEST_MOVE differs materially from PLAYED and quality is dubious.\n"
-        "- Tie alternatives to measurable plans (outposts, breaks, king safety).\n"
-    ),
-}
-
-
-def _composer_system_prompt(role_key: str, *, archetype: str | None = None) -> str:
-    role_body = COMPOSER_ROLE_BODIES.get(
-        role_key, COMPOSER_ROLE_BODIES["positional_plan"]
-    )
-    mid = role_body.strip() + "\n"
-    if archetype is not None:
-        mid += "\n" + _archetype_texture_system_block(archetype) + "\n"
-    return (
-        STYLE_GUIDE_BLOCK
-        + "\n\n"
-        + EXPLAIN_WHY_BLOCK
-        + "\n\n"
-        + mid
-        + PLAIN_OUTPUT_INSTRUCTIONS
-    )
-
-
-BOOK_COMPOSER_PROMPT = _composer_system_prompt("book")
-TACTICAL_FORCING_COMPOSER_PROMPT = _composer_system_prompt("tactical_forcing")
-POSITIONAL_PLAN_COMPOSER_PROMPT = _composer_system_prompt("positional_plan")
-MISTAKE_EXPLAINER_COMPOSER_PROMPT = _composer_system_prompt("mistake_explainer")
-
-COMPOSER_ROLE_PROMPTS: dict[str, str] = {
-    "book": BOOK_COMPOSER_PROMPT,
-    "tactical_forcing": TACTICAL_FORCING_COMPOSER_PROMPT,
-    "positional_plan": POSITIONAL_PLAN_COMPOSER_PROMPT,
-    "mistake_explainer": MISTAKE_EXPLAINER_COMPOSER_PROMPT,
-}
-
-CATEGORY_COMPOSER_PROMPTS: dict[str, str] = {
-    MoveCategory.BOOK.value: BOOK_COMPOSER_PROMPT,
-    MoveCategory.TACTICAL.value: TACTICAL_FORCING_COMPOSER_PROMPT,
-    MoveCategory.FORCING.value: TACTICAL_FORCING_COMPOSER_PROMPT,
-    MoveCategory.DEFENSIVE.value: TACTICAL_FORCING_COMPOSER_PROMPT,
-    MoveCategory.POSITIONAL.value: POSITIONAL_PLAN_COMPOSER_PROMPT,
-    MoveCategory.PROPHYLACTIC.value: POSITIONAL_PLAN_COMPOSER_PROMPT,
-    MoveCategory.INACCURACY.value: MISTAKE_EXPLAINER_COMPOSER_PROMPT,
-    MoveCategory.CRITICAL.value: MISTAKE_EXPLAINER_COMPOSER_PROMPT,
-}
-
-# JSON Schema for OpenAI Structured Outputs (strict).
-COMPOSER_OUTPUT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "named_motifs": {"type": "array", "items": {"type": "string"}},
-        "text": {"type": "string"},
-        "better_alternative": {"type": "string"},
-        "rag_idea_used": {"type": "string"},
-        "rag_applied": {"type": "boolean"},
-    },
-    "required": [
-        "named_motifs",
-        "text",
-        "better_alternative",
-        "rag_idea_used",
-        "rag_applied",
-    ],
-    "additionalProperties": False,
-}
-
-EPISODE_COMMENTARY_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {"commentary": {"type": "string"}},
-    "required": ["commentary"],
-    "additionalProperties": False,
-}
-
-GAME_NARRATIVE_COMMENT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {"commentary": {"type": "string"}},
-    "required": ["commentary"],
-    "additionalProperties": False,
-}
 
 
 def compute_commentary_audit(
@@ -777,7 +427,7 @@ def build_planned_llm_passes_and_system_prompts(
         )
     else:
         arch = (strategic_archetype or "other").strip() or "other"
-        composer_prompt = _composer_system_prompt(role, archetype=arch)
+        composer_prompt = composer_system_prompt(role, archetype=arch)
     composer_name = f"composer_{role}"
     passes: list[dict[str, Any]] = [
         {
@@ -1321,38 +971,6 @@ class AdvancedCommentService:
         _debug_log_prompt("build_event_input", "", structured_text)
         return structured_text, rag_results or [], debug_dict
 
-    async def analyze_and_compose_event(
-        self,
-        move_event: MoveEvent,
-        episode: Episode | None,
-        game_context: GameAnalysisContext,
-        *,
-        model: str | None = None,
-        effort: str | None = None,
-        key_moment_type: str | None = None,
-        analyzed_row: AnalyzedMoveData | None = None,
-    ) -> tuple[str, list[RAGResult], dict[str, Any]]:
-        structured_text, rag_results, debug_dict = await self.build_event_llm_input(
-            move_event,
-            episode,
-            game_context,
-            analyzed_row=analyzed_row,
-            composer_effort=effort,
-        )
-        text = await self.analyze_and_compose_raw_text(
-            structured_text,
-            model=model,
-            effort=effort,
-            key_moment_type=key_moment_type or move_event.key_moment_type,
-            move_category=move_event.move_category.value
-            if move_event.move_category
-            else None,
-            llm_debug=debug_dict,
-            fen_before=move_event.fen_before,
-            fen_after=move_event.fen_after,
-        )
-        return text, rag_results, debug_dict
-
     async def analyze_and_compose_raw_text(
         self,
         structured_text: str,
@@ -1389,7 +1007,7 @@ class AdvancedCommentService:
                 role, POSITIONAL_PLAN_COMPOSER_PROMPT
             )
         else:
-            composer_prompt = _composer_system_prompt(role, archetype=digest_arch)
+            composer_prompt = composer_system_prompt(role, archetype=digest_arch)
         if _log_llm_prompts_enabled():
             logger.info(
                 "analyze_and_compose_raw_text: branch=single move_category=%s key_moment_type=%s composer_role=%s",
@@ -1483,37 +1101,6 @@ class AdvancedCommentService:
             )
         return prose
 
-    async def generate_game_digest(
-        self,
-        context: GameAnalysisContext,
-        *,
-        model: str | None = None,
-        effort: str | None = None,
-    ) -> dict[str, Any]:
-        """Whole-game structured summary for per-move context (runs before move commentary)."""
-        if not self._provider.is_configured():
-            return {}
-        user = build_game_digest_input(context)
-        digest_cap = int(os.environ.get("LLM_DIGEST_MAX_OUTPUT_TOKENS", "8192"))
-        mdl = model or resolve_model(self.provider_name, "digest")
-        raw = await self._llm_call_json_schema(
-            GAME_DIGEST_PROMPT,
-            user,
-            model=mdl,
-            effort=effort or "low",
-            schema=GAME_DIGEST_SCHEMA,
-            schema_name="game_digest",
-            max_output_tokens=digest_cap,
-        )
-        try:
-            text = _strip_json_fence(raw)
-            if not text:
-                return {}
-            return json.loads(text)
-        except Exception as e:
-            logger.warning("generate_game_digest parse failed: %s", e)
-            return {}
-
     async def generate_episode_commentary(
         self,
         episode: Episode,
@@ -1559,49 +1146,6 @@ class AdvancedCommentService:
             effort=effort,
             schema=EPISODE_COMMENTARY_SCHEMA,
             schema_name="episode_commentary",
-            max_output_tokens=512,
-        )
-        if raw:
-            try:
-                obj = json.loads(raw)
-                return sanitize_text(obj.get("commentary", raw))
-            except Exception:
-                return sanitize_text(raw.strip())
-        return ""
-
-    async def generate_game_narrative(
-        self,
-        context: GameAnalysisContext,
-        *,
-        model: str | None = None,
-        effort: str = "low",
-    ) -> str:
-        if not self._provider.is_configured():
-            return ""
-        meta = context.metadata or {}
-        digest = context.game_digest or {}
-        header_lines = [
-            f"RESULT: {meta.get('result', '*')}",
-            f"WHITE_ELO: {meta.get('whiteElo')} BLACK_ELO: {meta.get('blackElo')}",
-            f"STRATEGIC_ARCHETYPE: {digest.get('strategic_archetype', '')}",
-            f"TURNING_POINTS_JSON:\n{json.dumps(digest.get('turning_points', []), indent=2)}",
-            "",
-            "EPISODES:",
-        ]
-        parts: list[str] = list(header_lines)
-        for ep in context.episodes:
-            parts.append(
-                f"Ep{ep.episode_index}: {ep.title} | {ep.dominant_theme} | "
-                f"narrative={ep.narrative_summary or ''}"
-            )
-        mdl = model or resolve_model(self.provider_name, "narrative")
-        raw = await self._llm_call_json_schema(
-            GAME_NARRATIVE_PROMPT,
-            "\n".join(parts),
-            model=mdl,
-            effort=effort,
-            schema=GAME_NARRATIVE_COMMENT_SCHEMA,
-            schema_name="game_narrative",
             max_output_tokens=512,
         )
         if raw:
