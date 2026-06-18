@@ -310,6 +310,14 @@ _LLM_DISABLED_MESSAGE = (
 _FORBIDDEN_RETRY_SUFFIX = (
     "\n\nRevise your commentary JSON: remove these banned phrases entirely: "
 )
+COMPOSER_MAX_ATTEMPTS = 2
+COMPOSER_RAW_PREVIEW_CHARS = 500
+_UNDER_WORD_LIMIT_PREFIX = "Keep the answer under 70 words.\n\n"
+_PV_TOKEN_RE = re.compile(r"\[pv\s*:")
+
+
+def _empty_composer_extras() -> dict[str, Any]:
+    return {"better_alternative": "", "rag_idea_used": "", "rag_applied": False}
 
 
 def _is_forbidden_retry_enabled() -> bool:
@@ -1163,109 +1171,137 @@ class AdvancedCommentService:
         forcing_pv_bracket: str | None = None,
     ) -> tuple[str, list[str], dict[str, Any]]:
         """Structured composer JSON; tokenize prose; one retry on empty/failure."""
-        fb = fen_before or chess.Board().fen()
-        fa = fen_after or chess.Board().fen()
+        start_fen = chess.Board().fen()
+        fb = fen_before or start_fen
+        fa = fen_after or start_fen
         rag_list = list(rag_snippets or [])
         last_raw: str | None = None
         last_plain_len: int | None = None
-        empty_extras: dict[str, Any] = {
-            "better_alternative": "",
-            "rag_idea_used": "",
-            "rag_applied": False,
-        }
-        for attempt in range(2):
-            user_for_attempt = user_text
-            if attempt == 1:
-                user_for_attempt = "Keep the answer under 70 words.\n\n" + user_text
+        for attempt in range(COMPOSER_MAX_ATTEMPTS):
             try:
                 raw = await self._llm_call(
                     structured_system,
-                    user_for_attempt,
+                    user_text if attempt == 0 else _UNDER_WORD_LIMIT_PREFIX + user_text,
                     model=model,
                     effort=effort,
                     use_structured_composer=True,
                     prompt_name=prompt_name if attempt == 0 else f"{prompt_name}_retry",
                     max_output_tokens=max_output_tokens,
                 )
-                last_raw = raw
-                if raw:
-                    text = strip_json_fence(raw)
-                    obj = json.loads(text)
-                    named_raw = obj.get("named_motifs") or []
-                    named = [
-                        str(x) for x in named_raw if isinstance(x, str) and x.strip()
-                    ]
-                    allow_set = {
-                        str(x) for x in (motif_hint_allowlist or []) if str(x).strip()
-                    }
-                    if allow_set:
-                        named = [x for x in named if x in allow_set][:1]
-                    plain = str(obj.get("text") or "").strip()
-                    ba = str(obj.get("better_alternative") or "").strip()
-                    riu = str(obj.get("rag_idea_used") or "").strip()
-                    rap = bool(obj.get("rag_applied", False))
-                    extras = {
-                        "better_alternative": ba,
-                        "rag_idea_used": riu,
-                        "rag_applied": rap,
-                    }
-                    if not rag_list and extras.get("rag_applied"):
-                        extras["rag_applied"] = False
-                        extras["rag_idea_used"] = ""
-                    if rag_list and extras.get("rag_applied"):
-                        if not rag_idea_overlap_tokens(
-                            extras.get("rag_idea_used", ""), rag_list
-                        ):
-                            extras["rag_applied"] = False
-                            extras["rag_idea_used"] = ""
-                    last_plain_len = len(plain)
-                    base = sanitize_text(auto_tokenize(plain, fb, fa)) if plain else ""
-                    if base.strip():
-                        out = base.rstrip()
-                        if ba and ba.lower() not in out.lower():
-                            out = f"{out} {ba}".strip()
-                        if forcing_pv_bracket and not re.search(
-                            r"\[pv\s*:", out.lower()
-                        ):
-                            out = f"{out} {forcing_pv_bracket}".strip()
-                        if out.strip():
-                            ref = self._last_llm_log_seq
-                            if ref is not None:
-                                append_postcheck(
-                                    ref_seq=ref,
-                                    payload={
-                                        "rag_applied": extras.get("rag_applied"),
-                                        "rag_idea_used": extras.get("rag_idea_used"),
-                                        "named_motifs": named,
-                                    },
-                                )
-                            return out, named, extras
-                    logger.warning(
-                        "Structured composer empty prose after parse (attempt %s): "
-                        "raw_preview=%.500s plain_len=%s",
-                        attempt + 1,
-                        text,
-                        last_plain_len,
-                    )
             except Exception as e:
                 logger.warning(
                     "Structured composer failed (attempt %s): %s", attempt + 1, e
                 )
-        preview = (last_raw or "")[:500]
-        plen = last_plain_len
-        if plen is None and last_raw:
+                continue
+            last_raw = raw
+            if not raw:
+                continue
+            named, plain, extras = self._parse_composer_json(
+                raw, motif_hint_allowlist, rag_list
+            )
+            last_plain_len = len(plain)
+            prose = self._finalize_composer_prose(
+                plain, extras["better_alternative"], forcing_pv_bracket, fb, fa
+            )
+            if prose:
+                self._record_composer_postcheck(named, extras)
+                return prose, named, extras
+            logger.warning(
+                "Structured composer empty prose after parse (attempt %s): "
+                "raw_preview=%.500s plain_len=%s",
+                attempt + 1,
+                strip_json_fence(raw),
+                last_plain_len,
+            )
+        self._log_composer_empty(last_raw, last_plain_len)
+        return "", [], _empty_composer_extras()
+
+    def _parse_composer_json(
+        self, raw: str, motif_hint_allowlist: list[str] | None, rag_list: list[str]
+    ) -> tuple[list[str], str, dict[str, Any]]:
+        """Parse the composer JSON into (named motifs, prose, validated extras)."""
+        obj = json.loads(strip_json_fence(raw))
+        named = [
+            str(x)
+            for x in (obj.get("named_motifs") or [])
+            if isinstance(x, str) and x.strip()
+        ]
+        allow_set = {str(x) for x in (motif_hint_allowlist or []) if str(x).strip()}
+        if allow_set:
+            named = [x for x in named if x in allow_set][:1]
+        extras = self._validate_rag_extras(
+            {
+                "better_alternative": str(obj.get("better_alternative") or "").strip(),
+                "rag_idea_used": str(obj.get("rag_idea_used") or "").strip(),
+                "rag_applied": bool(obj.get("rag_applied", False)),
+            },
+            rag_list,
+        )
+        return named, str(obj.get("text") or "").strip(), extras
+
+    @staticmethod
+    def _validate_rag_extras(
+        extras: dict[str, Any], rag_list: list[str]
+    ) -> dict[str, Any]:
+        """Clear the RAG claim unless an annotation idea overlaps the snippets."""
+        applied = extras["rag_applied"]
+        if applied and (
+            not rag_list
+            or not rag_idea_overlap_tokens(extras["rag_idea_used"], rag_list)
+        ):
+            extras["rag_applied"] = False
+            extras["rag_idea_used"] = ""
+        return extras
+
+    @staticmethod
+    def _finalize_composer_prose(
+        plain: str,
+        better_alternative: str,
+        forcing_pv_bracket: str | None,
+        fen_before: str,
+        fen_after: str,
+    ) -> str:
+        """Tokenize the prose; append the alternative clause and forcing PV bracket."""
+        if not plain:
+            return ""
+        out = sanitize_text(auto_tokenize(plain, fen_before, fen_after)).rstrip()
+        if not out:
+            return ""
+        if better_alternative and better_alternative.lower() not in out.lower():
+            out = f"{out} {better_alternative}".strip()
+        if forcing_pv_bracket and not _PV_TOKEN_RE.search(out.lower()):
+            out = f"{out} {forcing_pv_bracket}".strip()
+        return out.strip()
+
+    def _record_composer_postcheck(
+        self, named: list[str], extras: dict[str, Any]
+    ) -> None:
+        ref = self._last_llm_log_seq
+        if ref is None:
+            return
+        append_postcheck(
+            ref_seq=ref,
+            payload={
+                "rag_applied": extras["rag_applied"],
+                "rag_idea_used": extras["rag_idea_used"],
+                "named_motifs": named,
+            },
+        )
+
+    @staticmethod
+    def _log_composer_empty(last_raw: str | None, last_plain_len: int | None) -> None:
+        plain_len = last_plain_len
+        if plain_len is None and last_raw:
             try:
-                t2 = strip_json_fence(last_raw)
-                o2 = json.loads(t2)
-                plen = len(str(o2.get("text") or "").strip())
+                parsed = json.loads(strip_json_fence(last_raw))
+                plain_len = len(str(parsed.get("text") or "").strip())
             except Exception:
                 pass
         logger.warning(
-            "Structured composer returned empty after retries; raw_preview=%.500s plain_len=%s",
-            preview,
-            plen,
+            "Structured composer returned empty after retries; raw_preview=%s plain_len=%s",
+            (last_raw or "")[:COMPOSER_RAW_PREVIEW_CHARS],
+            plain_len,
         )
-        return "", [], empty_extras
 
     async def _llm_call(
         self,

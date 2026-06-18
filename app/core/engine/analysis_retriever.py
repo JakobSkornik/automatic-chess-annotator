@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import chess
@@ -841,6 +841,124 @@ def _build_feature_series(analyzed_rows: list[AnalyzedMoveData]) -> FeatureSerie
     return FeatureSeries(plies=plies, features=by_name)
 
 
+@dataclass
+class _MoveComment:
+    """A move's resolved comment, its per-audience-level texts, and its motifs."""
+
+    comment: str | None = None
+    comments_by_level: dict[str, str] = field(default_factory=dict)
+    named_motifs: list[str] = field(default_factory=list)
+    primary_motif_label: str | None = None
+
+
+def _extract_llm_rag_refs(analyzed_move: Move) -> list[RagRef]:
+    """RAG references the LLM attached under ``hiddenFeatures._llm.rag_refs``."""
+    refs: list[RagRef] = []
+    hidden = analyzed_move.hiddenFeatures or {}
+    llm = hidden.get("_llm") if isinstance(hidden, dict) else None
+    raw_refs = llm.get("rag_refs") if isinstance(llm, dict) else None
+    if not isinstance(raw_refs, list):
+        return refs
+    for item in raw_refs:
+        if not isinstance(item, dict):
+            continue
+        try:
+            refs.append(RagRef.model_validate(item))
+        except Exception:
+            continue
+    return refs
+
+
+def _opening_comment(analyzed_move: Move) -> str | None:
+    hidden = analyzed_move.hiddenFeatures or {}
+    opening = hidden.get("_opening") if isinstance(hidden, dict) else None
+    if isinstance(opening, dict) and opening.get("comment"):
+        return str(opening["comment"])
+    return None
+
+
+def _apply_llm_comment(mc: _MoveComment, analyzed_move: Move) -> None:
+    """Overlay the LLM-authored comment, per-level texts, and motifs onto ``mc``."""
+    hidden = analyzed_move.hiddenFeatures or {}
+    llm = hidden.get("_llm") if isinstance(hidden, dict) else None
+    if not isinstance(llm, dict):
+        return
+    if llm.get("comment"):
+        mc.comment = str(llm["comment"])
+    levels = llm.get("comments")
+    if isinstance(levels, dict):
+        mc.comments_by_level = {str(k): str(v) for k, v in levels.items() if v}
+    named = llm.get("named_motifs")
+    if isinstance(named, list):
+        mc.named_motifs = [str(x) for x in named if x]
+    primary = llm.get("primary_motif_label")
+    if primary:
+        mc.primary_motif_label = str(primary)
+
+
+def _facts_floor_comment(move_event: MoveEvent | None) -> str | None:
+    """Deterministic Guid template (verdict + line + eval) for a move with facts."""
+    if not move_event or move_event.comment_facts is None:
+        return None
+    try:
+        from app.core.commentary.phases.composer import render_facts_template
+
+        return render_facts_template(move_event.comment_facts)
+    except Exception:
+        return None
+
+
+def _key_moment_comment(
+    move_event: MoveEvent | None, key_moment: str | None
+) -> str | None:
+    if not (key_moment and move_event):
+        return None
+    label = key_moment.replace("_", " ").capitalize()
+    swing = move_event.eval_swing_cp
+    if swing is None:
+        return label
+    return f"{label} (Eval swing: {swing / 100:+.2f} pawns, White POV step)"
+
+
+def _fallback_comment(
+    move_event: MoveEvent | None, key_moment: str | None
+) -> str | None:
+    """Comment of last resort: brief stub, else facts floor, else key-moment line."""
+    me = move_event
+    if me and me.brief_commentary and me.commentary_stub_ref_ply is not None:
+        return (
+            f"Continues the same theme as around ply {me.commentary_stub_ref_ply} "
+            f"(see that move's commentary)."
+        )
+    return _facts_floor_comment(me) or _key_moment_comment(me, key_moment)
+
+
+def _resolve_move_comment(
+    row: AnalyzedMoveData,
+    analyzed_move: Move,
+    move_event: MoveEvent | None,
+    key_moment: str | None,
+    *,
+    side_ok: bool,
+) -> _MoveComment:
+    """Resolve the comment cascade: opening -> LLM -> stub/facts/key-moment floor.
+
+    A non-selected commentary side stays fully silent (no fallback either).
+    """
+    mc = _MoveComment()
+    if (row.phase_raw or "") == "early":
+        mc.comment = _opening_comment(analyzed_move)
+    if move_event and move_event.is_critical and side_ok:
+        _apply_llm_comment(mc, analyzed_move)
+    if side_ok and not mc.comment:
+        mc.comment = _fallback_comment(move_event, key_moment)
+    if mc.comment and not mc.comments_by_level:
+        mc.comments_by_level = dict.fromkeys(COMMENT_LEVELS, mc.comment)
+    if mc.comments_by_level:
+        mc.comment = mc.comments_by_level.get(DEFAULT_COMMENT_LEVEL) or mc.comment
+    return mc
+
+
 def assemble_game_json(state: EnginePipelineState) -> GameJson:
     """Build GameJson from pipeline state (engine + optional LLM fields)."""
     game = state.game
@@ -878,101 +996,18 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
             analyzed_rows[idx], "key_moment_type", None
         )
 
-        comment: str | None = None
-        named_motifs: list[str] = []
-        primary_motif_label: str | None = None
-        rag_refs: list[RagRef] = []
-
         # Commentary side gate: when a side is selected, the other side's moves
         # get NO commentary apparatus at all (no comment, facts, dot, charts).
-        _side_sel = (state.metadata.comment_side or "both").lower()
-        _mover_is_white = move_obj.depth % 2 == 1
-        _side_ok = _side_sel == "both" or (_side_sel == "white") == _mover_is_white
+        side_sel = (state.metadata.comment_side or "both").lower()
+        mover_is_white = move_obj.depth % 2 == 1
+        _side_ok = side_sel == "both" or (side_sel == "white") == mover_is_white
 
-        try:
-            hf_all = analyzed_move.hiddenFeatures or {}
-            llm_rr = hf_all.get("_llm") if isinstance(hf_all, dict) else None
-            if isinstance(llm_rr, dict):
-                raw_rr = llm_rr.get("rag_refs")
-                if isinstance(raw_rr, list):
-                    for item in raw_rr:
-                        if isinstance(item, dict):
-                            try:
-                                rag_refs.append(RagRef.model_validate(item))
-                            except Exception:
-                                continue
-        except Exception:
-            rag_refs = []
-
-        comments_by_level: dict[str, str] = {}
-        if (row.phase_raw or "") == "early":
-            try:
-                hf_op = analyzed_move.hiddenFeatures or {}
-                op = hf_op.get("_opening") if isinstance(hf_op, dict) else None
-                if isinstance(op, dict) and op.get("comment"):
-                    comment = str(op["comment"])
-            except Exception:
-                comment = None
-        if me and me.is_critical and _side_ok:
-            try:
-                hf = analyzed_move.hiddenFeatures or {}
-                llm = hf.get("_llm") if isinstance(hf, dict) else None
-                if isinstance(llm, dict) and llm.get("comment"):
-                    comment = str(llm["comment"])
-                if isinstance(llm, dict):
-                    lvl_raw = llm.get("comments")
-                    if isinstance(lvl_raw, dict):
-                        comments_by_level = {
-                            str(k): str(v) for k, v in lvl_raw.items() if v
-                        }
-                    nm = llm.get("named_motifs")
-                    if isinstance(nm, list):
-                        named_motifs = [str(x) for x in nm if x]
-                    pm = llm.get("primary_motif_label")
-                    if pm:
-                        primary_motif_label = str(pm)
-            except Exception:
-                comment = None
-        # When a comment side is selected, the other side's moves stay silent —
-        # no stub or heuristic fallback either.
-        if _side_ok:
-            if (
-                not comment
-                and me
-                and me.brief_commentary
-                and me.commentary_stub_ref_ply is not None
-            ):
-                comment = (
-                    f"Continues the same theme as around ply {me.commentary_stub_ref_ply} "
-                    f"(see that move's commentary)."
-                )
-            # Floor: a move with CommentFacts always renders at least the
-            # deterministic Guid template (verdict + numbered line + eval) —
-            # never the bare "X (Eval swing: …)" stub.
-            if not comment and me and me.comment_facts is not None:
-                try:
-                    from app.core.commentary.phases.composer import (
-                        render_facts_template,
-                    )
-
-                    comment = render_facts_template(me.comment_facts)
-                except Exception:
-                    comment = None
-            if not comment and key_moment and me:
-                swing = me.eval_swing_cp
-                if swing is not None:
-                    comment = (
-                        f"{key_moment.replace('_', ' ').capitalize()} "
-                        f"(Eval swing: {swing / 100:+.2f} pawns, White POV step)"
-                    )
-                else:
-                    comment = key_moment.replace("_", " ").capitalize()
-        # Single-source comments (opening lines, stubs, fallbacks) read the
-        # same at every audience level.
-        if comment and not comments_by_level:
-            comments_by_level = dict.fromkeys(COMMENT_LEVELS, comment)
-        if comments_by_level:
-            comment = comments_by_level.get(DEFAULT_COMMENT_LEVEL) or comment
+        rag_refs = _extract_llm_rag_refs(analyzed_move)
+        mc = _resolve_move_comment(row, analyzed_move, me, key_moment, side_ok=_side_ok)
+        comment = mc.comment
+        comments_by_level = mc.comments_by_level
+        named_motifs = mc.named_motifs
+        primary_motif_label = mc.primary_motif_label
 
         variations: list[Variation] = []
         board_pv_start = _board_before_mainline_move(game, idx)
