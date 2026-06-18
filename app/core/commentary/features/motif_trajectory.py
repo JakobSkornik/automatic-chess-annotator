@@ -58,14 +58,3 @@ def compute_episode_trajectories(episodes: list[Episode]) -> None:
         if counts:
             best = max(counts.items(), key=lambda x: x[1])[0]
             ep.motif_trajectory = f"episode_sustained_{best}"
-
-
-def trajectory_summary(events: list[MoveEvent]) -> list[str]:
-    """Collect unique trajectory labels for prompts."""
-    out: list[str] = []
-    seen: set[str] = set()
-    for ev in events:
-        if ev.motif_trajectory and ev.motif_trajectory not in seen:
-            seen.add(ev.motif_trajectory)
-            out.append(ev.motif_trajectory)
-    return out

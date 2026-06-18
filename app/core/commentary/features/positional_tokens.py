@@ -197,16 +197,6 @@ def imbalance_signature(board: chess.Board) -> str:
     return " ".join(parts)
 
 
-def _material_value(board: chess.Board, color: chess.Color) -> int:
-    s = 0
-    for pt in chess.PIECE_TYPES:
-        if pt == chess.KING:
-            continue
-        for _ in board.pieces(pt, color):
-            s += PIECE_VALUES.get(pt, 0)
-    return s
-
-
 def _dynamic_general_from_pv(board: chess.Board, pv_san: list[str]) -> list[str]:
     """High-level events from PV (captures, checks, promotions)."""
     tags: list[str] = []

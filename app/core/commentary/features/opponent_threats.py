@@ -64,15 +64,3 @@ def detect_opponent_threats(
         _add(found)
 
     return motifs
-
-
-def threats_prevented(
-    opponent_threats: list[TacticalMotif],
-    played_motifs: list[TacticalMotif],
-) -> list[TacticalMotif]:
-    """
-    Heuristic: opponent threats that the played move's prophylaxis may address.
-    Returns threats not mirrored as immediate tactical themes on the played move.
-    """
-    played_set = set(played_motifs)
-    return [t for t in opponent_threats if t not in played_set]

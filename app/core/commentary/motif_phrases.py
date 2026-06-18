@@ -1,8 +1,6 @@
-"""Coach phrasing hints per motif (for prompts + rationale)."""
+"""Coach phrasing hints per motif (for rationale)."""
 
 from __future__ import annotations
-
-from collections.abc import Sequence
 
 from app.models.chess_events import StrategicMotif, TacticalMotif
 
@@ -56,27 +54,3 @@ def glossary_phrase_for(motif_key: str) -> str:
         motif_key,
         f"the idea '{motif_key}' — describe with concrete squares and pieces",
     )
-
-
-def motif_glossary_prompt_block() -> str:
-    lines = [
-        "MOTIF GLOSSARY (use these ideas in prose; never dump this list as labels):",
-        "If a motif is NOT listed under DETECTED_MOTIFS for this move, do not name it.",
-    ]
-    for k in sorted(MOTIF_GLOSSARY.keys()):
-        lines.append(f"- {k}: {MOTIF_GLOSSARY[k]}")
-    return "\n".join(lines)
-
-
-def motif_glossary_prompt_block_for(keys: Sequence[str]) -> str:
-    """Per-move glossary: only listed motif keys (falls back to full glossary if none)."""
-    uniq = sorted({str(k).strip() for k in keys if str(k).strip()})
-    if not uniq:
-        return motif_glossary_prompt_block()
-    lines = [
-        "MOTIF GLOSSARY (subset for this move; weave naturally — never dump as a labeled list):",
-        "Only name motifs that appear under DETECTED_MOTIFS.",
-    ]
-    for k in uniq:
-        lines.append(f"- {k}: {glossary_phrase_for(k)}")
-    return "\n".join(lines)

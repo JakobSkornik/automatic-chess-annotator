@@ -10,7 +10,6 @@ import chess
 from app.core.commentary.openings.eco_book import (
     ECOBook,
     OpeningInfo,
-    mainline_uci_list,
 )
 
 # Align with engine: early game through full move 10; endgame by minor+major count.
@@ -190,14 +189,6 @@ def build_opening_tags(
     )
 
 
-def material_tuple(board: chess.Board) -> tuple[int, ...]:
-    return tuple(
-        len(board.pieces(pt, c))
-        for c in (chess.WHITE, chess.BLACK)
-        for pt in (chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN)
-    )
-
-
 def _side_material_str(board: chess.Board, color: chess.Color) -> str:
     order = (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN)
     parts: list[str] = ["K"]
@@ -363,8 +354,3 @@ def pawn_structure_fingerprint(board: chess.Board) -> str:
     w_s = "".join(str(min(x, 3)) for x in wf)
     b_s = "".join(str(min(x, 3)) for x in bf)
     return f"wf:{w_s}_bf:{b_s}"
-
-
-def uci_list_from_pgn_start(game: chess.pgn.Game, plies: int) -> list[str]:
-    """UCI plies of the first `plies` mainline half-moves from the start position."""
-    return mainline_uci_list(game)[: int(max(0, plies))]
