@@ -18,7 +18,10 @@ from app.core.commentary.features.pv_motif_scan import (
 )
 from app.core.commentary.features.strategic_motifs import detect_strategic_motifs
 from app.core.commentary.features.tactical_motifs import detect_tactical_motifs
-from app.core.commentary.key_moment_detector import KeyMomentDetector
+from app.core.commentary.key_moment_detector import (
+    KeyMomentDetector,
+    decisive_eval_cp,
+)
 from app.core.commentary.openings.eco_book import ECOBook
 from app.models.chess_events import (
     AnalyzedMoveData,
@@ -148,6 +151,17 @@ class ChessEventExtractor:
             if best_eval is not None and cur_score is not None:
                 loss = _eval_loss_white_pov(board_before, best_eval, cur_score)
             mq = _move_quality_from_loss(loss, played_is_best)
+            # In an already-decided position (both played and best evals beyond
+            # the decisive interval) an imprecise move is not a real mistake
+            # (Guid) — don't brand it ?/?? .
+            if (
+                mq in (MoveQuality.INACCURACY, MoveQuality.MISTAKE, MoveQuality.BLUNDER)
+                and best_eval is not None
+                and cur_score is not None
+            ):
+                t = decisive_eval_cp()
+                if abs(best_eval) > t and abs(cur_score) > t:
+                    mq = MoveQuality.GOOD
 
             swing: int | None = None
             if prev_score is not None and cur_score is not None:

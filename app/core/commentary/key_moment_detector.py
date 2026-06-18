@@ -1,10 +1,24 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from app.models.Move import Move
 
 logger = logging.getLogger(__name__)
+
+
+def decisive_eval_cp() -> int:
+    """Half-width of the "still a real game" interval, in centipawns (Guid).
+
+    When both the played move and the engine's suggestion evaluate beyond this
+    (default ±3.00), the position is already decided and imprecise moves should
+    not be flagged as mistakes/oversights. Tunable via ``DECISIVE_EVAL_CP``.
+    """
+    try:
+        return int(os.environ.get("DECISIVE_EVAL_CP", "300"))
+    except ValueError:
+        return 300
 
 
 # ---------------------------------------------------------------------------
@@ -124,17 +138,22 @@ class KeyMomentDetector:
         )
         logger.info(log_msg)
 
-        # -- Blunder --
-        if perspective_change <= -200:
-            results.append("blunder")
+        # Already-decided position: when both the played result and the
+        # best-play baseline are beyond the decisive interval, an imprecise
+        # move is not a real mistake (Guid) — skip the negative classifications.
+        decisive = decisive_eval_cp()
+        decided = (
+            abs(current_move.score) > decisive and abs(previous_move.score) > decisive
+        )
 
-        # -- Mistake --
-        elif perspective_change <= -100:
-            results.append("mistake")
-
-        # -- Inaccuracy --
-        elif perspective_change <= -50:
-            results.append("inaccuracy")
+        # -- Blunder / Mistake / Inaccuracy (only while the game is still live) --
+        if not decided:
+            if perspective_change <= -200:
+                results.append("blunder")
+            elif perspective_change <= -100:
+                results.append("mistake")
+            elif perspective_change <= -50:
+                results.append("inaccuracy")
 
         # -- Good defense: under pressure (bad eval for side to move) but holds or improves --
         prev_s = previous_move.score
@@ -144,8 +163,8 @@ class KeyMomentDetector:
             if not is_white_move and prev_s >= 100 and perspective_change >= 0:
                 results.append("good_defense")
 
-        # -- Missed opportunity (PV-based) --
-        if pvs_for_move and pvs_for_move[0]:
+        # -- Missed opportunity (PV-based) — also suppressed once decided --
+        if not decided and pvs_for_move and pvs_for_move[0]:
             best_move_in_pv = pvs_for_move[0][0]
             if best_move_in_pv and best_move_in_pv.score is not None:
                 opportunity_diff = best_move_in_pv.score - current_move.score  # type: ignore[operator]

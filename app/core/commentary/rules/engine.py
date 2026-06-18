@@ -56,7 +56,6 @@ THRESHOLDS: dict[str, int] = {
     "bishop_color_complex": 12,
     "king_activity_endgame": 10,
     "passer_escort": 8,
-    "material": 90,  # ~a pawn of net material won/lost along the line
     "bad_bishop": 25,  # min |delta| before a bad-bishop change is worth stating
     "connected_rooks": 10,
     "min_claim_cp": 8,  # ignore fired rules weaker than this
@@ -165,25 +164,173 @@ Rule = Callable[[_Ctx], list[Claim]]
 # ---------------------------------------------------------------------------
 
 
+# Material is described in concrete, whole-unit terms (Guid): never fractional
+# pawns. piece = bishop/knight only; exchange = rook vs. a minor.
+_MAT_NAME = {
+    chess.PAWN: "pawn",
+    chess.KNIGHT: "knight",
+    chess.BISHOP: "bishop",
+    chess.ROOK: "rook",
+    chess.QUEEN: "queen",
+}
+_MAT_VAL = {
+    chess.PAWN: 1,
+    chess.KNIGHT: 3,
+    chess.BISHOP: 3,
+    chess.ROOK: 5,
+    chess.QUEEN: 9,
+}
+_MAT_ORDER = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN]
+_NUMWORD = {1: "a", 2: "two", 3: "three", 4: "four", 5: "five"}
+
+
+def _imbalance(board: chess.Board) -> dict[int, int]:
+    """White-minus-Black piece count per type."""
+    return {
+        pt: len(board.pieces(pt, chess.WHITE)) - len(board.pieces(pt, chess.BLACK))
+        for pt in _MAT_ORDER
+    }
+
+
+def _enumerate_extra(extra: dict[int, int]) -> str:
+    """e.g. {ROOK:1, BISHOP:1} -> 'a rook and a bishop'; {KNIGHT:2} -> 'two knights'."""
+    parts: list[str] = []
+    for pt in _MAT_ORDER:
+        c = extra.get(pt, 0)
+        if c <= 0:
+            continue
+        name = _MAT_NAME[pt]
+        parts.append(f"a {name}" if c == 1 else f"{_NUMWORD.get(c, str(c))} {name}s")
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _pawns_phrase(n: int) -> str:
+    return "a pawn" if n == 1 else f"{_NUMWORD.get(n, str(n))} pawns"
+
+
+def describe_material(
+    leaf_board: chess.Board, *, changed: bool
+) -> tuple[str, str, int] | None:
+    """(text, beneficiary, delta_cp) for the material standing, in concrete whole
+    units. ``changed`` -> 'has won ...'; else the static 'is ... up' / 'has ...'."""
+    imb = _imbalance(leaf_board)
+    if all(v == 0 for v in imb.values()):
+        return None
+    white_extra = {pt: d for pt, d in imb.items() if d > 0}
+    black_extra = {pt: -d for pt, d in imb.items() if d < 0}
+    val = sum(d * _MAT_VAL[pt] for pt, d in imb.items())
+    if val != 0:
+        white_subject = val > 0
+    else:
+        white_subject = sum(white_extra.values()) >= sum(black_extra.values())
+    side = "WHITE" if white_subject else "BLACK"
+    subj = white_extra if white_subject else black_extra
+    opp = black_extra if white_subject else white_extra
+    label, benef = _side_label(side), _benef(side)
+    delta_cp = max(abs(val) * 100, 100)
+
+    nonpawn_subj = {pt: c for pt, c in subj.items() if pt != chess.PAWN}
+    nonpawn_opp = {pt: c for pt, c in opp.items() if pt != chess.PAWN}
+    subj_pawns, opp_pawns = subj.get(chess.PAWN, 0), opp.get(chess.PAWN, 0)
+
+    def _single_minor(d: dict[int, int]) -> str | None:
+        if sum(d.values()) != 1:
+            return None
+        if d.get(chess.BISHOP) == 1:
+            return "bishop"
+        if d.get(chess.KNIGHT) == 1:
+            return "knight"
+        return None
+
+    # Pure pawn(s).
+    if not nonpawn_subj and not nonpawn_opp:
+        text = (
+            f"{label} has won {_pawns_phrase(subj_pawns)}."
+            if changed
+            else f"{label} is {_pawns_phrase(subj_pawns)} up."
+        )
+        return text, benef, max(subj_pawns * 100, 100)
+
+    # Exchange: a rook against a single minor (optionally for pawns).
+    if (
+        nonpawn_subj.get(chess.ROOK) == 1
+        and len(nonpawn_subj) == 1
+        and _single_minor(nonpawn_opp)
+    ):
+        if opp_pawns:
+            return (
+                f"{label} has won an exchange for {_pawns_phrase(opp_pawns)}.",
+                benef,
+                delta_cp,
+            )
+        text = (
+            f"{label} has won the exchange."
+            if changed
+            else f"{label} is up the exchange."
+        )
+        return text, benef, delta_cp
+
+    # A single minor, opponent has only pawns (or nothing) as compensation.
+    minor = _single_minor(nonpawn_subj)
+    if minor and not nonpawn_opp:
+        if opp_pawns:
+            return (
+                f"{label} has won a {minor} for {_pawns_phrase(opp_pawns)}.",
+                benef,
+                delta_cp,
+            )
+        text = f"{label} has won a {minor}." if changed else f"{label} is up a {minor}."
+        return text, benef, delta_cp
+
+    # A single rook, opponent has only pawns.
+    if nonpawn_subj.get(chess.ROOK) == 1 and len(nonpawn_subj) == 1 and not nonpawn_opp:
+        if opp_pawns:
+            return (
+                f"{label} has won a rook for {_pawns_phrase(opp_pawns)}.",
+                benef,
+                delta_cp,
+            )
+        text = f"{label} has won a rook." if changed else f"{label} is up a rook."
+        return text, benef, delta_cp
+
+    # General imbalance: "<subj> for/against <opp>" (against a lone queen).
+    subj_desc = _enumerate_extra(subj)
+    opp_desc = _enumerate_extra(opp)
+    if opp_desc:
+        connector = "against" if set(nonpawn_opp) == {chess.QUEEN} else "for"
+        return f"{label} has {subj_desc} {connector} {opp_desc}.", benef, delta_cp
+    verb = "has won" if changed else "has"
+    return f"{label} {verb} {subj_desc}.", benef, delta_cp
+
+
 def rule_material(ctx: _Ctx) -> list[Claim]:
-    """Net material won/lost along the line — the most important feature, so it
-    leads the claim list. Fires only on a settled swing of ~a pawn or more
-    (the envisioned line is quiescence-trimmed, so quiet positions net ~0)."""
-    d = ctx.delta("MATERIAL_BALANCE")  # White-POV centipawns
-    if abs(d) < THRESHOLDS["material"]:
+    """Material standing in concrete, whole-unit terms — the most important
+    feature, so it leads the claim list. Fires when the line changes the
+    material balance (a capture nets material), describing the actual
+    difference / resulting imbalance."""
+    if ctx.leaf_board is None:
         return []
-    side = "WHITE" if d > 0 else "BLACK"
-    pawns = abs(d) / 100.0
-    amount = f"{pawns:.1f}".rstrip("0").rstrip(".")
-    unit = "pawn" if amount in ("1", "0") else "pawns"
+    changed = ctx.start_board is None or _imbalance(ctx.start_board) != _imbalance(
+        ctx.leaf_board
+    )
+    if not changed:
+        return []
+    described = describe_material(ctx.leaf_board, changed=True)
+    if described is None:
+        return []
+    text, benef, delta_cp = described
     return [
         Claim(
             rule_id="material_won",
-            beneficiary=_benef(side),
-            text=f"{_side_label(side)} wins material (about {amount} {unit}).",
-            text_state=f"{_side_label(side)} is up material.",
+            beneficiary=benef,
+            text=text,
+            text_state=text,
             features_involved=["MATERIAL_BALANCE"],
-            delta_cp=abs(d),
+            delta_cp=delta_cp,
         )
     ]
 
@@ -978,7 +1125,11 @@ def build_comment_facts(
     ):
         gap = me.best_move_eval_cp - me.eval_after_cp
         gap_for_mover = gap if mover == "White" else -gap
-        if gap_for_mover >= THRESHOLDS["better_alternative_gap"]:
+        # A ?/?? move must always show what was better (Guid) — bypass the gap
+        # gate for mistakes/blunders (the decisive-position filter already kept
+        # only the ones that are real mistakes).
+        force_alt = mq in ("mistake", "blunder")
+        if force_alt or gap_for_mover >= THRESHOLDS["better_alternative_gap"]:
             best_pv_uci: list[str] = []
             if row.pvs and row.pvs[0]:
                 best_pv_uci = [

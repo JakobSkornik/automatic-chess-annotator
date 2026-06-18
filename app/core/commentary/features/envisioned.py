@@ -25,14 +25,21 @@ from app.core.commentary.features.guid_features import (
 from app.models.comment_facts import EnvisionedLine, FeatureDelta, FeatureDiff
 
 
-def max_display_plies() -> int:
+def base_display_plies() -> int:
+    """Standard PV length (Guid): 5 plies, extended only until quiescent."""
     try:
-        return int(os.environ.get("ENVISIONED_MAX_PLIES", "11"))
+        return int(os.environ.get("ENVISIONED_BASE_PLIES", "5"))
     except ValueError:
-        return 11
+        return 5
 
 
-MIN_DISPLAY_PLIES = 2
+def max_display_plies() -> int:
+    """Hard safety cap when extending the base length to reach a quiescent leaf."""
+    try:
+        return int(os.environ.get("ENVISIONED_MAX_PLIES", "12"))
+    except ValueError:
+        return 12
+
 
 _SEE_VALUES = {
     chess.PAWN: 1,
@@ -87,8 +94,18 @@ def build_envisioned_line(
     depth: int | None = None,
     max_plies: int | None = None,
 ) -> EnvisionedLine:
-    """Walk the PV, cap its length, trim the non-quiescent tail."""
-    cap = max_plies if max_plies is not None else max_display_plies()
+    """Walk the PV to a standard length, extending only until a quiescent leaf.
+
+    Guid's spec: 5 plies as the standard PV length, or until a quiescent move
+    after 5 — so a line never ends mid-capture/-check, but also isn't padded
+    out to an arbitrary horizon.
+    """
+    hard_cap = (
+        max_plies
+        if max_plies is not None
+        else max(base_display_plies(), max_display_plies())
+    )
+    base = min(base_display_plies(), hard_cap)
     board = chess.Board(start_fen)
     start_q = is_quiescent(board)
 
@@ -96,7 +113,7 @@ def build_envisioned_line(
     sans: list[str] = []
     fens: list[str] = []
     boards_before: list[chess.Board] = []
-    for uci in line_uci[:cap]:
+    for uci in line_uci[:hard_cap]:
         try:
             mv = chess.Move.from_uci(uci)
             if mv not in board.legal_moves:
@@ -109,18 +126,27 @@ def build_envisioned_line(
         moves.append(mv)
         fens.append(board.fen())
 
-    # Trim: drop trailing forcing moves and stop on a quiescent leaf.
-    trimmed = 0
-    while len(moves) > MIN_DISPLAY_PLIES:
-        leaf_board = chess.Board(fens[-1])
-        last_forcing = _is_forcing(boards_before[-1], moves[-1])
-        if not last_forcing and is_quiescent(leaf_board):
-            break
-        moves.pop()
-        sans.pop()
-        fens.pop()
-        boards_before.pop()
-        trimmed += 1
+    walked = len(moves)
+
+    def _unsettled(k: int) -> bool:
+        """Ply k ends on a forcing move or a non-quiescent leaf."""
+        return _is_forcing(boards_before[k - 1], moves[k - 1]) or not is_quiescent(
+            chess.Board(fens[k - 1])
+        )
+
+    # Standard length is `base` plies; extend forward until the leaf settles
+    # (Guid: "5 plies, or until a quiescent move after 5").
+    keep = min(base, walked)
+    while keep < walked and _unsettled(keep):
+        keep += 1
+    # If the PV ran out mid-tactic, trim back so the line still ends quietly.
+    while keep > 1 and _unsettled(keep):
+        keep -= 1
+    moves = moves[:keep]
+    sans = sans[:keep]
+    fens = fens[:keep]
+    boards_before = boards_before[:keep]
+    trimmed = walked - keep
 
     leaf_fen = fens[-1] if fens else start_fen
     leaf_q = is_quiescent(chess.Board(leaf_fen))
