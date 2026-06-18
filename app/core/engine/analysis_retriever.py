@@ -56,8 +56,10 @@ from app.models.PgnMetadata import PgnMetadata
 
 # ANALYSIS_STAGES = [0.05, 0.1, 0.2, 0.4]
 ANALYSIS_STAGES = [4, 8, 16]
+DEFAULT_ANALYSIS_DEPTH = ANALYSIS_STAGES[-1]
 DEFAULT_PV_COUNT = 3
 MATE_SCORE = 1000000
+FEATURE_DIFF_MAX_ENTRIES = 10
 logger = logging.getLogger(__name__)
 
 
@@ -959,6 +961,168 @@ def _resolve_move_comment(
     return mc
 
 
+def _trace_pv_line(
+    board_start: chess.Board, pv_sequence: list
+) -> tuple[list[str], list[str]]:
+    """SAN and post-move FEN for each ply of a PV, walked from ``board_start``."""
+    san_line: list[str] = []
+    fen_line: list[str] = []
+    board = board_start.copy()
+    for pm in pv_sequence:
+        try:
+            mv = chess.Move.from_uci(pm.move)
+            san_line.append(board.san(mv))
+            board.push(mv)
+            fen_line.append(board.fen())
+        except Exception:
+            san_line.append(str(pm.move))
+            fen_line.append("")
+    return san_line, fen_line
+
+
+def _build_variations(game: Game, move_index: int, pvs: list) -> list[Variation]:
+    """Engine PVs -> Variation list (SAN + per-ply FENs) from the pre-move board."""
+    board_start = _board_before_mainline_move(game, move_index)
+    variations: list[Variation] = []
+    for rank, pv_sequence in enumerate(pvs):
+        if not pv_sequence:
+            continue
+        san_line, fen_line = _trace_pv_line(board_start, pv_sequence)
+        variations.append(
+            Variation(
+                rank=rank + 1,
+                move_san=san_line[0] if san_line else "",
+                score=_score_to_move_score(pv_sequence[0].score),
+                line=san_line,
+                fens=fen_line,
+                depth=DEFAULT_ANALYSIS_DEPTH,
+            )
+        )
+    return variations
+
+
+def _llm_rendering_debug(analyzed_move: Move) -> tuple[Any, Any]:
+    """(facts_renderings, facts_contract_ok) the LLM stored under hiddenFeatures._llm."""
+    hidden = analyzed_move.hiddenFeatures or {}
+    llm = hidden.get("_llm") if isinstance(hidden, dict) else None
+    if not isinstance(llm, dict):
+        return None, None
+    return llm.get("facts_renderings"), llm.get("facts_contract_ok")
+
+
+def _facts_debug(
+    facts: Any,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[str]]:
+    """(envisioned-line stats, fired-rule claims, muted claims) from CommentFacts."""
+    if facts is None:
+        return None, [], []
+    envisioned_stats = None
+    dl = facts.display_line
+    if dl is not None:
+        envisioned_stats = {
+            "kept_plies": len(dl.line_san),
+            "trimmed_plies": dl.trimmed_plies,
+            "start_quiescent": dl.start_quiescent,
+            "leaf_quiescent": dl.leaf_quiescent,
+        }
+    fired_rules = [
+        {
+            "rule_id": c.rule_id,
+            "text": c.text,
+            "delta_cp": c.delta_cp,
+            "features": list(c.features_involved),
+            "flag_note": c.flag_note,
+        }
+        for c in facts.claims
+    ]
+    return envisioned_stats, fired_rules, list(facts.muted_claims)
+
+
+def _build_move_debug(
+    analyzed_move: Move,
+    move_event: MoveEvent | None,
+    facts: Any,
+    comment: str | None,
+    phase_raw: str,
+) -> dict[str, Any] | None:
+    """Academic reasoning trace for a commented mid/endgame move (None otherwise)."""
+    me = move_event
+    if not (comment and me and phase_raw != "early"):
+        return None
+    renderings, contract_ok = _llm_rendering_debug(analyzed_move)
+    envisioned_stats, fired_rules, muted = _facts_debug(facts)
+    return {
+        "eval_before_cp": me.eval_before_cp,
+        "eval_after_cp": me.eval_after_cp,
+        "eval_swing_cp": me.eval_swing_cp,
+        "best_move_san": me.best_move_san,
+        "best_move_eval_cp": me.best_move_eval_cp,
+        "key_moment_type": me.key_moment_type,
+        "move_quality": me.move_quality.value if me.move_quality else None,
+        "envisioned": envisioned_stats,
+        "fired_rules": fired_rules,
+        "muted_claims": muted,
+        "renderings": renderings,
+        "contract_ok": contract_ok,
+    }
+
+
+def _build_feature_refs(
+    facts: Any, comment: str | None
+) -> tuple[list[FeatureRef], dict[str, Any] | None]:
+    """Chart-highlight feature refs (and the diff tables) grounding this comment."""
+    if facts is None:
+        return [], None
+    delta_by_name: dict[str, int] = {}
+    if facts.feature_diff:
+        for fd in list(facts.feature_diff.positive) + list(facts.feature_diff.negative):
+            delta_by_name[fd.name] = fd.delta_cp
+    feature_refs = [
+        FeatureRef(name=name, delta_cp=int(delta_by_name.get(name, 0)))
+        for name in facts.feature_refs()
+    ]
+    feature_diff_out: dict[str, Any] | None = None
+    if comment and facts.feature_diff:
+        feature_diff_out = {
+            "positive": [
+                fd.model_dump()
+                for fd in facts.feature_diff.positive[:FEATURE_DIFF_MAX_ENTRIES]
+            ],
+            "negative": [
+                fd.model_dump()
+                for fd in facts.feature_diff.negative[:FEATURE_DIFF_MAX_ENTRIES]
+            ],
+        }
+    return feature_refs, feature_diff_out
+
+
+def _resolve_comment_tokens(
+    comment: str | None,
+    comments_by_level: dict[str, str],
+    move_event: MoveEvent | None,
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """Resolve interactive tokens for the comment and each per-audience-level text."""
+    if not (comment and move_event):
+        return [], {}
+    try:
+        from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
+
+        tokens = resolve_tokens_for_comment(
+            comment, move_event.fen_before, move_event.fen_after
+        )
+        by_text: dict[str, list[dict[str, Any]]] = {comment: tokens}
+        by_level: dict[str, list[dict[str, Any]]] = {}
+        for level, text in comments_by_level.items():
+            if text not in by_text:
+                by_text[text] = resolve_tokens_for_comment(
+                    text, move_event.fen_before, move_event.fen_after
+                )
+            by_level[level] = by_text[text]
+        return tokens, by_level
+    except Exception:
+        return [], {}
+
+
 def assemble_game_json(state: EnginePipelineState) -> GameJson:
     """Build GameJson from pipeline state (engine + optional LLM fields)."""
     game = state.game
@@ -1009,36 +1173,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         named_motifs = mc.named_motifs
         primary_motif_label = mc.primary_motif_label
 
-        variations: list[Variation] = []
-        board_pv_start = _board_before_mainline_move(game, idx)
-        for rank, pv_sequence in enumerate(pvs):
-            if not pv_sequence:
-                continue
-            first_move = pv_sequence[0]
-            san_line: list[str] = []
-            fen_line: list[str] = []
-            board_trace = board_pv_start.copy()
-            for pm in pv_sequence:
-                try:
-                    m_uci = chess.Move.from_uci(pm.move)
-                    san_line.append(board_trace.san(m_uci))
-                    board_trace.push(m_uci)
-                    fen_line.append(board_trace.fen())
-                except Exception:
-                    san_line.append(str(pm.move))
-                    fen_line.append("")
-
-            score_val = first_move.score
-            variations.append(
-                Variation(
-                    rank=rank + 1,
-                    move_san=san_line[0] if san_line else "",
-                    score=_score_to_move_score(score_val),
-                    line=san_line,
-                    fens=fen_line,
-                    depth=16,
-                )
-            )
+        variations = _build_variations(game, idx, pvs)
 
         board_before = _board_before_mainline_move(game, idx)
         try:
@@ -1059,109 +1194,19 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
 
         # Guid Expert Module outputs: which features ground this comment
         # (chart highlights) and the diff tables behind them.
-        feature_refs: list[FeatureRef] = []
-        feature_diff_out: dict[str, Any] | None = None
         facts = me.comment_facts if (me and _side_ok) else None
-        if facts is not None:
-            by_name: dict[str, int] = {}
-            if facts.feature_diff:
-                for fd in list(facts.feature_diff.positive) + list(
-                    facts.feature_diff.negative
-                ):
-                    by_name[fd.name] = fd.delta_cp
-            for fname in facts.feature_refs():
-                feature_refs.append(
-                    FeatureRef(name=fname, delta_cp=int(by_name.get(fname, 0)))
-                )
-            if comment and facts.feature_diff:
-                feature_diff_out = {
-                    "positive": [
-                        fd.model_dump() for fd in facts.feature_diff.positive[:10]
-                    ],
-                    "negative": [
-                        fd.model_dump() for fd in facts.feature_diff.negative[:10]
-                    ],
-                }
+        feature_refs, feature_diff_out = _build_feature_refs(facts, comment)
+        resolved_tokens, resolved_by_level = _resolve_comment_tokens(
+            comment, comments_by_level, me
+        )
+        comment_facts_out = (
+            _facts_to_json(facts) if (comment and facts is not None) else None
+        )
 
-        resolved_tokens: list[dict[str, Any]] = []
-        resolved_by_level: dict[str, list[dict[str, Any]]] = {}
-        if comment and me:
-            try:
-                from app.core.commentary.annotation_tokens import (
-                    resolve_tokens_for_comment,
-                )
-
-                resolved_tokens = resolve_tokens_for_comment(
-                    comment, me.fen_before, me.fen_after
-                )
-                seen_texts: dict[str, list[dict[str, Any]]] = {comment: resolved_tokens}
-                for lvl, lvl_text in comments_by_level.items():
-                    if lvl_text in seen_texts:
-                        resolved_by_level[lvl] = seen_texts[lvl_text]
-                    else:
-                        rt = resolve_tokens_for_comment(
-                            lvl_text, me.fen_before, me.fen_after
-                        )
-                        seen_texts[lvl_text] = rt
-                        resolved_by_level[lvl] = rt
-            except Exception:
-                resolved_tokens = []
-                resolved_by_level = {}
-
-        comment_facts_out: dict[str, Any] | None = None
-        if comment and facts is not None:
-            comment_facts_out = _facts_to_json(facts)
-
-        # Academic reasoning trace ("how did we reach this conclusion")
-        debug_out: dict[str, Any] | None = None
-        if comment and me and (row.phase_raw or "") != "early":
-            renderings = None
-            contract_ok = None
-            try:
-                hf_dbg = analyzed_move.hiddenFeatures or {}
-                llm_dbg = hf_dbg.get("_llm") if isinstance(hf_dbg, dict) else None
-                if isinstance(llm_dbg, dict):
-                    renderings = llm_dbg.get("facts_renderings")
-                    contract_ok = llm_dbg.get("facts_contract_ok")
-            except Exception:
-                pass
-            envisioned_stats = None
-            fired_rules: list[dict[str, Any]] = []
-            muted: list[str] = []
-            if facts is not None:
-                dl = facts.display_line
-                if dl is not None:
-                    envisioned_stats = {
-                        "kept_plies": len(dl.line_san),
-                        "trimmed_plies": dl.trimmed_plies,
-                        "start_quiescent": dl.start_quiescent,
-                        "leaf_quiescent": dl.leaf_quiescent,
-                    }
-                fired_rules = [
-                    {
-                        "rule_id": c.rule_id,
-                        "text": c.text,
-                        "delta_cp": c.delta_cp,
-                        "features": list(c.features_involved),
-                        "flag_note": c.flag_note,
-                    }
-                    for c in facts.claims
-                ]
-                muted = list(facts.muted_claims)
-            debug_out = {
-                "eval_before_cp": me.eval_before_cp,
-                "eval_after_cp": me.eval_after_cp,
-                "eval_swing_cp": me.eval_swing_cp,
-                "best_move_san": me.best_move_san,
-                "best_move_eval_cp": me.best_move_eval_cp,
-                "key_moment_type": me.key_moment_type,
-                "move_quality": me.move_quality.value if me.move_quality else None,
-                "envisioned": envisioned_stats,
-                "fired_rules": fired_rules,
-                "muted_claims": muted,
-                "renderings": renderings,
-                "contract_ok": contract_ok,
-            }
+        # Academic reasoning trace ("how did we reach this conclusion").
+        debug_out = _build_move_debug(
+            analyzed_move, me, facts, comment, (row.phase_raw or "")
+        )
 
         game_moves.append(
             GameMove(
