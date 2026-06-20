@@ -976,6 +976,10 @@ def verdict_for_eval(eval_cp: int | None, eval_mate: int | None = None) -> str:
 _MATE_SCORE = 1000000
 # Beyond this eval the game is decided, so positional claims are dropped as noise.
 DECISIVE_CLAIM_CP = 500
+# When the move leaves the mover at least this much worse (mover-POV cp), its
+# incidental positional "merits" are misleading consolation and are dropped —
+# only the consequences that explain the result are kept.
+MERIT_SUPPRESS_CP = 100
 MATERIAL_LOSS_CP = 100  # mover-POV material drop that earns a "loses material" claim
 EVAL_CONCESSION_CP = 60  # weight for the "engine preferred X" fallback claim
 MAX_ALTERNATIVE_MERITS = 2
@@ -1252,6 +1256,19 @@ def build_comment_facts(
         eval_cp is not None and abs(eval_cp) > DECISIVE_CLAIM_CP
     ):
         claims = []
+    # A move that leaves the mover clearly worse off is an error: its incidental
+    # positional merits (e.g. "I damaged your pawns" while dropping a piece) read
+    # as achievements and bury the point. Keep only the consequences/concessions.
+    mover_pov_eval = (
+        None if eval_cp is None else (eval_cp if mover == "White" else -eval_cp)
+    )
+    if mover_pov_eval is not None and mover_pov_eval <= -MERIT_SUPPRESS_CP:
+        mover_key = mover.lower()
+        claims = [
+            c
+            for c in claims
+            if c.is_concession or c.beneficiary not in (mover_key, None)
+        ]
     if not claims and mq in ("inaccuracy", "mistake", "blunder"):
         fallback = _fallback_claim(ctx, leaf_vec, refutation_san)
         if fallback is not None:
