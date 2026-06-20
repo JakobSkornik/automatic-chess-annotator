@@ -147,7 +147,7 @@ def log_call(
 
 
 def append_postcheck(*, ref_seq: int, payload: dict[str, Any]) -> None:
-    """Append a correction row after composer post-processing (e.g. rag_applied overlap fix)."""
+    """Append a correction row after composer post-processing (e.g. forbidden-phrase fix)."""
     if not is_enabled():
         return
     gid = _GAME_ID.get()

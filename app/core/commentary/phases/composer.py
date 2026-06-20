@@ -318,7 +318,7 @@ def build_facts_user_prompt(
         ]
     if enrichment:
         enr_lines: list[str] = []
-        for key in ("opening", "episode_theme", "what_happens_later", "master_note"):
+        for key in ("opening", "what_happens_later"):
             val = enrichment.get(key)
             if val:
                 enr_lines.append(f"{key}: {val}")

@@ -3,20 +3,6 @@ from typing import Any
 from pydantic import BaseModel
 
 
-class RagRef(BaseModel):
-    """Serialized RAG hit persisted on a move (mirrors WebSocket rag_refs payload)."""
-
-    source: str = ""
-    fen: str = ""
-    text: str = ""
-    score: float = 0.0
-    san: str = ""
-    phase: str = ""
-    opening_eco: str = ""
-    opening_name: str = ""
-    material_signature: str = ""
-
-
 class MoveScore(BaseModel):
     cp: int | None = None
     mate: int | None = None
@@ -55,27 +41,13 @@ class GameMove(BaseModel):
     variations: list[Variation] = []
     comment: str | None = None
     classification: str | None = None
-    move_quality: str | None = None
-    event_type: str | None = None
-    tactical_motifs: list[str] = []
-    strategic_motifs: list[str] = []
-    move_category: str | None = None
-    plan_comparison: dict[str, Any] | None = None
-    is_critical: bool = False
+    move_quality: str | None = None  # PGN export NAGs (pgn_writer)
     # True only for moves that received a real key-moment/teaching commentary
     # pass (drives the move-list dot) — not the template-floor facts that every
     # analyzed move carries.
     is_key_moment: bool = False
-    episode_index: int | None = None
-    named_motifs: list[str] = []
-    primary_motif_label: str | None = None
-    rag_refs: list[RagRef] = []
-    opponent_threats: list[str] = []
-    pv_motif_summary: list[str] = []
-    motif_trajectory: str | None = None
     # Guid Expert Module outputs
     feature_refs: list[FeatureRef] = []
-    feature_diff: dict[str, Any] | None = None  # {"positive": [...], "negative": [...]}
     resolved_tokens: list[dict[str, Any]] = []
     # Per-audience-level renderings of the same facts; `comment` mirrors the
     # intermediate level for backward compatibility.
@@ -97,13 +69,12 @@ class GameMetadata(BaseModel):
     white: str
     black: str
     result: str
-    date: str | None = None
+    date: str | None = None  # PGN Date header (pgn_writer)
     eventId: str | None = None
     whiteElo: int | None = None
     blackElo: int | None = None
     opening: str | None = None
-    opening_eco: str | None = None
-    strategic_archetype: str | None = None
+    opening_eco: str | None = None  # PGN ECO header (pgn_writer)
     # Pre-analysis options the commentary was generated with
     commentary_level: str | None = None  # beginner | intermediate | expert
     comment_side: str | None = None  # white | black | both
@@ -123,24 +94,10 @@ class FeatureSeries(BaseModel):
     features: dict[str, list[int | None]] = {}
 
 
-class EpisodeSummary(BaseModel):
-    episode_index: int
-    title: str
-    start_move: int
-    end_move: int
-    narrative: str | None = None
-    dominant_theme: str = ""
-    motif_trajectory: str | None = None
-
-
 class GameJson(BaseModel):
     metadata: GameMetadata
     moves: list[GameMove]
-    episodes: list[EpisodeSummary] = []
-    game_narrative: str | None = None
     feature_series: FeatureSeries | None = None
-    # Pipeline parameters behind the per-move debug traces (rule thresholds etc.)
-    debug_info: dict[str, Any] | None = None
     # True once the LLM commentary sweep finished (drives the FE "done" state).
     commentary_complete: bool = False
     analysis_info: AnalysisInfo

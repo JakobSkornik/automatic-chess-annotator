@@ -3,24 +3,9 @@
 from __future__ import annotations
 
 _POLICY: dict[str, dict[str, str]] = {
-    "openai": {
-        "digest": "gpt-4.1",
-        "composer": "gpt-4.1-mini",
-        "episode": "gpt-4.1-mini",
-        "narrative": "gpt-4.1",
-    },
-    "anthropic": {
-        "digest": "claude-sonnet-4-5",
-        "composer": "claude-haiku-4-5",
-        "episode": "claude-haiku-4-5",
-        "narrative": "claude-sonnet-4-5",
-    },
-    "cursor": {
-        "digest": "composer-2.5",
-        "composer": "composer-2.5",
-        "episode": "composer-2.5",
-        "narrative": "composer-2.5",
-    },
+    "openai": {"composer": "gpt-4.1-mini"},
+    "anthropic": {"composer": "claude-haiku-4-5"},
+    "cursor": {"composer": "composer-2.5"},
 }
 
 # When ``pass_label`` is passed for composer, override base composer model (optional per provider).
@@ -33,9 +18,9 @@ _POLICY_COMPOSER_BY_PASS: dict[str, dict[str, str]] = {
 
 
 def resolve_model(provider: str, stage: str, pass_label: str | None = None) -> str:
-    """Return model id for ``stage`` in ``digest|composer|episode|narrative``.
+    """Return model id for ``stage`` (currently only ``composer``).
 
-    For ``composer`` only, ``pass_label`` may be ``key_moment`` or ``teaching`` to pick a tiered model.
+    ``pass_label`` may be ``key_moment`` or ``teaching`` to pick a tiered composer model.
     """
     p = (provider or "openai").strip().lower()
     if p not in _POLICY:

@@ -83,18 +83,6 @@ def scan_pv_motifs(
     return out
 
 
-def collect_pv_motif_summary(scans: list[PlyMotifScan]) -> list[str]:
-    """Human-readable summary lines for rationale / prompts."""
-    lines: list[str] = []
-    for s in scans:
-        labels: list[str] = [m.value for m in s.tactical_motifs] + [
-            m.value for m in s.strategic_motifs
-        ]
-        if labels:
-            lines.append(f"PV ply {s.ply} ({s.san}): {', '.join(labels[:4])}")
-    return lines
-
-
 def merge_pv_motifs_into_strategic(
     existing: list[StrategicMotif],
     scans: list[PlyMotifScan],

@@ -8,7 +8,6 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.core.commentary.advanced_comment_service import COMPOSER_OUTPUT_SCHEMA
 from app.core.commentary.llm_providers import (
     DYNAMIC_SECTION_SENTINEL,
     AnthropicProvider,
@@ -16,6 +15,7 @@ from app.core.commentary.llm_providers import (
     OpenAIProvider,
     make_llm_provider,
 )
+from app.core.commentary.phases.composer import SINGLE_LEVEL_SCHEMA
 
 
 class TestMakeLlmProvider(unittest.TestCase):
@@ -78,7 +78,7 @@ class TestCursorProvider(unittest.TestCase):
                 "static" + DYNAMIC_SECTION_SENTINEL + "dynamic",
                 model="composer-2.5",
                 effort="low",
-                schema=COMPOSER_OUTPUT_SCHEMA,
+                schema=SINGLE_LEVEL_SCHEMA,
                 schema_name="chess_commentary_composer",
                 max_output_tokens=100,
             )
@@ -139,7 +139,7 @@ class TestOpenAIProvider(unittest.TestCase):
                 "user",
                 model="gpt-4.1-mini",
                 effort="low",
-                schema=COMPOSER_OUTPUT_SCHEMA,
+                schema=SINGLE_LEVEL_SCHEMA,
                 schema_name="chess_commentary_composer",
                 max_output_tokens=100,
             )
@@ -181,7 +181,7 @@ class TestAnthropicProvider(unittest.TestCase):
                 "static" + DYNAMIC_SECTION_SENTINEL + "tail",
                 model="claude-haiku-4-5",
                 effort="low",
-                schema=COMPOSER_OUTPUT_SCHEMA,
+                schema=SINGLE_LEVEL_SCHEMA,
                 schema_name="chess_commentary_composer",
                 max_output_tokens=256,
             )

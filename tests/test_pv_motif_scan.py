@@ -4,10 +4,7 @@ import unittest
 
 import chess
 
-from app.core.commentary.features.pv_motif_scan import (
-    collect_pv_motif_summary,
-    scan_pv_motifs,
-)
+from app.core.commentary.features.pv_motif_scan import scan_pv_motifs
 
 
 class TestPvMotifScan(unittest.TestCase):
@@ -21,9 +18,6 @@ class TestPvMotifScan(unittest.TestCase):
         self.assertEqual(len(scans), 1)
         self.assertEqual(scans[0].san, "e4")
         self.assertEqual(scans[0].ply, 1)
-
-    def test_collect_summary_empty(self) -> None:
-        self.assertEqual(collect_pv_motif_summary([]), [])
 
     def test_fork_in_pv_line(self) -> None:
         # Scholar's mate style: after e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5

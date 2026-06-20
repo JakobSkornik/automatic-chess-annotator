@@ -14,10 +14,6 @@ FORBIDDEN_REGEX = re.compile(
 )
 
 
-def forbidden_hit_count(text: str) -> int:
-    return len(FORBIDDEN_REGEX.findall(text or ""))
-
-
 def forbidden_hit_strings(text: str) -> list[str]:
     """Unique matched substrings (lowered for display), preserve first-seen order."""
     seen: set[str] = set()

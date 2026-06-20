@@ -11,7 +11,6 @@ from typing import Any
 import chess
 from chess.pgn import Game
 
-from app.core.commentary.episode_segmenter import EpisodeSegmenter
 from app.core.commentary.event_extractor import ChessEventExtractor
 from app.core.commentary.features.guid_features import (
     CHART_FEATURES,
@@ -19,7 +18,6 @@ from app.core.commentary.features.guid_features import (
     vector_to_plain,
 )
 from app.core.commentary.features.positional_features import compute_hidden_features
-from app.core.commentary.features.pv_horizon_diff import compute_pv_horizon_diff
 from app.core.commentary.key_moment_detector import KeyMomentDetector
 from app.core.commentary.openings.eco_book import (
     ECOBook,
@@ -33,22 +31,17 @@ from app.core.engine.engine_connector import EngineConnector
 from app.core.io.pgn_reader import PGNReader
 from app.models.chess_events import (
     AnalyzedMoveData,
-    Episode,
     GameAnalysisContext,
     MoveEvent,
-    MoveQuality,
-    PvHorizonDiff,
 )
 from app.models.GameJson import (
     AnalysisInfo,
-    EpisodeSummary,
     FeatureRef,
     FeatureSeries,
     GameJson,
     GameMetadata,
     GameMove,
     MoveScore,
-    RagRef,
     Variation,
 )
 from app.models.Move import AnalysisStage, Move
@@ -63,37 +56,8 @@ FEATURE_DIFF_MAX_ENTRIES = 10
 logger = logging.getLogger(__name__)
 
 
-def _heuristic_llm_fallback_comment(me: MoveEvent) -> str:
-    """Same shape as assemble_game_json heuristic when LLM returns empty."""
-    key_moment = me.key_moment_type or ""
-    if key_moment:
-        swing = me.eval_swing_cp
-        if swing is not None:
-            return (
-                f"{key_moment.replace('_', ' ').capitalize()} "
-                f"(Eval swing: {swing / 100:+.2f} pawns, White POV step)"
-            )
-        return key_moment.replace("_", " ").capitalize()
-    if me.teaching_moment:
-        tact = ", ".join(m.value for m in me.tactical_motifs[:3])
-        strat = ", ".join(m.value for m in me.strategic_motifs[:3])
-        parts = [p for p in (tact, strat) if p]
-        return "Teaching highlight" + (f": {', '.join(parts)}" if parts else "")
-    return ""
-
-
-def _game_winner_from_result(result: str | None) -> str | None:
-    r = (result or "").strip()
-    if r == "1-0":
-        return "white"
-    if r == "0-1":
-        return "black"
-    return None
-
-
 def _apply_back_to_back_key_moment_suppression(
     move_events: list[MoveEvent],
-    episodes: list[Episode],
     context: GameAnalysisContext,
 ) -> None:
     """Second of two same-type key moments within 2 plies loses LLM pass; gets stub reference."""
@@ -117,91 +81,8 @@ def _apply_back_to_back_key_moment_suppression(
             )
             move_events[mi] = updated
             context.move_events[mi] = updated
-            for ep in episodes:
-                for ej, ev in enumerate(ep.move_events):
-                    if ev.ply == updated.ply:
-                        ep.move_events[ej] = updated
-                        break
         else:
             last_ply, last_type = me.ply, km
-
-
-def _mark_teaching_moments_per_episode(
-    move_events: list[MoveEvent],
-    episodes: list[Episode],
-    context: GameAnalysisContext,
-    result: str | None,
-) -> None:
-    """One teaching highlight per episode: strong quiet move by eventual winner with strategy."""
-    winner = _game_winner_from_result(result)
-    if winner is None:
-        return
-    taken_plys: set[int] = set()
-    ply_to_mi = {move_events[i].ply: i for i in range(len(move_events))}
-    for ep in episodes:
-        candidates: list[tuple[int, int, int]] = []
-        for ev in ep.move_events:
-            if ev.key_moment_type or ev.teaching_moment or ev.brief_commentary:
-                continue
-            if ev.phase == "opening":
-                # Book plies carry no engine data; the opening commenter owns them.
-                continue
-            if ev.move_quality not in (MoveQuality.BEST, MoveQuality.EXCELLENT):
-                continue
-            if not ev.strategic_motifs:
-                continue
-            is_white = ev.ply % 2 == 1
-            if winner == "white" and not is_white:
-                continue
-            if winner == "black" and is_white:
-                continue
-            mi = ply_to_mi.get(ev.ply)
-            if mi is None:
-                continue
-            richness = len(ev.strategic_motifs) * 3 + len(ev.tactical_motifs)
-            candidates.append((richness, ev.ply, mi))
-        if not candidates:
-            continue
-        candidates.sort(key=lambda x: -x[0])
-        _score, ply, mi = candidates[0]
-        if ply in taken_plys:
-            continue
-        taken_plys.add(ply)
-        promoted = move_events[mi].model_copy(
-            update={"teaching_moment": True, "is_critical": True}
-        )
-        move_events[mi] = promoted
-        context.move_events[mi] = promoted
-        for ep2 in episodes:
-            for ej, ev2 in enumerate(ep2.move_events):
-                if ev2.ply == promoted.ply:
-                    ep2.move_events[ej] = promoted
-                    break
-
-
-def _bm25_pv_san_from_fen_after(
-    engine: EngineConnector, fen_after: str, depth: int
-) -> list[str]:
-    """SAN plies of engine PV1 from the position after the move (matches BM25 corpus indexing)."""
-    try:
-        board = chess.Board(fen_after)
-        info = engine.analyse(board, depth=depth, multiPv=1)
-        if isinstance(info, list) and info:
-            info = info[0]
-        if not isinstance(info, dict):
-            return []
-        pv = info.get("pv") or []
-        b2 = board.copy()
-        out: list[str] = []
-        for m in pv[:8]:
-            if m not in b2.legal_moves:
-                break
-            out.append(b2.san(m))
-            b2.push(m)
-        return out[:5]
-    except Exception as e:
-        logger.debug("BM25 PV from fen_after failed: %s", e)
-        return []
 
 
 def _cp_and_pv1(info_any: Any) -> tuple[int | None, str | None]:
@@ -498,29 +379,6 @@ class AnalysisRetriever:
                 after_features["_engine"]["after_pv_uci"] = [m.uci() for m in after_pv]
             except Exception:
                 after_features["_engine"]["after_pv_uci"] = []
-            # Superseded by the envisioned-line diff (rules/engine.py); costs a
-            # depth-18 search per move, so off unless explicitly re-enabled.
-            pv_horizon_enabled = os.environ.get(
-                "PV_HORIZON_ENABLED", "0"
-            ).strip().lower() in ("1", "true")
-            if not in_book and pv_horizon_enabled:
-                try:
-                    hv_plies = int(os.environ.get("PV_HORIZON_PLIES", "10"))
-                    hv_depth = int(os.environ.get("PV_HORIZON_DEPTH", "18"))
-                    pv_horizon_obj = compute_pv_horizon_diff(
-                        self.engine_connector,
-                        board_after_move.fen(),
-                        plies=hv_plies,
-                        depth=hv_depth,
-                    )
-                    if pv_horizon_obj is not None:
-                        after_features["_engine"]["pv_horizon_diff"] = (
-                            pv_horizon_obj.model_dump()
-                        )
-                except Exception as e_hv:
-                    logger.warning(
-                        "pv_horizon_diff failed depth=%s: %s", main_move_obj.depth, e_hv
-                    )
         (
             main_move_obj.capturedByWhite,
             main_move_obj.capturedByBlack,
@@ -742,10 +600,8 @@ class EnginePipelineState:
     moves_list: list[Move]
     analyzed_rows: list[AnalyzedMoveData]
     move_events: list[MoveEvent]
-    episodes: list[Episode]
     context: GameAnalysisContext
     metadata: GameMetadata
-    ply_to_episode: dict[int, int]
     # Set by GameAnnotationPipeline when the commentary sweep finished.
     llm_done: bool = False
 
@@ -805,23 +661,6 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
     return out
 
 
-def _build_debug_info() -> dict[str, Any]:
-    """Pipeline parameters behind the per-move debug traces."""
-    from app.core.commentary.features.envisioned import max_display_plies
-    from app.core.commentary.phase_classifier import endgame_piece_threshold
-    from app.core.commentary.rules.engine import THRESHOLDS
-
-    return {
-        "rule_thresholds": dict(THRESHOLDS),
-        "envisioned_max_plies": max_display_plies(),
-        "claim_dedup_window_plies": int(
-            os.environ.get("CLAIM_DEDUP_WINDOW_PLIES", "6")
-        ),
-        "endgame_piece_threshold": endgame_piece_threshold(),
-        "better_alternative_gap_cp": THRESHOLDS.get("better_alternative_gap"),
-    }
-
-
 def _build_feature_series(analyzed_rows: list[AnalyzedMoveData]) -> FeatureSeries:
     """Aligned per-ply arrays of the charted Guid features (White-POV cp)."""
     plies: list[int] = []
@@ -844,26 +683,6 @@ class _MoveComment:
 
     comment: str | None = None
     comments_by_level: dict[str, str] = field(default_factory=dict)
-    named_motifs: list[str] = field(default_factory=list)
-    primary_motif_label: str | None = None
-
-
-def _extract_llm_rag_refs(analyzed_move: Move) -> list[RagRef]:
-    """RAG references the LLM attached under ``hiddenFeatures._llm.rag_refs``."""
-    refs: list[RagRef] = []
-    hidden = analyzed_move.hiddenFeatures or {}
-    llm = hidden.get("_llm") if isinstance(hidden, dict) else None
-    raw_refs = llm.get("rag_refs") if isinstance(llm, dict) else None
-    if not isinstance(raw_refs, list):
-        return refs
-    for item in raw_refs:
-        if not isinstance(item, dict):
-            continue
-        try:
-            refs.append(RagRef.model_validate(item))
-        except Exception:
-            continue
-    return refs
 
 
 def _opening_comment(analyzed_move: Move) -> str | None:
@@ -885,12 +704,6 @@ def _apply_llm_comment(mc: _MoveComment, analyzed_move: Move) -> None:
     levels = llm.get("comments")
     if isinstance(levels, dict):
         mc.comments_by_level = {str(k): str(v) for k, v in levels.items() if v}
-    named = llm.get("named_motifs")
-    if isinstance(named, list):
-        mc.named_motifs = [str(x) for x in named if x]
-    primary = llm.get("primary_motif_label")
-    if primary:
-        mc.primary_motif_label = str(primary)
 
 
 def _facts_floor_comment(move_event: MoveEvent | None) -> str | None:
@@ -1124,25 +937,6 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
     moves_list = state.moves_list
     analyzed_rows = state.analyzed_rows
     move_events = state.move_events
-    episodes = state.episodes
-    context = state.context
-    ply_to_episode = state.ply_to_episode
-
-    episode_summaries: list[EpisodeSummary] = []
-    for ep in episodes:
-        start_mn = (ep.start_ply + 1) // 2
-        end_mn = (ep.end_ply + 1) // 2
-        episode_summaries.append(
-            EpisodeSummary(
-                episode_index=ep.episode_index,
-                title=ep.title,
-                start_move=start_mn,
-                end_move=end_mn,
-                narrative=ep.narrative_summary,
-                dominant_theme=ep.dominant_theme,
-                motif_trajectory=ep.motif_trajectory,
-            )
-        )
 
     game_moves: list[GameMove] = []
     for idx, row in enumerate(analyzed_rows):
@@ -1161,12 +955,9 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         mover_is_white = move_obj.depth % 2 == 1
         _side_ok = side_sel == "both" or (side_sel == "white") == mover_is_white
 
-        rag_refs = _extract_llm_rag_refs(analyzed_move)
         mc = _resolve_move_comment(row, analyzed_move, me, key_moment, side_ok=_side_ok)
         comment = mc.comment
         comments_by_level = mc.comments_by_level
-        named_motifs = mc.named_motifs
-        primary_motif_label = mc.primary_motif_label
 
         variations = _build_variations(game, idx, pvs)
 
@@ -1177,20 +968,10 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         except Exception:
             san_main = move_obj.move
 
-        ep_idx = ply_to_episode.get(move_obj.depth)
-
-        pv_motif_summary: list[str] = []
-        if me and me.pv_motifs:
-            from app.core.commentary.features.pv_motif_scan import (
-                collect_pv_motif_summary,
-            )
-
-            pv_motif_summary = collect_pv_motif_summary(me.pv_motifs)
-
         # Guid Expert Module outputs: which features ground this comment
-        # (chart highlights) and the diff tables behind them.
+        # (chart highlights).
         facts = me.comment_facts if (me and _side_ok) else None
-        feature_refs, feature_diff_out = _build_feature_refs(facts, comment)
+        feature_refs, _ = _build_feature_refs(facts, comment)
         resolved_tokens, resolved_by_level = _resolve_comment_tokens(
             comment, comments_by_level, me
         )
@@ -1216,28 +997,8 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 comment=comment,
                 classification=key_moment,
                 move_quality=me.move_quality.value if me else None,
-                event_type=me.event_type.value if me else None,
-                tactical_motifs=[m.value for m in (me.tactical_motifs if me else [])],
-                strategic_motifs=[m.value for m in (me.strategic_motifs if me else [])],
-                move_category=me.move_category.value
-                if me and me.move_category
-                else None,
-                plan_comparison=me.plan_comparison.model_dump()
-                if me and me.plan_comparison
-                else None,
-                is_critical=bool(me.is_critical if me else False),
-                is_key_moment=bool(
-                    me and (me.key_moment_type or me.teaching_moment) and _side_ok
-                ),
-                episode_index=ep_idx,
-                named_motifs=named_motifs,
-                primary_motif_label=primary_motif_label,
-                rag_refs=rag_refs,
-                opponent_threats=[t.value for t in (me.opponent_threats if me else [])],
-                pv_motif_summary=pv_motif_summary,
-                motif_trajectory=me.motif_trajectory if me else None,
+                is_key_moment=bool(me and me.key_moment_type and _side_ok),
                 feature_refs=feature_refs,
-                feature_diff=feature_diff_out,
                 resolved_tokens=resolved_tokens,
                 comments=comments_by_level,
                 resolved_tokens_by_level=resolved_by_level,
@@ -1249,10 +1010,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
     return GameJson(
         metadata=state.metadata,
         moves=game_moves,
-        episodes=episode_summaries,
-        game_narrative=context.game_narrative,
         feature_series=_build_feature_series(analyzed_rows),
-        debug_info=_build_debug_info(),
         commentary_complete=state.llm_done,
         analysis_info=AnalysisInfo(
             engine="Stockfish",
@@ -1270,7 +1028,7 @@ async def run_engine_analysis_to_json(
     *,
     metadata_id: str | None = None,
 ) -> tuple[GameJson, EnginePipelineState]:
-    """Passes 1–3: engine analysis, event extraction, episode segmentation. Heuristic comments only."""
+    """Passes 1–3: engine analysis + event extraction. Heuristic comments only."""
     PGNReader.validate_single_game(pgn_string)
     pgn_reader = PGNReader()
     game = pgn_reader.read_game_from_string(pgn_string)
@@ -1382,13 +1140,6 @@ async def run_engine_analysis_to_json(
                 if analyzed_move.hiddenFeatures
                 else {}
             )
-        _pv_horizon: PvHorizonDiff | None = None
-        try:
-            _raw_hv = (_eng or {}).get("pv_horizon_diff")
-            if isinstance(_raw_hv, dict):
-                _pv_horizon = PvHorizonDiff.model_validate(_raw_hv)
-        except Exception:
-            _pv_horizon = None
         analyzed_rows.append(
             AnalyzedMoveData(
                 index=idx,
@@ -1406,7 +1157,6 @@ async def run_engine_analysis_to_json(
                 analyzed_move=analyzed_move,
                 eval_at_depth=dict(_eng.get("eval_at_depth") or {}),
                 pv1_change_count=int(_eng.get("pv1_change_count", 0)),
-                pv_horizon_diff=_pv_horizon,
             )
         )
         previous_move_obj = analyzed_move
@@ -1416,7 +1166,7 @@ async def run_engine_analysis_to_json(
 
     attach_opening_comments(analyzed_rows, eco_book)
 
-    await progress_callback(92.0, "Extracting events and episodes...")
+    await progress_callback(92.0, "Extracting move events...")
     extractor = ChessEventExtractor(
         eco_book=eco_book,
         key_moment_detector=retriever.key_moment_detector,
@@ -1479,21 +1229,6 @@ async def run_engine_analysis_to_json(
             facts = facts.model_copy(update={"claims": kept, "muted_claims": muted})
             move_events[mi] = me.model_copy(update={"comment_facts": facts})
 
-    from app.core.commentary.features.motif_trajectory import (
-        compute_episode_trajectories,
-        compute_move_trajectories,
-    )
-
-    compute_move_trajectories(move_events)
-    segmenter = EpisodeSegmenter()
-    episodes = segmenter.segment(move_events)
-    compute_episode_trajectories(episodes)
-
-    ply_to_episode: dict[int, int] = {}
-    for ep in episodes:
-        for me in ep.move_events:
-            ply_to_episode[me.ply] = ep.episode_index
-
     opening_name = meta_opening_name
     opening_eco_ctx = meta_opening_eco
     for me in move_events:
@@ -1511,7 +1246,6 @@ async def run_engine_analysis_to_json(
             "blackElo": headers.blackElo,
         },
         move_events=move_events,
-        episodes=episodes,
         critical_moments=[e for e in move_events if e.is_critical],
         opening_name=opening_name,
         opening_eco=opening_eco_ctx,
@@ -1524,10 +1258,8 @@ async def run_engine_analysis_to_json(
         moves_list=moves_list,
         analyzed_rows=analyzed_rows,
         move_events=move_events,
-        episodes=episodes,
         context=context,
         metadata=metadata,
-        ply_to_episode=ply_to_episode,
     )
     return assemble_game_json(state), state
 

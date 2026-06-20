@@ -139,47 +139,6 @@ class PlyMotifScan(BaseModel):
     strategic_motifs: list[StrategicMotif] = Field(default_factory=list)
 
 
-class MoveRationale(BaseModel):
-    """Symbolic intermediate for LLM: why the move matters (no raw feature dump)."""
-
-    eval_change_cp: int = 0
-    immediate_effect: str = ""
-    future_effect: str = ""
-    motif: str | None = None
-    counterfactual: str | None = None
-    played_plan: str | None = None
-    best_plan: str | None = None
-    risk: str | None = None
-    stakes: str | None = None
-    glossary_phrasings: dict[str, str] = Field(default_factory=dict)
-    primary_motif_label: str = ""
-    narrative_template: str = ""
-    coach_scratchpad: dict[str, str] = Field(default_factory=dict)
-
-
-class FutureLineDelta(BaseModel):
-    """Played PV vs best PV after N plies (engine); populated for critical moves at LLM time."""
-
-    played_leaf_eval_cp: int | None = None
-    best_leaf_eval_cp: int | None = None
-    eval_gap_cp: int | None = None  # best_leaf - played_leaf (White POV)
-    feature_deltas: dict[str, float] = Field(default_factory=dict)
-    played_targets: list[str] = Field(default_factory=list)
-    best_targets: list[str] = Field(default_factory=list)
-    played_line_san: list[str] = Field(default_factory=list)
-    best_line_san: list[str] = Field(default_factory=list)
-
-
-class PvHorizonDiff(BaseModel):
-    """Root vs leaf hidden features along engine PV1 (current position horizon)."""
-
-    plies: int
-    pv_san: list[str] = Field(default_factory=list)
-    leaf_eval_cp: int | None = None
-    scalar_deltas: dict[str, float] = Field(default_factory=dict)
-    list_deltas: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
-
-
 class MoveEvent(BaseModel):
     """Rich per-move event descriptor produced by the feature extraction layer."""
 
@@ -197,58 +156,21 @@ class MoveEvent(BaseModel):
     event_type: MoveEventType
     tactical_motifs: list[TacticalMotif] = Field(default_factory=list)
     strategic_motifs: list[StrategicMotif] = Field(default_factory=list)
-    plan_comparison: PlanComparison | None = None
     move_category: MoveCategory | None = None
     is_critical: bool = False
     best_move_san: str | None = None
     best_move_uci: str | None = None
     best_move_eval_cp: int | None = None
-    pv_lines: list[dict[str, Any]] = Field(default_factory=list)
     material_balance: dict[str, Any] | None = None
-    king_safety: dict[str, Any] | None = None
     pawn_structure_type: str | None = None
-    score_trend: list[int] = Field(default_factory=list)
     opening_name: str | None = None
     opening_eco: str | None = None
     key_moment_type: str | None = None
     brief_commentary: bool = False
-    teaching_moment: bool = False
     # When back-to-back key moments are suppressed, points to prior ply for stub text
     commentary_stub_ref_ply: int | None = None
-    # PV from fen_after (engine), first plies as SAN — used by Tantivy BM25 RAG
-    pv_san: list[str] | None = None
-    # Future-line comparison (played vs best continuation); set in GameAnnotationPipeline for critical moves
-    future_line: FutureLineDelta | None = None
-    # Root vs PV-leaf feature deltas along engine PV1 (engine pass, out-of-book positions)
-    pv_horizon_diff: PvHorizonDiff | None = None
-    # max(eval@depth) - min(eval@depth) across depths 8/12/16 on after-move position
-    eval_instability_cp: int | None = None
-    # Motifs detected along engine PV1 (future plies)
-    pv_motifs: list[PlyMotifScan] = Field(default_factory=list)
-    # Tactical threats available to the opponent from fen_after
-    opponent_threats: list[TacticalMotif] = Field(default_factory=list)
-    # Sustained motif pattern label when a motif persists >=3 consecutive plies
-    motif_trajectory: str | None = None
     # Guid Expert Module output: the move's inviolable comment facts
     comment_facts: CommentFacts | None = None
-
-
-class Episode(BaseModel):
-    """A contiguous group of moves forming a strategic/narrative unit."""
-
-    episode_index: int
-    title: str
-    start_ply: int
-    end_ply: int
-    move_events: list[MoveEvent] = Field(default_factory=list)
-    eval_start_cp: int | None = None
-    eval_end_cp: int | None = None
-    eval_trend: list[int] = Field(default_factory=list)
-    dominant_theme: str = ""
-    tactical_motifs_in_episode: list[TacticalMotif] = Field(default_factory=list)
-    phase: str = ""
-    narrative_summary: str | None = None
-    motif_trajectory: str | None = None
 
 
 class GameAnalysisContext(BaseModel):
@@ -256,11 +178,9 @@ class GameAnalysisContext(BaseModel):
 
     metadata: dict[str, Any] = Field(default_factory=dict)
     move_events: list[MoveEvent] = Field(default_factory=list)
-    episodes: list[Episode] = Field(default_factory=list)
     critical_moments: list[MoveEvent] = Field(default_factory=list)
     opening_name: str | None = None
     opening_eco: str | None = None
-    game_narrative: str | None = None
     # Whole-game LLM digest (JSON); injected into per-move prompts before commentary runs
     game_digest: dict[str, Any] = Field(default_factory=dict)
     # Last few one-line hints from prior LLM comments (motifs + archetype) for continuity
@@ -290,4 +210,3 @@ class AnalyzedMoveData(BaseModel):
     pv1_change_count: int = 0
     # Cached from ChessEventExtractor / KeyMomentDetector (single source of truth)
     key_moment_type: str | None = None
-    pv_horizon_diff: PvHorizonDiff | None = None
