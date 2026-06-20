@@ -133,49 +133,6 @@ def test_ply_propagates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
     assert line["ply"] == 15
 
 
-def test_append_postcheck_writes_second_line(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("LOG_LLM_TO_FILE", "1")
-    gid = "game-postcheck-test"
-    gtok = llm_call_log.set_game_context(gid)
-    mtok = llm_call_log.set_move_context(ply=7, pass_label="key_moment")
-    try:
-        seq = llm_call_log.log_call(
-            pass_name="composer_single",
-            system="s",
-            user="u",
-            response='{"named_motifs":[],"text":"x","better_alternative":"","rag_idea_used":"","rag_applied":true}',
-            model="m",
-            effort="low",
-            schema_name="chess_commentary_composer",
-            token_usage=3,
-            elapsed_ms=2.0,
-            ok=True,
-        )
-        assert seq == 1
-        llm_call_log.append_postcheck(
-            ref_seq=seq,
-            payload={"rag_applied": False, "rag_idea_used": "", "named_motifs": []},
-        )
-    finally:
-        llm_call_log.reset_move_context(mtok)
-        llm_call_log.reset_game_context(gtok)
-
-    lines = (
-        (tmp_path / "logs" / "llm" / f"{gid}.jsonl")
-        .read_text(encoding="utf-8")
-        .strip()
-        .splitlines()
-    )
-    assert len(lines) == 2
-    row = json.loads(lines[1])
-    assert row["pass_name"] == "composer_postcheck"
-    assert row["ref_seq"] == 1
-    assert row["postcheck"]["rag_applied"] is False
-
-
 def test_file_isolation_per_cwd(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

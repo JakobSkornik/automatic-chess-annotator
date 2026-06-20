@@ -13,7 +13,7 @@ import os
 
 import chess
 
-from app.core.commentary.openings.eco_book import ECOBook, OpeningInfo
+from app.core.commentary.openings.eco_book import ECOBook
 
 
 def endgame_piece_threshold() -> int:
@@ -37,9 +37,6 @@ class PhaseClassifier:
 
     def __init__(self, eco_book: ECOBook | None = None) -> None:
         self._eco = eco_book or ECOBook()
-
-    def book_match(self, uci_prefix: list[str]) -> tuple[OpeningInfo | None, int]:
-        return self._eco.match(uci_prefix)
 
     def in_book(self, uci_prefix: list[str]) -> bool:
         """True while the ECO book covers every ply played so far."""

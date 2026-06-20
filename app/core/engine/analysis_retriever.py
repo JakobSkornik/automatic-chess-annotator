@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import chess
@@ -36,7 +36,6 @@ from app.models.chess_events import (
 )
 from app.models.GameJson import (
     AnalysisInfo,
-    FeatureRef,
     FeatureSeries,
     GameJson,
     GameMetadata,
@@ -52,7 +51,6 @@ ANALYSIS_STAGES = [4, 8, 16]
 DEFAULT_ANALYSIS_DEPTH = ANALYSIS_STAGES[-1]
 DEFAULT_PV_COUNT = 3
 MATE_SCORE = 1000000
-FEATURE_DIFF_MAX_ENTRIES = 10
 logger = logging.getLogger(__name__)
 
 
@@ -606,11 +604,6 @@ class EnginePipelineState:
     llm_done: bool = False
 
 
-# Audience levels for comment renderings (kept in sync with phases/composer.py)
-COMMENT_LEVELS = ("expert", "intermediate", "beginner")
-DEFAULT_COMMENT_LEVEL = "intermediate"
-
-
 def _facts_to_json(facts: Any) -> dict[str, Any]:
     """Trimmed CommentFacts for the structured comment renderer in the UI."""
 
@@ -679,10 +672,9 @@ def _build_feature_series(analyzed_rows: list[AnalyzedMoveData]) -> FeatureSerie
 
 @dataclass
 class _MoveComment:
-    """A move's resolved comment, its per-audience-level texts, and its motifs."""
+    """A move's resolved comment."""
 
     comment: str | None = None
-    comments_by_level: dict[str, str] = field(default_factory=dict)
 
 
 def _opening_comment(analyzed_move: Move) -> str | None:
@@ -701,9 +693,6 @@ def _apply_llm_comment(mc: _MoveComment, analyzed_move: Move) -> None:
         return
     if llm.get("comment"):
         mc.comment = str(llm["comment"])
-    levels = llm.get("comments")
-    if isinstance(levels, dict):
-        mc.comments_by_level = {str(k): str(v) for k, v in levels.items() if v}
 
 
 def _facts_floor_comment(move_event: MoveEvent | None) -> str | None:
@@ -762,10 +751,6 @@ def _resolve_move_comment(
         _apply_llm_comment(mc, analyzed_move)
     if side_ok and not mc.comment:
         mc.comment = _fallback_comment(move_event, key_moment)
-    if mc.comment and not mc.comments_by_level:
-        mc.comments_by_level = dict.fromkeys(COMMENT_LEVELS, mc.comment)
-    if mc.comments_by_level:
-        mc.comment = mc.comments_by_level.get(DEFAULT_COMMENT_LEVEL) or mc.comment
     return mc
 
 
@@ -875,60 +860,21 @@ def _build_move_debug(
     }
 
 
-def _build_feature_refs(
-    facts: Any, comment: str | None
-) -> tuple[list[FeatureRef], dict[str, Any] | None]:
-    """Chart-highlight feature refs (and the diff tables) grounding this comment."""
-    if facts is None:
-        return [], None
-    delta_by_name: dict[str, int] = {}
-    if facts.feature_diff:
-        for fd in list(facts.feature_diff.positive) + list(facts.feature_diff.negative):
-            delta_by_name[fd.name] = fd.delta_cp
-    feature_refs = [
-        FeatureRef(name=name, delta_cp=int(delta_by_name.get(name, 0)))
-        for name in facts.feature_refs()
-    ]
-    feature_diff_out: dict[str, Any] | None = None
-    if comment and facts.feature_diff:
-        feature_diff_out = {
-            "positive": [
-                fd.model_dump()
-                for fd in facts.feature_diff.positive[:FEATURE_DIFF_MAX_ENTRIES]
-            ],
-            "negative": [
-                fd.model_dump()
-                for fd in facts.feature_diff.negative[:FEATURE_DIFF_MAX_ENTRIES]
-            ],
-        }
-    return feature_refs, feature_diff_out
-
-
 def _resolve_comment_tokens(
     comment: str | None,
-    comments_by_level: dict[str, str],
     move_event: MoveEvent | None,
-) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-    """Resolve interactive tokens for the comment and each per-audience-level text."""
+) -> list[dict[str, Any]]:
+    """Resolve interactive tokens for the comment."""
     if not (comment and move_event):
-        return [], {}
+        return []
     try:
         from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
 
-        tokens = resolve_tokens_for_comment(
+        return resolve_tokens_for_comment(
             comment, move_event.fen_before, move_event.fen_after
         )
-        by_text: dict[str, list[dict[str, Any]]] = {comment: tokens}
-        by_level: dict[str, list[dict[str, Any]]] = {}
-        for level, text in comments_by_level.items():
-            if text not in by_text:
-                by_text[text] = resolve_tokens_for_comment(
-                    text, move_event.fen_before, move_event.fen_after
-                )
-            by_level[level] = by_text[text]
-        return tokens, by_level
     except Exception:
-        return [], {}
+        return []
 
 
 def assemble_game_json(state: EnginePipelineState) -> GameJson:
@@ -957,7 +903,6 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
 
         mc = _resolve_move_comment(row, analyzed_move, me, key_moment, side_ok=_side_ok)
         comment = mc.comment
-        comments_by_level = mc.comments_by_level
 
         variations = _build_variations(game, idx, pvs)
 
@@ -968,13 +913,8 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
         except Exception:
             san_main = move_obj.move
 
-        # Guid Expert Module outputs: which features ground this comment
-        # (chart highlights).
         facts = me.comment_facts if (me and _side_ok) else None
-        feature_refs, _ = _build_feature_refs(facts, comment)
-        resolved_tokens, resolved_by_level = _resolve_comment_tokens(
-            comment, comments_by_level, me
-        )
+        resolved_tokens = _resolve_comment_tokens(comment, me)
         comment_facts_out = (
             _facts_to_json(facts) if (comment and facts is not None) else None
         )
@@ -996,12 +936,8 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 variations=variations,
                 comment=comment,
                 classification=key_moment,
-                move_quality=me.move_quality.value if me else None,
                 is_key_moment=bool(me and me.key_moment_type and _side_ok),
-                feature_refs=feature_refs,
                 resolved_tokens=resolved_tokens,
-                comments=comments_by_level,
-                resolved_tokens_by_level=resolved_by_level,
                 comment_facts=comment_facts_out,
                 debug=debug_out,
             )

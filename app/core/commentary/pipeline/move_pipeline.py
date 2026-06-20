@@ -34,10 +34,8 @@ class MoveCommentaryContext:
     composer_pass_label: str | None = None
     # Reverse-order generation: what the game already "knows" about its future
     future_context: str | None = None
-    # Audience level the comments are generated at (job parameter)
+    # Audience level the comment is generated at (job parameter)
     commentary_level: str = "intermediate"
-    # Rendered text keyed by that level ({level: text})
-    level_texts: dict[str, str] = field(default_factory=dict)
 
 
 class MoveStage(Protocol):
@@ -90,12 +88,10 @@ class FactsComposeStage:
             level=ctx.commentary_level,
         )
         text, forbidden_hits = scrub_forbidden(str(result.get("text") or ""))
-        lvl = str(result.get("level") or ctx.commentary_level)
-        ctx.level_texts = {lvl: text}
         ctx.final_text = text
         ctx.llm_debug.update(
             {
-                "facts_renderings": {lvl: result.get("rendering")},
+                "facts_renderings": {ctx.commentary_level: result.get("rendering")},
                 "facts_contract_ok": result.get("contract_ok"),
                 "forbidden_phrase_hits": len(forbidden_hits),
                 "claims": [c.text for c in facts.claims],

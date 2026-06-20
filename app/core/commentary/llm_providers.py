@@ -161,16 +161,6 @@ class LlmProvider(Protocol):
 
     def is_configured(self) -> bool: ...
 
-    async def text_call(
-        self,
-        system: str,
-        user: str,
-        *,
-        model: str,
-        effort: str,
-        max_output_tokens: int | None = None,
-    ) -> tuple[str, int]: ...
-
     async def json_schema_call(
         self,
         system: str,
@@ -194,38 +184,6 @@ class OpenAIProvider:
 
     def is_configured(self) -> bool:
         return bool(os.environ.get("OPENAI_API_KEY", "").strip())
-
-    async def text_call(
-        self,
-        system: str,
-        user: str,
-        *,
-        model: str,
-        effort: str,
-        max_output_tokens: int | None = None,
-    ) -> tuple[str, int]:
-        user = _strip_sentinel_for_openai(user)
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "input": [
-                {"role": "system", "content": [{"type": "input_text", "text": system}]},
-                {"role": "user", "content": [{"type": "input_text", "text": user}]},
-            ],
-        }
-        if _openai_model_uses_reasoning_api(model):
-            kwargs["reasoning"] = {"effort": effort or "low"}
-        if max_output_tokens is not None:
-            kwargs["max_output_tokens"] = max_output_tokens
-        response = await self._client.responses.create(**kwargs)
-        text = ""
-        if hasattr(response, "output_text") and response.output_text:
-            text = response.output_text
-        elif hasattr(response, "output") and response.output:
-            try:
-                text = response.output[0].content[0].text
-            except Exception:
-                text = ""
-        return text, _usage_total_openai(response)
 
     async def json_schema_call(
         self,
@@ -301,30 +259,6 @@ class AnthropicProvider:
                 {"type": "text", "text": dynamic.strip()},
             ]
         return user
-
-    async def text_call(
-        self,
-        system: str,
-        user: str,
-        *,
-        model: str,
-        effort: str,
-        max_output_tokens: int | None = None,
-    ) -> tuple[str, int]:
-        max_tok = max_output_tokens if max_output_tokens is not None else 4096
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "max_tokens": max_tok,
-            "system": system,
-            "messages": [{"role": "user", "content": self._user_content_blocks(user)}],
-        }
-        msg = await self._client.messages.create(**kwargs)
-        parts: list[str] = []
-        for block in getattr(msg, "content", []) or []:
-            btype = getattr(block, "type", None)
-            if btype == "text":
-                parts.append(getattr(block, "text", "") or "")
-        return "".join(parts).strip(), _usage_total_anthropic(msg)
 
     async def json_schema_call(
         self,
@@ -426,19 +360,6 @@ class CursorProvider:
             return "", usage
         text = getattr(result, "result", None) or ""
         return str(text).strip(), usage
-
-    async def text_call(
-        self,
-        system: str,
-        user: str,
-        *,
-        model: str,
-        effort: str,
-        max_output_tokens: int | None = None,
-    ) -> tuple[str, int]:
-        user = _strip_sentinel_for_openai(user)
-        prompt = f"{system.strip()}\n\n{user.strip()}".strip()
-        return await self._prompt(prompt, model=model)
 
     async def json_schema_call(
         self,

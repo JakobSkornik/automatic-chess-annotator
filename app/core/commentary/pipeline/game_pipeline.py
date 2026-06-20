@@ -229,8 +229,6 @@ class GameAnnotationPipeline:
                                         )
                                         _slot = r.analyzed_move.hiddenFeatures["_llm"]
                                         _slot["comment"] = text
-                                        if mctx.level_texts:
-                                            _slot["comments"] = dict(mctx.level_texts)
                                         if llm_debug.get("facts_renderings"):
                                             _slot["facts_renderings"] = llm_debug[
                                                 "facts_renderings"

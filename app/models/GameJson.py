@@ -23,13 +23,6 @@ class Variation(BaseModel):
     key_factors: list[dict[str, Any]] = []
 
 
-class FeatureRef(BaseModel):
-    """A positional feature this move's comment is grounded in (chart highlight)."""
-
-    name: str
-    delta_cp: int = 0
-
-
 class GameMove(BaseModel):
     mn: int
     color: str
@@ -41,26 +34,16 @@ class GameMove(BaseModel):
     variations: list[Variation] = []
     comment: str | None = None
     classification: str | None = None
-    move_quality: str | None = None  # PGN export NAGs (pgn_writer)
-    # True only for moves that received a real key-moment/teaching commentary
-    # pass (drives the move-list dot) — not the template-floor facts that every
+    # True only for moves that received a real key-moment commentary pass
+    # (drives the move-list dot) — not the template-floor facts that every
     # analyzed move carries.
     is_key_moment: bool = False
-    # Guid Expert Module outputs
-    feature_refs: list[FeatureRef] = []
     resolved_tokens: list[dict[str, Any]] = []
-    # Per-audience-level renderings of the same facts; `comment` mirrors the
-    # intermediate level for backward compatibility.
-    comments: dict[
-        str, str
-    ] = {}  # {"expert": ..., "intermediate": ..., "beginner": ...}
-    resolved_tokens_by_level: dict[str, list[dict[str, Any]]] = {}
     # Trimmed CommentFacts for the structured comment renderer (assessment /
     # reasons / better alternative, each with its own line).
     comment_facts: dict[str, Any] | None = None
     # Academic reasoning trace: how this move's conclusions were reached
-    # (engine numbers, key moment, envisioned-line stats, fired/muted rules,
-    # per-level rendering outcomes).
+    # (engine numbers, key moment, envisioned-line stats, fired/muted rules).
     debug: dict[str, Any] | None = None
 
 
@@ -69,12 +52,10 @@ class GameMetadata(BaseModel):
     white: str
     black: str
     result: str
-    date: str | None = None  # PGN Date header (pgn_writer)
     eventId: str | None = None
     whiteElo: int | None = None
     blackElo: int | None = None
     opening: str | None = None
-    opening_eco: str | None = None  # PGN ECO header (pgn_writer)
     # Pre-analysis options the commentary was generated with
     commentary_level: str | None = None  # beginner | intermediate | expert
     comment_side: str | None = None  # white | black | both

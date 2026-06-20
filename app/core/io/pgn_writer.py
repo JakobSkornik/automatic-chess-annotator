@@ -27,11 +27,6 @@ _CLASSIFICATION_NAGS = {
     "brilliant": 3,
     "great_move": 1,
 }
-_QUALITY_NAGS = {
-    "blunder": 4,
-    "mistake": 2,
-    "inaccuracy": 6,
-}
 
 
 def _flatten_tokens(text: str) -> tuple[str, list[list[str]]]:
@@ -128,19 +123,7 @@ def _alt_eval(
 def _nag_for_move(move: GameMove) -> int | None:
     if move.classification in _CLASSIFICATION_NAGS:
         return _CLASSIFICATION_NAGS[move.classification]
-    if move.move_quality in _QUALITY_NAGS:
-        return _QUALITY_NAGS[move.move_quality]
     return None
-
-
-def _feature_note(move: GameMove, max_items: int = 4) -> str:
-    if not move.feature_refs:
-        return ""
-    parts = []
-    for fr in move.feature_refs[:max_items]:
-        sign = "+" if fr.delta_cp >= 0 else ""
-        parts.append(f"{fr.name} {sign}{fr.delta_cp}")
-    return "Features: " + ", ".join(parts)
 
 
 def _try_add_line(
@@ -191,34 +174,17 @@ def _try_add_line(
             )
 
 
-def _comment_for_language(move: GameMove, language: str | None) -> str | None:
-    if language and move.comments:
-        text = move.comments.get(language)
-        if text:
-            return text
-    return move.comment
-
-
-def game_json_to_pgn(
-    gj: GameJson,
-    *,
-    include_features: bool = False,
-    language: str | None = "expert",
-) -> str:
+def game_json_to_pgn(gj: GameJson) -> str:
     game = chess.pgn.Game()
     md = gj.metadata
     game.headers["Event"] = md.eventId or "?"
     game.headers["White"] = md.white or "?"
     game.headers["Black"] = md.black or "?"
     game.headers["Result"] = md.result or "*"
-    if md.date:
-        game.headers["Date"] = md.date
     if md.whiteElo:
         game.headers["WhiteElo"] = str(md.whiteElo)
     if md.blackElo:
         game.headers["BlackElo"] = str(md.blackElo)
-    if md.opening_eco:
-        game.headers["ECO"] = md.opening_eco
     if md.opening:
         game.headers["Opening"] = md.opening
     game.headers["Annotator"] = "automatic-chess-annotator"
@@ -277,7 +243,7 @@ def game_json_to_pgn(
         if ev:
             comment_bits.append(ev)
 
-        move_comment = _comment_for_language(move, language)
+        move_comment = move.comment
         if move_comment:
             plain, pv_lines = _flatten_tokens(move_comment)
             if plain:
@@ -303,11 +269,6 @@ def game_json_to_pgn(
                         sans,
                         *_alt_eval(move, sans[0], default_depth),
                     )
-
-        if include_features and move_comment:
-            fn = _feature_note(move)
-            if fn:
-                comment_bits.append(fn)
 
         if comment_bits:
             node.comment = " ".join(comment_bits).strip()
