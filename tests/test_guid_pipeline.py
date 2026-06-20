@@ -554,3 +554,117 @@ def test_template_comparable_alternative_not_a_miss():
     text = render_facts_template(comparable)
     assert "A comparable alternative was Rd8" in text
     assert "missed" not in text
+
+
+def test_comment_archetype_mapping():
+    from app.core.commentary.phases.composer import comment_archetype
+
+    assert comment_archetype("brilliant") == "brilliant_sacrifice"
+    assert comment_archetype("best_move") == "engine_choice"
+    assert comment_archetype("great_move") == "engine_choice"
+    assert comment_archetype("inaccuracy") == "inaccuracy_missed"
+    assert comment_archetype("missed_opportunity") == "inaccuracy_missed"
+    assert comment_archetype("blunder") == "neutral"
+    assert comment_archetype(None) == "neutral"
+
+
+def test_template_archetype_openers():
+    facts = _facts()
+    assert "is the engine's top choice" in render_facts_template(
+        facts, archetype="engine_choice"
+    )
+    assert "is a brilliant sacrifice" in render_facts_template(
+        facts, archetype="brilliant_sacrifice"
+    )
+    # neutral / default keeps the plain verdict head
+    assert "top choice" not in render_facts_template(facts)
+
+
+def test_annotation_symbol_mapping():
+    from app.core.engine.analysis_retriever import _annotation_symbol
+
+    assert _annotation_symbol("brilliant") == "!!"
+    assert _annotation_symbol("best_move") == "!"
+    assert _annotation_symbol("great_move") == "!"
+    assert _annotation_symbol("inaccuracy") == "?!"
+    assert _annotation_symbol("mistake") == "?"
+    assert _annotation_symbol("blunder") == "??"
+    assert _annotation_symbol("critical_decision") is None
+    assert _annotation_symbol(None) is None
+
+
+def _me(**over):
+    from app.models.chess_events import MoveEvent, MoveEventType, MoveQuality
+
+    base = {
+        "move_index": 10,
+        "ply": 21,
+        "san": "Nd5",
+        "uci": "f4d5",
+        "fen_before": START,
+        "fen_after": START,
+        "phase": "mid",
+        "move_quality": MoveQuality.BEST,
+        "event_type": MoveEventType.BEST_MOVE_PLAYED,
+        "best_move_uci": "f4d5",
+    }
+    base.update(over)
+    return MoveEvent(**base)
+
+
+def _facts_with_material(series, mover="White", eval_cp=200, eval_before=50, claims=()):
+    return _facts().model_copy(
+        update={
+            "mover": mover,
+            "eval_cp": eval_cp,
+            "eval_before_cp": eval_before,
+            "claims": list(claims),
+            "display_line": EnvisionedLine(
+                start_fen=START,
+                line_san=["Nd5", "exd5", "Qxd5"],
+                line_uci=["f4d5", "e6d5", "d1d5"],
+                fens=[START, START, START],
+                leaf_fen=START,
+                feature_series={"MATERIAL_BALANCE": series},
+            ),
+        }
+    )
+
+
+def test_promote_brilliant_sacrifice():
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(key_moment_type=None)
+    # White gives up ~3 pawns along the line yet keeps a +2 eval -> brilliant
+    facts = _facts_with_material([0, -300, -300], eval_cp=200, eval_before=50)
+    assert _promote_key_moment(me, facts, facts.claims) == "brilliant"
+
+
+def test_promote_best_move_requires_claim():
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(key_moment_type=None)
+    # best move, no material dip, with a fired claim -> best_move
+    with_claim = _facts_with_material([10, 10, 10], claims=_facts().claims)
+    assert _promote_key_moment(me, with_claim, with_claim.claims) == "best_move"
+    # same move with NO claims (e.g. decided position) -> not promoted
+    no_claim = _facts_with_material([10, 10, 10], claims=())
+    assert _promote_key_moment(me, no_claim, []) is None
+
+
+def test_promote_leaves_non_best_untouched():
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(best_move_uci="a2a3", uci="h2h3", key_moment_type="inaccuracy")
+    facts = _facts_with_material([0, -300, -300])
+    # not the engine's move -> never brilliant/best, keeps its existing type
+    assert _promote_key_moment(me, facts, facts.claims) == "inaccuracy"
+
+
+def test_promote_losing_sacrifice_is_not_brilliant():
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(key_moment_type=None)
+    # material given up AND the mover ends up worse -> just a bad move, not brilliant
+    facts = _facts_with_material([0, -300, -300], eval_cp=-250, eval_before=50)
+    assert _promote_key_moment(me, facts, facts.claims) != "brilliant"

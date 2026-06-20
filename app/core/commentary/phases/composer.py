@@ -130,6 +130,30 @@ def _missed_noun(claims: list[Claim]) -> str:
     return "potential" if claims and claims[0].realization == "envisioned" else "chance"
 
 
+def comment_archetype(key_moment_type: str | None) -> str:
+    """Map the key-moment classification to a commentary framing.
+
+    engine_choice      the played move IS the engine's pick — confirm, don't fault
+    brilliant_sacrifice a material sacrifice that holds/improves the eval
+    inaccuracy_missed  an imprecise move — lead with the opportunity passed up
+    neutral            the default verdict + claims shape
+    """
+    kmt = key_moment_type or ""
+    if kmt == "brilliant":
+        return "brilliant_sacrifice"
+    if kmt in ("best_move", "great_move"):
+        return "engine_choice"
+    if kmt in ("inaccuracy", "missed_opportunity"):
+        return "inaccuracy_missed"
+    return "neutral"
+
+
+_ARCHETYPE_OPENER: dict[str, str] = {
+    "engine_choice": "is the engine's top choice,",
+    "brilliant_sacrifice": "is a brilliant sacrifice,",
+}
+
+
 # ---------------------------------------------------------------------------
 # Deterministic template (expert fallback / no-LLM rendering)
 # ---------------------------------------------------------------------------
@@ -141,7 +165,7 @@ def _claim_text(c: Claim, *, prefer_state: bool) -> str:
     return c.text
 
 
-def render_facts_template(facts: CommentFacts) -> str:
+def render_facts_template(facts: CommentFacts, *, archetype: str | None = None) -> str:
     """Guid-format rendering with deterministic phrasing rotation (per ply),
     so the pattern does not repeat verbatim move after move."""
     variant = facts.ply % 2
@@ -149,15 +173,18 @@ def render_facts_template(facts: CommentFacts) -> str:
     ev = eval_token(facts)
     move = _move_label(facts)
 
+    opener = _ARCHETYPE_OPENER.get(archetype or "")
+    base = f"{move} {opener} {facts.verdict}" if opener else f"{move} {facts.verdict}"
+
     parts: list[str] = []
     if variant == 0:
-        head = f"{move} {facts.verdict}"
+        head = base
         if pv:
             head += f" after {pv}"
         if ev:
             head += f" {ev}"
     else:
-        head = f"{move} {facts.verdict}"
+        head = base
         if pv:
             head += f": {pv}"
         if ev:
@@ -312,6 +339,26 @@ AUDIENCE_BLOCKS: dict[str, str] = {
     ),
 }
 
+ARCHETYPE_RULES: dict[str, str] = {
+    "engine_choice": (
+        "ARCHETYPE — engine's choice: the played move IS the engine's preferred "
+        "move. Open by confirming it as the top/optimal choice and say what it "
+        "leads to (from the verdict and claims). There is NO better alternative; "
+        "do not invent a flaw, a downside, or a 'but'.\n"
+    ),
+    "brilliant_sacrifice": (
+        "ARCHETYPE — brilliant sacrifice: the move gives up material yet the "
+        "evaluation holds or improves. Lead by naming it as a sacrifice and "
+        "explain why it works using the claims and verdict. You MAY mark it '!!'. "
+        "Do not call it dubious.\n"
+    ),
+    "inaccuracy_missed": (
+        "ARCHETYPE — inaccuracy / missed opportunity: open with what the move "
+        "passed up. Lead with the better alternative framed as the opportunity "
+        "missed (per the BETTER ALTERNATIVE rules), then the eval consequence.\n"
+    ),
+}
+
 ENRICHMENT_RULES = (
     "ENRICHMENT block (optional): intermediate and beginner MAY weave in at most "
     "one element (opening background or what this leads to later in the game) as "
@@ -326,6 +373,7 @@ def build_facts_user_prompt(
     facts: CommentFacts,
     *,
     enrichment: dict[str, Any] | None = None,
+    archetype: str | None = None,
 ) -> str:
     def _claim_line(c: Claim) -> str:
         line = f"- {c.text}"
@@ -352,6 +400,8 @@ def build_facts_user_prompt(
         f"EVAL token (copy verbatim): {eval_token(facts)}",
         f"PV token (copy verbatim): {pv_token(facts)}",
     ]
+    if archetype and archetype != "neutral":
+        blocks.append(f"Move character: {archetype} (see ARCHETYPE rule)")
     if facts.refutation_san:
         blocks.append(f"REFUTATION (must be named): {facts.refutation_san}")
     blocks += [
@@ -495,6 +545,7 @@ async def compose_facts_comment(
     effort: str,
     enrichment: dict[str, Any] | None = None,
     level: str = DEFAULT_LEVEL,
+    key_moment_type: str | None = None,
 ) -> dict[str, Any]:
     """Render the facts at the audience level chosen at submit time.
 
@@ -502,7 +553,8 @@ async def compose_facts_comment(
     an LLM text violating the fact contract falls back to the template.
     """
     lvl = level if level in LEVELS else DEFAULT_LEVEL
-    template = render_facts_template(facts)
+    archetype = comment_archetype(key_moment_type)
+    template = render_facts_template(facts, archetype=archetype)
 
     configured = True
     try:
@@ -520,7 +572,9 @@ async def compose_facts_comment(
     system = (
         GUID_COMPOSER_SYSTEM + "\n" + AUDIENCE_BLOCKS[lvl] + "\n" + ENRICHMENT_RULES
     )
-    user = build_facts_user_prompt(facts, enrichment=enrichment)
+    if archetype in ARCHETYPE_RULES:
+        system += "\n" + ARCHETYPE_RULES[archetype]
+    user = build_facts_user_prompt(facts, enrichment=enrichment, archetype=archetype)
     candidate = ""
     try:
         raw = await service._llm_call_json_schema(
