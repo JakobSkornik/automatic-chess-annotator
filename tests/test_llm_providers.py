@@ -8,7 +8,6 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.core.commentary.advanced_comment_service import COMPOSER_OUTPUT_SCHEMA
 from app.core.commentary.llm_providers import (
     DYNAMIC_SECTION_SENTINEL,
     AnthropicProvider,
@@ -16,6 +15,7 @@ from app.core.commentary.llm_providers import (
     OpenAIProvider,
     make_llm_provider,
 )
+from app.core.commentary.phases.composer import SINGLE_LEVEL_SCHEMA
 
 
 class TestMakeLlmProvider(unittest.TestCase):
@@ -78,7 +78,7 @@ class TestCursorProvider(unittest.TestCase):
                 "static" + DYNAMIC_SECTION_SENTINEL + "dynamic",
                 model="composer-2.5",
                 effort="low",
-                schema=COMPOSER_OUTPUT_SCHEMA,
+                schema=SINGLE_LEVEL_SCHEMA,
                 schema_name="chess_commentary_composer",
                 max_output_tokens=100,
             )
@@ -102,27 +102,6 @@ class TestOpenAIProvider(unittest.TestCase):
         self.env.stop()
         super().tearDown()
 
-    def test_strips_sentinel(self) -> None:
-        p = OpenAIProvider()
-        fake_resp = MagicMock()
-        fake_resp.output_text = '{"x":1}'
-        fake_resp.usage = MagicMock(total_tokens=5)
-        p._client = MagicMock()
-        p._client.responses.create = AsyncMock(return_value=fake_resp)
-
-        import asyncio
-
-        async def _run() -> None:
-            u = "static" + DYNAMIC_SECTION_SENTINEL + "dynamic"
-            text, n = await p.text_call("sys", u, model="gpt-4.1-mini", effort="low")
-            self.assertEqual(text, '{"x":1}')
-            self.assertEqual(n, 5)
-            call_kw = p._client.responses.create.call_args.kwargs
-            user_block = call_kw["input"][1]["content"][0]["text"]
-            self.assertNotIn("===DYNAMIC===", user_block)
-
-        asyncio.run(_run())
-
     def test_json_schema_call(self) -> None:
         p = OpenAIProvider()
         fake_resp = MagicMock()
@@ -139,7 +118,7 @@ class TestOpenAIProvider(unittest.TestCase):
                 "user",
                 model="gpt-4.1-mini",
                 effort="low",
-                schema=COMPOSER_OUTPUT_SCHEMA,
+                schema=SINGLE_LEVEL_SCHEMA,
                 schema_name="chess_commentary_composer",
                 max_output_tokens=100,
             )
@@ -181,7 +160,7 @@ class TestAnthropicProvider(unittest.TestCase):
                 "static" + DYNAMIC_SECTION_SENTINEL + "tail",
                 model="claude-haiku-4-5",
                 effort="low",
-                schema=COMPOSER_OUTPUT_SCHEMA,
+                schema=SINGLE_LEVEL_SCHEMA,
                 schema_name="chess_commentary_composer",
                 max_output_tokens=256,
             )

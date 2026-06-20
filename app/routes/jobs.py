@@ -138,11 +138,7 @@ async def export_all_games():
 
 
 @router.get("/{job_id}/pgn")
-async def get_job_pgn(
-    job_id: str,
-    include_features: bool = Query(False),
-    language: str = Query("expert", pattern="^(expert|intermediate|beginner)$"),
-):
+async def get_job_pgn(job_id: str):
     """Annotated PGN export: comments, [%eval] tags, NAGs and variations."""
     from fastapi.responses import PlainTextResponse
 
@@ -161,7 +157,7 @@ async def get_job_pgn(
     try:
         with open(file_path, encoding="utf-8") as f:
             gj = GameJson.model_validate(json.load(f))
-        pgn = game_json_to_pgn(gj, include_features=include_features, language=language)
+        pgn = game_json_to_pgn(gj)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PGN export failed: {e}") from e
     return PlainTextResponse(

@@ -590,17 +590,6 @@ def vector_to_plain(vec: FeatureVector) -> dict[str, dict[str, int | None]]:
     return {name: {"v": fv.value_cp, "flag": fv.flag} for name, fv in vec.items()}
 
 
-def vector_from_plain(data: dict[str, dict[str, int | None]]) -> FeatureVector:
-    out: FeatureVector = {}
-    for name, d in (data or {}).items():
-        if not isinstance(d, dict):
-            continue
-        out[name] = FeatureValue(
-            name=name, value_cp=int(d.get("v") or 0), flag=d.get("flag")
-        )
-    return out
-
-
 def compute_feature_vector_fen(fen: str) -> FeatureVector:
     return compute_feature_vector(chess.Board(fen))
 

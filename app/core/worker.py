@@ -5,7 +5,6 @@ import traceback
 
 from app.core.commentary.advanced_comment_service import AdvancedCommentService
 from app.core.commentary.pipeline.game_pipeline import GameAnnotationPipeline
-from app.core.commentary.tantivy_positional_retriever import get_default_retriever
 from app.core.engine.analysis_retriever import (
     assemble_game_json,
     run_engine_analysis_to_json,
@@ -90,10 +89,7 @@ async def analysis_worker():
                     .strip()
                     .lower()
                 )
-                advanced_commenter = AdvancedCommentService(
-                    rag_retriever=get_default_retriever(),
-                    provider_key=prov,
-                )
+                advanced_commenter = AdvancedCommentService(provider_key=prov)
 
                 async def commentary_callback(
                     msg_type: str, payload: dict, job_id=job_id

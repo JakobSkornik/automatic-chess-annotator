@@ -7,9 +7,7 @@ from typing import Any
 import chess
 import chess.pgn
 
-from app.core.commentary.features.delta_to_motif import infer_motifs_from_deltas
 from app.core.commentary.features.move_category import classify_move_event
-from app.core.commentary.features.opponent_threats import detect_opponent_threats
 from app.core.commentary.features.plan_extractor import build_plan_comparison
 from app.core.commentary.features.pv_motif_scan import (
     merge_pv_motifs_into_strategic,
@@ -86,7 +84,6 @@ class ChessEventExtractor:
         mainline = list(game.mainline_moves())
         events: list[MoveEvent] = []
         prev_move_obj: Move | None = previous_engine_move
-        score_history: list[int] = []
 
         for i, row in enumerate(analyzed_rows):
             idx = row.index
@@ -183,19 +180,6 @@ class ChessEventExtractor:
             )
             pawn_type = ps.get("centerType") if isinstance(ps, dict) else None
             mat = hf.get("material") if isinstance(hf.get("material"), dict) else None
-            wk = (
-                (hf.get("white") or {}).get("kingExposure")
-                if isinstance(hf.get("white"), dict)
-                else None
-            )
-            bk = (
-                (hf.get("black") or {}).get("kingExposure")
-                if isinstance(hf.get("black"), dict)
-                else None
-            )
-            king_safety = None
-            if isinstance(wk, (int, float)) and isinstance(bk, (int, float)):
-                king_safety = {"white": float(wk), "black": float(bk)}
 
             seq_uci: list[str] = []
             bb2 = game.board()
@@ -289,27 +273,6 @@ class ChessEventExtractor:
             motifs = merge_pv_motifs_into_tactical(motifs, pv_motif_scans)
             strat_motifs = merge_pv_motifs_into_strategic(strat_motifs, pv_motif_scans)
 
-            # Map PV horizon feature deltas to strategic motifs
-            if row.pv_horizon_diff is not None:
-                mover_color = board_before.turn
-                delta_motifs = infer_motifs_from_deltas(
-                    row.pv_horizon_diff,
-                    mover=mover_color,
-                    phase=phase,
-                )
-                seen_strat = set(strat_motifs)
-                for dm in delta_motifs:
-                    if dm not in seen_strat:
-                        seen_strat.add(dm)
-                        strat_motifs.append(dm)
-
-            # Opponent threat scan from fen_after
-            opp_threats = detect_opponent_threats(
-                board_after,
-                best_pv_ucis=pv_ucis or None,
-                played_matches_best=played_is_best,
-            )
-
             event_type = MoveEventType.QUIET
             if km == "missed_opportunity":
                 event_type = MoveEventType.MISSED_TACTIC
@@ -330,10 +293,6 @@ class ChessEventExtractor:
             ) or km in ("blunder", "mistake", "inaccuracy"):
                 event_type = MoveEventType.EVAL_SWING
             self._prev_pawn_center = pawn_type or self._prev_pawn_center
-
-            if cur_score is not None:
-                score_history.append(int(cur_score))
-            trend = score_history[-self.SCORE_TREND_WINDOW :]
 
             is_critical = (not in_book_ply) and bool(
                 km
@@ -363,27 +322,17 @@ class ChessEventExtractor:
                 event_type=event_type,
                 tactical_motifs=motifs,
                 strategic_motifs=strat_motifs,
-                plan_comparison=plan_cmp,
                 is_critical=is_critical,
                 best_move_san=best_san,
                 best_move_uci=best_uci,
                 best_move_eval_cp=int(best_eval) if best_eval is not None else None,
-                pv_lines=pv_lines,
                 material_balance=mat,
-                king_safety=king_safety,
                 pawn_structure_type=str(pawn_type) if pawn_type else None,
-                score_trend=[int(x) for x in trend],
                 opening_name=opening_name,
                 opening_eco=opening_eco,
                 key_moment_type=km,
-                eval_instability_cp=eval_instability_cp,
-                pv_horizon_diff=row.pv_horizon_diff,
-                pv_motifs=pv_motif_scans,
-                opponent_threats=opp_threats,
             )
-            ev = ev.model_copy(
-                update={"move_category": classify_move_event(ev, future_delta=None)}
-            )
+            ev = ev.model_copy(update={"move_category": classify_move_event(ev)})
             events.append(ev)
             prev_move_obj = analyzed
 

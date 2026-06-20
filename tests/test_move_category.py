@@ -6,7 +6,6 @@ import chess
 
 from app.core.commentary.features.move_category import classify_move_event
 from app.models.chess_events import (
-    FutureLineDelta,
     MoveCategory,
     MoveEvent,
     MoveEventType,
@@ -42,10 +41,12 @@ class TestMoveCategory(unittest.TestCase):
         me = _minimal_event(tactical_motifs=[TacticalMotif.FORK])
         self.assertEqual(classify_move_event(me), MoveCategory.TACTICAL)
 
-    def test_future_line_forcing(self) -> None:
-        me = _minimal_event()
-        fl = FutureLineDelta(eval_gap_cp=120)
-        self.assertEqual(classify_move_event(me, fl), MoveCategory.FORCING)
+    def test_capture_is_forcing(self) -> None:
+        b0 = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+        me = _minimal_event(
+            san="exd5", uci="e4d5", fen_before=b0.fen(), phase="opening"
+        )
+        self.assertEqual(classify_move_event(me), MoveCategory.FORCING)
 
 
 if __name__ == "__main__":

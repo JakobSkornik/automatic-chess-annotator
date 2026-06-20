@@ -7,13 +7,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from app.core.commentary.llm_policy import resolve_model
-from app.core.commentary.rag_retriever import RAGResult, build_rag_query
 from app.models.chess_events import (
     AnalyzedMoveData,
-    Episode,
     GameAnalysisContext,
     MoveEvent,
-    MoveRationale,
 )
 
 if TYPE_CHECKING:
@@ -25,26 +22,20 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MoveCommentaryContext:
     move_event: MoveEvent
-    episode: Episode | None
     game_context: GameAnalysisContext
     analyzed_row: AnalyzedMoveData | None
     service: AdvancedCommentService
     composer_effort: str
     key_moment_type: str | None
     skip: bool = False
-    rag_results: list[RAGResult] = field(default_factory=list)
-    rationale: MoveRationale | None = None
-    user_prompt: str | None = None
     llm_debug: dict[str, Any] = field(default_factory=dict)
     final_text: str = ""
     fallback_used: str | None = None
     composer_pass_label: str | None = None
     # Reverse-order generation: what the game already "knows" about its future
     future_context: str | None = None
-    # Audience level the comments are generated at (job parameter)
+    # Audience level the comment is generated at (job parameter)
     commentary_level: str = "intermediate"
-    # Rendered text keyed by that level ({level: text})
-    level_texts: dict[str, str] = field(default_factory=dict)
 
 
 class MoveStage(Protocol):
@@ -57,39 +48,8 @@ class KeyMomentGateStage:
     name = "key_moment_gate"
 
     async def run(self, ctx: MoveCommentaryContext) -> None:
-        if not (ctx.move_event.key_moment_type or ctx.move_event.teaching_moment):
+        if not ctx.move_event.key_moment_type:
             ctx.skip = True
-
-
-class RagRetrievalStage:
-    name = "rag_retrieval"
-
-    async def run(self, ctx: MoveCommentaryContext) -> None:
-        if ctx.skip:
-            return
-        if ctx.move_event.comment_facts is not None:
-            from app.core.commentary.phases.composer import llm_rendering_enabled
-
-            if not llm_rendering_enabled():
-                # Enrichment (and thus RAG) only feeds the LLM renderings.
-                return
-        from app.core.commentary.advanced_comment_service import (
-            _detail_level_for_key_moment,
-            compute_rag_top_k,
-        )
-
-        query = build_rag_query(ctx.move_event, ctx.episode)
-        detail_pre = _detail_level_for_key_moment(ctx.move_event)
-        if detail_pre == "book":
-            ctx.rag_results = []
-            return
-        rag_top_k = compute_rag_top_k(detail_pre, query.phase)
-        ctx.rag_results = await ctx.service._rag.retrieve(query, top_k=rag_top_k)
-        logger.info(
-            "RAG query: phase=%s fen=%.80s",
-            query.phase,
-            (query.fen or "")[:80],
-        )
 
 
 class FactsComposeStage:
@@ -108,23 +68,15 @@ class FactsComposeStage:
 
         enrichment: dict[str, Any] = {}
         gc = ctx.game_context
-        if gc.opening_name or gc.opening_eco:
+        # Opening scene-setting is only relevant while still in the opening;
+        # passing it on every key moment makes the model restate the opening
+        # line in every comment (Guid feedback).
+        if (gc.opening_name or gc.opening_eco) and ctx.move_event.phase == "opening":
             enrichment["opening"] = (
                 f"{gc.opening_name or ''} ({gc.opening_eco or ''})".strip()
             )
-        if ctx.episode is not None and (
-            ctx.episode.dominant_theme or ctx.episode.title
-        ):
-            enrichment["episode_theme"] = (
-                ctx.episode.dominant_theme or ctx.episode.title
-            )
         if ctx.future_context:
             enrichment["what_happens_later"] = ctx.future_context
-        if ctx.rag_results:
-            top = ctx.rag_results[0]
-            snippet = str(getattr(top, "text", "") or "")[:300]
-            if snippet:
-                enrichment["master_note"] = snippet
 
         pl = ctx.composer_pass_label or (
             "key_moment" if ctx.move_event.key_moment_type else "teaching"
@@ -139,74 +91,15 @@ class FactsComposeStage:
             level=ctx.commentary_level,
         )
         text, forbidden_hits = scrub_forbidden(str(result.get("text") or ""))
-        lvl = str(result.get("level") or ctx.commentary_level)
-        ctx.level_texts = {lvl: text}
         ctx.final_text = text
         ctx.llm_debug.update(
             {
-                "facts_renderings": {lvl: result.get("rendering")},
+                "facts_renderings": {ctx.commentary_level: result.get("rendering")},
                 "facts_contract_ok": result.get("contract_ok"),
                 "forbidden_phrase_hits": len(forbidden_hits),
                 "claims": [c.text for c in facts.claims],
                 "feature_refs": facts.feature_refs(),
             }
-        )
-
-
-class RationaleStage:
-    name = "rationale"
-
-    async def run(self, ctx: MoveCommentaryContext) -> None:
-        if ctx.skip or ctx.final_text:
-            return
-        if ctx.move_event.comment_facts is not None:
-            return
-        from app.core.commentary.move_rationale import build_rationale
-
-        ctx.rationale = build_rationale(ctx.move_event, ctx.move_event.future_line)
-
-
-class PromptBuildStage:
-    name = "prompt_build"
-
-    async def run(self, ctx: MoveCommentaryContext) -> None:
-        if ctx.skip or ctx.final_text or ctx.move_event.comment_facts is not None:
-            return
-        user_prompt, rag_results, dbg = await ctx.service.build_event_llm_input(
-            ctx.move_event,
-            ctx.episode,
-            ctx.game_context,
-            analyzed_row=ctx.analyzed_row,
-            composer_effort=ctx.composer_effort,
-            rag_results=ctx.rag_results,
-            rationale_override=ctx.rationale,
-        )
-        ctx.user_prompt = user_prompt
-        ctx.rag_results = rag_results
-        ctx.llm_debug = dbg
-
-
-class LlmCallStage:
-    name = "llm_call"
-
-    async def run(self, ctx: MoveCommentaryContext) -> None:
-        if ctx.skip or ctx.final_text or ctx.move_event.comment_facts is not None:
-            return
-        pl = ctx.composer_pass_label or (
-            "key_moment" if ctx.move_event.key_moment_type else "teaching"
-        )
-        model = resolve_model(ctx.service.provider_name, "composer", pass_label=pl)
-        ctx.final_text = await ctx.service.analyze_and_compose_raw_text(
-            ctx.user_prompt or "",
-            model=model,
-            effort=ctx.composer_effort,
-            key_moment_type=ctx.key_moment_type or ctx.move_event.key_moment_type,
-            move_category=ctx.move_event.move_category.value
-            if ctx.move_event.move_category
-            else None,
-            llm_debug=ctx.llm_debug,
-            fen_before=ctx.move_event.fen_before,
-            fen_after=ctx.move_event.fen_after,
         )
 
 
@@ -218,18 +111,10 @@ class FallbackStage:
             return
         if (ctx.final_text or "").strip():
             return
-        from app.core.engine.analysis_retriever import _heuristic_llm_fallback_comment
-
         ctx.llm_debug["composer_empty"] = True
-        fb = _heuristic_llm_fallback_comment(ctx.move_event)
-        if fb:
-            ctx.final_text = fb
-            ctx.fallback_used = "heuristic"
-            ctx.llm_debug["fallback_used"] = "heuristic"
-        else:
-            ctx.final_text = "Commentary temporarily unavailable."
-            ctx.fallback_used = "unavailable"
-            ctx.llm_debug["fallback_used"] = "unavailable"
+        ctx.final_text = "Commentary temporarily unavailable."
+        ctx.fallback_used = "unavailable"
+        ctx.llm_debug["fallback_used"] = "unavailable"
 
 
 class FinalizeStage:
@@ -247,11 +132,7 @@ class MoveCommentaryPipeline:
             list[MoveStage],
             [
                 KeyMomentGateStage(),
-                RagRetrievalStage(),
                 FactsComposeStage(),
-                RationaleStage(),
-                PromptBuildStage(),
-                LlmCallStage(),
                 FallbackStage(),
                 FinalizeStage(),
             ],

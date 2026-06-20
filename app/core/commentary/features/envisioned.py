@@ -20,7 +20,6 @@ import chess
 
 from app.core.commentary.features.guid_features import (
     FeatureVector,
-    compute_feature_vector,
 )
 from app.models.comment_facts import EnvisionedLine, FeatureDelta, FeatureDiff
 
@@ -162,18 +161,6 @@ def build_envisioned_line(
         start_quiescent=start_q,
         leaf_quiescent=leaf_q,
     )
-
-
-def feature_diff(
-    start_fen: str,
-    leaf_fen: str,
-    *,
-    min_abs_cp: int = 1,
-) -> FeatureDiff:
-    """Guid diff vector between two positions, sorted by |delta| descending."""
-    start_vec = compute_feature_vector(chess.Board(start_fen))
-    leaf_vec = compute_feature_vector(chess.Board(leaf_fen))
-    return diff_vectors(start_vec, leaf_vec, min_abs_cp=min_abs_cp)
 
 
 def diff_vectors(

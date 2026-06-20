@@ -5,7 +5,6 @@ from __future__ import annotations
 import chess
 
 from app.models.chess_events import (
-    FutureLineDelta,
     MoveCategory,
     MoveEvent,
     MoveQuality,
@@ -13,12 +12,9 @@ from app.models.chess_events import (
 )
 
 
-def classify_move_event(
-    me: MoveEvent,
-    future_delta: FutureLineDelta | None = None,
-) -> MoveCategory:
+def classify_move_event(me: MoveEvent) -> MoveCategory:
     """
-    Deterministic category from motifs, eval, opening, PV/future-line hints.
+    Deterministic category from motifs, eval, opening, and PV hints.
     Order follows mentor plan: tactical / quality / defensive / book / prophylactic / forcing / positional.
     """
     if me.tactical_motifs:
@@ -58,9 +54,5 @@ def classify_move_event(
             return MoveCategory.FORCING
     except Exception:
         pass
-
-    if future_delta is not None and future_delta.eval_gap_cp is not None:
-        if abs(future_delta.eval_gap_cp) >= 60:
-            return MoveCategory.FORCING
 
     return MoveCategory.POSITIONAL

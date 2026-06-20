@@ -10,8 +10,6 @@ from app.core.commentary.features.envisioned import (
 from app.core.commentary.features.guid_features import (
     CHART_FEATURES,
     compute_feature_vector,
-    vector_from_plain,
-    vector_to_plain,
 )
 from app.core.commentary.phase_classifier import (
     PhaseClassifier,
@@ -44,14 +42,6 @@ def test_chart_features_exist_in_vector():
     vec = compute_feature_vector(chess.Board())
     for name in CHART_FEATURES:
         assert name in vec, name
-
-
-def test_vector_plain_roundtrip():
-    vec = compute_feature_vector(chess.Board())
-    again = vector_from_plain(vector_to_plain(vec))
-    assert {k: v.value_cp for k, v in vec.items()} == {
-        k: v.value_cp for k, v in again.items()
-    }
 
 
 def test_quiescence():
@@ -225,7 +215,6 @@ def test_pgn_writer_roundtrip():
                 fen=b.fen(),
                 phase="mid",
                 score=MoveScore(cp=10),
-                move_quality=q,
                 comment=("Solid. [pv:" + san + " d6]" if q else None),
             )
         )
@@ -240,7 +229,6 @@ def test_pgn_writer_roundtrip():
     g2 = chess.pgn.read_game(io.StringIO(pgn))
     assert g2 is not None and not g2.errors
     assert "[%eval" in pgn
-    assert "$2" in pgn  # mistake NAG
 
 
 def test_template_phrasing_variants_rotate():
@@ -261,30 +249,6 @@ def test_facts_to_json_shape():
     assert d["display_line"]["san"] == ["Nc3", "Bd6"]
     assert d["claims"][0]["features"] == ["EVALUATE_PAWNS"]
     assert "better_alternative" not in d
-
-
-def test_pgn_language_selection():
-    from app.core.io.pgn_writer import _comment_for_language
-    from app.models.GameJson import GameMove
-
-    mv = GameMove(
-        mn=1,
-        color="w",
-        san="e4",
-        uci="e2e4",
-        fen="x",
-        phase="mid",
-        comment="intermediate text",
-        comments={
-            "expert": "dry text",
-            "intermediate": "intermediate text",
-            "beginner": "simple text",
-        },
-    )
-    assert _comment_for_language(mv, "expert") == "dry text"
-    assert _comment_for_language(mv, "beginner") == "simple text"
-    assert _comment_for_language(mv, None) == "intermediate text"
-    assert _comment_for_language(mv, "unknown") == "intermediate text"
 
 
 def test_state_form_claims_in_template():

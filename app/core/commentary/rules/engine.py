@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import chess
 
@@ -36,6 +37,7 @@ from app.models.comment_facts import (
     BestAlternative,
     Claim,
     CommentFacts,
+    EnvisionedLine,
     FeatureDelta,
     FeatureDiff,
 )
@@ -59,7 +61,6 @@ THRESHOLDS: dict[str, int] = {
     "bad_bishop": 25,  # min |delta| before a bad-bishop change is worth stating
     "connected_rooks": 10,
     "min_claim_cp": 8,  # ignore fired rules weaker than this
-    "better_alternative_gap": 50,  # cp loss before the best move is shown
 }
 
 SIDES = ("WHITE", "BLACK")
@@ -973,6 +974,11 @@ def verdict_for_eval(eval_cp: int | None, eval_mate: int | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 _MATE_SCORE = 1000000
+# Beyond this eval the game is decided, so positional claims are dropped as noise.
+DECISIVE_CLAIM_CP = 500
+MATERIAL_LOSS_CP = 100  # mover-POV material drop that earns a "loses material" claim
+EVAL_CONCESSION_CP = 60  # weight for the "engine preferred X" fallback claim
+MAX_ALTERNATIVE_MERITS = 2
 
 
 def _decode_eval(cp: int | None) -> tuple:
@@ -1017,6 +1023,157 @@ def _line_feature_series(
     return series
 
 
+@dataclass
+class _FactsCtx:
+    """Shared per-move inputs for the CommentFacts builder helpers."""
+
+    me: MoveEvent
+    row: AnalyzedMoveData
+    board_before: chess.Board
+    mover: str
+    phase_raw: str
+    depth: int
+    start_vec: dict
+
+
+def _played_line_claims(
+    ctx: _FactsCtx,
+) -> tuple[EnvisionedLine, FeatureDiff, dict, list[Claim]]:
+    """Envisioned played line + its feature diff, leaf vector, and ordered claims."""
+    me = ctx.me
+    eng = (ctx.row.hidden_features or {}).get("_engine") or {}
+    after_pv = list(eng.get("after_pv_uci") or [])
+    played_line = envisioned_for_played_move(
+        me.fen_before,
+        me.uci,
+        after_pv,
+        played_eval_cp=me.eval_after_cp,
+        depth=ctx.depth,
+    )
+    leaf_vec = compute_feature_vector_fen(played_line.leaf_fen)
+    diff = diff_vectors(ctx.start_vec, leaf_vec)
+    claims = run_rules(
+        diff,
+        phase=ctx.phase_raw,
+        mover=ctx.mover.upper(),
+        eval_cp=me.eval_after_cp,
+        start_board=ctx.board_before,
+        leaf_board=chess.Board(played_line.leaf_fen),
+    )
+    return played_line, diff, leaf_vec, order_claims_for_mover(claims, ctx.mover)
+
+
+def _net_material_cp(vec: dict) -> int:
+    fv = vec.get("MATERIAL_BALANCE")
+    return fv.value_cp if fv is not None else 0
+
+
+def _fallback_claim(
+    ctx: _FactsCtx, leaf_vec: dict, refutation_san: str | None
+) -> Claim | None:
+    """One grounded claim (material loss / engine preference) when no rule fired."""
+    me = ctx.me
+    opp = "black" if ctx.mover == "White" else "white"
+    mover_sign = 1 if ctx.mover == "White" else -1
+    mat_delta = mover_sign * (
+        _net_material_cp(leaf_vec) - _net_material_cp(ctx.start_vec)
+    )
+    best_san = me.best_move_san
+    if mat_delta <= -MATERIAL_LOSS_CP:
+        text = f"{ctx.mover} loses material"
+        if best_san:
+            text += f"; {best_san} held the balance"
+        return Claim(
+            rule_id="tactical_material_loss",
+            text=text + ".",
+            beneficiary=opp,
+            delta_cp=abs(mat_delta),
+            features_involved=["MATERIAL_BALANCE"],
+        )
+    if refutation_san is None and best_san:
+        return Claim(
+            rule_id="eval_concession",
+            text=f"the engine preferred {best_san} here.",
+            beneficiary=opp,
+            delta_cp=EVAL_CONCESSION_CP,
+        )
+    return None
+
+
+def _alternative_merits(
+    best_claims: list[Claim], main_claims: list[Claim], mover: str
+) -> list[Claim]:
+    """The alternative's own merits (max 2), never repeating the main block's claims."""
+    main_texts = {c.text for c in main_claims}
+    mover_key = mover.lower()
+    return [
+        c
+        for c in best_claims
+        if c.beneficiary in (mover_key, None) and c.text not in main_texts
+    ][:MAX_ALTERNATIVE_MERITS]
+
+
+def _build_better_alternative(
+    ctx: _FactsCtx, main_claims: list[Claim]
+) -> BestAlternative | None:
+    """The engine's preferred move + its merits, whenever a different move was
+    played — so the better line can always be visualized, regardless of how
+    small the gap is or whether it's the same piece (Guid). Uses the
+    already-computed PVs, so it costs no extra engine search.
+    """
+    me = ctx.me
+    if not (
+        me.best_move_uci
+        and me.best_move_uci != me.uci
+        and me.best_move_eval_cp is not None
+        and me.eval_after_cp is not None
+    ):
+        return None
+
+    best_pv_uci = (
+        [str(m.move) for m in ctx.row.pvs[0] if getattr(m, "move", None)]
+        if ctx.row.pvs and ctx.row.pvs[0]
+        else []
+    )
+    best_cp, best_mate = _decode_eval(me.best_move_eval_cp)
+    best_line = envisioned_for_best_move(
+        me.fen_before, best_pv_uci, best_eval_cp=best_cp, depth=ctx.depth
+    )
+    best_diff = diff_vectors(
+        ctx.start_vec, compute_feature_vector_fen(best_line.leaf_fen)
+    )
+    best_claims = run_rules(
+        best_diff,
+        phase=ctx.phase_raw,
+        mover=ctx.mover.upper(),
+        eval_cp=best_cp,
+        start_board=ctx.board_before,
+        leaf_board=chess.Board(best_line.leaf_fen),
+    )
+    return BestAlternative(
+        san=me.best_move_san or me.best_move_uci,
+        uci=me.best_move_uci,
+        eval_cp=best_cp,
+        verdict=verdict_for_eval(best_cp, best_mate),
+        display_line=best_line,
+        claims=_alternative_merits(best_claims, main_claims, ctx.mover),
+    )
+
+
+def _with_feature_series(line: EnvisionedLine, fen_before: str) -> EnvisionedLine:
+    """Attach the full per-feature progression along the line (for the charts)."""
+    return line.model_copy(
+        update={"feature_series": _line_feature_series(fen_before, line.fens)}
+    )
+
+
+def _refutation_san(played_line: EnvisionedLine, mq: str) -> str | None:
+    """The opponent's punishing reply — only meaningful for a real mistake."""
+    if mq in ("mistake", "blunder") and len(played_line.line_san) >= 2:
+        return played_line.line_san[1]
+    return None
+
+
 def build_comment_facts(
     row: AnalyzedMoveData,
     me: MoveEvent,
@@ -1030,162 +1187,42 @@ def build_comment_facts(
 
     board_before = chess.Board(me.fen_before)
     mover = "White" if board_before.turn == chess.WHITE else "Black"
-
     eval_cp, eval_mate = _decode_eval(me.eval_after_cp)
     eval_before_cp, _before_mate = _decode_eval(me.eval_before_cp)
-
-    eng = (row.hidden_features or {}).get("_engine") or {}
-    after_pv = list(eng.get("after_pv_uci") or [])
-
-    played_line = envisioned_for_played_move(
-        me.fen_before,
-        me.uci,
-        after_pv,
-        played_eval_cp=me.eval_after_cp,
+    ctx = _FactsCtx(
+        me=me,
+        row=row,
+        board_before=board_before,
+        mover=mover,
+        phase_raw=phase_raw,
         depth=depth,
+        start_vec=compute_feature_vector_fen(me.fen_before),
     )
-    leaf_board = chess.Board(played_line.leaf_fen)
-    start_vec = compute_feature_vector_fen(me.fen_before)
-    leaf_vec = compute_feature_vector_fen(played_line.leaf_fen)
-    diff = diff_vectors(start_vec, leaf_vec)
-    claims = run_rules(
-        diff,
-        phase=phase_raw,
-        mover=mover.upper(),
-        eval_cp=me.eval_after_cp,
-        start_board=board_before,
-        leaf_board=leaf_board,
-    )
-    claims = order_claims_for_mover(claims, mover)
-    # For dubious moves, opponent-favoring claims are not trade-offs — they ARE
-    # the explanation of the eval swing.
+
+    played_line, diff, leaf_vec, claims = _played_line_claims(ctx)
     mq = me.move_quality.value if me.move_quality else ""
+    # For dubious moves, opponent-favoring claims are the explanation, not trade-offs.
     concession_mode = (
         "consequence" if mq in ("inaccuracy", "mistake", "blunder") else "tradeoff"
     )
+    refutation_san = _refutation_san(played_line, mq)
 
-    # The opponent's punishing reply (board-level "why it is bad"). Only for
-    # real mistakes — calling a routine recapture a "punishment" reads wrong.
-    refutation_san: str | None = None
-    if mq in ("mistake", "blunder") and len(played_line.line_san) >= 2:
-        refutation_san = played_line.line_san[1]
-
-    # At decisive evals positional claims are noise: a passed pawn does not
-    # matter in mate-in-4. Keep the verdict + refutation only.
-    if eval_mate is not None or (eval_cp is not None and abs(eval_cp) > 500):
-        claims = []
-
-    # Fallback explanation when no positional rule fired — especially on
-    # tactical mistakes the positional rules don't model. Derive ONE grounded
-    # claim from material / the refutation / the engine's preference so the
-    # comment always says WHY, not just the verdict. All facts (material delta,
-    # best-move SAN), so the contract holds.
-    if not claims and mq in ("inaccuracy", "mistake", "blunder"):
-        opp = "black" if mover == "White" else "white"
-        mover_sign = 1 if mover == "White" else -1
-
-        def _net_material(vec) -> int:
-            fv = vec.get("MATERIAL_BALANCE")
-            return fv.value_cp if fv is not None else 0
-
-        mat_delta = mover_sign * (_net_material(leaf_vec) - _net_material(start_vec))
-        best_san = me.best_move_san
-        fb: Claim | None = None
-        if mat_delta <= -100:
-            txt = f"{mover} loses material"
-            if best_san:
-                txt += f"; {best_san} held the balance"
-            fb = Claim(
-                rule_id="tactical_material_loss",
-                text=txt + ".",
-                beneficiary=opp,
-                delta_cp=abs(mat_delta),
-                features_involved=["MATERIAL_BALANCE"],
-            )
-        elif refutation_san is None and best_san:
-            # No material swing and no refutation sentence from the template:
-            # point at the engine's preference so the reasons list is not empty.
-            fb = Claim(
-                rule_id="eval_concession",
-                text=f"the engine preferred {best_san} here.",
-                beneficiary=opp,
-                delta_cp=60,
-            )
-        if fb is not None:
-            claims = [fb]
-
-    # Better alternative (Guid's option 3): only when the played move measurably
-    # loses ground against the engine's preference.
-    better: BestAlternative | None = None
-    if (
-        me.best_move_uci
-        and me.best_move_uci != me.uci
-        and me.best_move_eval_cp is not None
-        and me.eval_after_cp is not None
+    # Decisive evals: positional claims are noise (a passed pawn in mate-in-4).
+    if eval_mate is not None or (
+        eval_cp is not None and abs(eval_cp) > DECISIVE_CLAIM_CP
     ):
-        gap = me.best_move_eval_cp - me.eval_after_cp
-        gap_for_mover = gap if mover == "White" else -gap
-        # A ?/?? move must always show what was better (Guid) — bypass the gap
-        # gate for mistakes/blunders (the decisive-position filter already kept
-        # only the ones that are real mistakes).
-        force_alt = mq in ("mistake", "blunder")
-        if force_alt or gap_for_mover >= THRESHOLDS["better_alternative_gap"]:
-            best_pv_uci: list[str] = []
-            if row.pvs and row.pvs[0]:
-                best_pv_uci = [
-                    str(m.move) for m in row.pvs[0] if getattr(m, "move", None)
-                ]
-            best_cp, best_mate = _decode_eval(me.best_move_eval_cp)
-            best_line = envisioned_for_best_move(
-                me.fen_before,
-                best_pv_uci,
-                best_eval_cp=best_cp,
-                depth=depth,
-            )
-            best_leaf_vec = compute_feature_vector_fen(best_line.leaf_fen)
-            best_diff = diff_vectors(start_vec, best_leaf_vec)
-            best_claims = run_rules(
-                best_diff,
-                phase=phase_raw,
-                mover=mover.upper(),
-                eval_cp=best_cp,
-                start_board=board_before,
-                leaf_board=chess.Board(best_line.leaf_fen),
-            )
-            # The alternative is the move the mover SHOULD have played: show
-            # only its merits (max 2) and never repeat the main block's claims.
-            main_texts = {c.text for c in claims}
-            mover_key = mover.lower()
-            best_claims = [
-                c
-                for c in best_claims
-                if c.beneficiary in (mover_key, None) and c.text not in main_texts
-            ][:2]
-            better = BestAlternative(
-                san=me.best_move_san or me.best_move_uci,
-                uci=me.best_move_uci,
-                eval_cp=best_cp,
-                verdict=verdict_for_eval(best_cp, best_mate),
-                display_line=best_line,
-                claims=best_claims,
-            )
+        claims = []
+    if not claims and mq in ("inaccuracy", "mistake", "blunder"):
+        fallback = _fallback_claim(ctx, leaf_vec, refutation_san)
+        if fallback is not None:
+            claims = [fallback]
 
-    # Feature progression along the displayed lines: emit every feature so the
-    # navigator can chart the game-vs-line curve for all of them, not just the
-    # fired-rule ones (the per-point vector is computed in full regardless).
-    played_line = played_line.model_copy(
-        update={"feature_series": _line_feature_series(me.fen_before, played_line.fens)}
-    )
+    better = _build_better_alternative(ctx, claims)
+    played_line = _with_feature_series(played_line, me.fen_before)
     if better is not None and better.display_line is not None:
         better = better.model_copy(
             update={
-                "display_line": better.display_line.model_copy(
-                    update={
-                        "feature_series": _line_feature_series(
-                            me.fen_before, better.display_line.fens
-                        )
-                    }
-                )
+                "display_line": _with_feature_series(better.display_line, me.fen_before)
             }
         )
 
