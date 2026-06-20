@@ -34,6 +34,9 @@ class GameMove(BaseModel):
     variations: list[Variation] = []
     comment: str | None = None
     classification: str | None = None
+    # NAG-style symbol derived from the key-moment classification
+    # (!! brilliant, ! best/great, ?! inaccuracy, ? mistake, ?? blunder).
+    annotation: str | None = None
     # True only for moves that received a real key-moment commentary pass
     # (drives the move-list dot) — not the template-floor facts that every
     # analyzed move carries.

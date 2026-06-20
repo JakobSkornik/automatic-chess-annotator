@@ -173,21 +173,10 @@ class KeyMomentDetector:
                 if opportunity_diff >= 200:
                     results.append("missed_opportunity")
 
-        # -- Brilliant: best move + material sacrifice + engine instability (non-obvious) --
-        if pvs_for_move and pvs_for_move[0]:
-            played_is_best = (
-                pvs_for_move[0][0]
-                and getattr(pvs_for_move[0][0], "move", None) == current_move.move
-            )
-            if played_is_best and pv1_change_count >= 1:
-                material_before = self._get_material_diff(previous_move)
-                material_after = self._get_material_diff(current_move)
-                if material_before is not None and material_after is not None:
-                    mat_change = material_after - material_before
-                    if not is_white_move:
-                        mat_change = -mat_change
-                    if mat_change < -50:  # sacrificed material
-                        results.append("brilliant")
+        # NOTE: "brilliant" (a sacrifice) is detected after CommentFacts exist,
+        # from the material trajectory along the engine PV — a single-ply material
+        # diff misses sacrifices whose loss only registers once the opponent
+        # captures on the next ply. See _promote_key_moment in analysis_retriever.
 
         # -- Great move: best move + significantly better than 2nd best --
         if pvs_for_move and len(pvs_for_move) >= 2:
@@ -352,20 +341,6 @@ class KeyMomentDetector:
         ps = hf.get("pawnStructure")
         if isinstance(ps, dict):
             self._prev_pawn_structure_type = ps.get("centerType")
-
-    @staticmethod
-    def _get_material_diff(move: Move) -> float | None:
-        """Get total material difference from hiddenFeatures."""
-        hf = move.hiddenFeatures
-        if not isinstance(hf, dict):
-            return None
-        material = hf.get("material")
-        if not isinstance(material, dict):
-            return None
-        diff = material.get("diff")
-        if not isinstance(diff, dict):
-            return None
-        return diff.get("total")
 
     @staticmethod
     def _pawn_structure_type(move: Move) -> str | None:

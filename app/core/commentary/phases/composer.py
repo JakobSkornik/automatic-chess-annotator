@@ -106,6 +106,54 @@ def _gerundize(verdict: str) -> str:
     return verdict
 
 
+# Below this mover-POV gap the engine's move is a comparable option, not a miss.
+ALT_MATERIAL_GAP_CP = 50
+
+
+def alt_gap_cp(facts: CommentFacts) -> int | None:
+    """Mover-POV centipawns the alternative gains over the played move."""
+    alt = facts.better_alternative
+    if alt is None or alt.eval_cp is None or facts.eval_cp is None:
+        return None
+    gap = alt.eval_cp - facts.eval_cp  # White-POV
+    return gap if facts.mover == "White" else -gap
+
+
+def _alt_materially_better(facts: CommentFacts) -> bool:
+    gap = alt_gap_cp(facts)
+    return gap is None or gap >= ALT_MATERIAL_GAP_CP
+
+
+def _missed_noun(claims: list[Claim]) -> str:
+    """'chance' if the alternative's gain lands at once, 'potential' if it only
+    develops in the line (judged on the ordered-strongest claim)."""
+    return "potential" if claims and claims[0].realization == "envisioned" else "chance"
+
+
+def comment_archetype(key_moment_type: str | None) -> str:
+    """Map the key-moment classification to a commentary framing.
+
+    engine_choice      the played move IS the engine's pick — confirm, don't fault
+    brilliant_sacrifice a material sacrifice that holds/improves the eval
+    inaccuracy_missed  an imprecise move — lead with the opportunity passed up
+    neutral            the default verdict + claims shape
+    """
+    kmt = key_moment_type or ""
+    if kmt == "brilliant":
+        return "brilliant_sacrifice"
+    if kmt in ("best_move", "great_move"):
+        return "engine_choice"
+    if kmt in ("inaccuracy", "missed_opportunity"):
+        return "inaccuracy_missed"
+    return "neutral"
+
+
+_ARCHETYPE_OPENER: dict[str, str] = {
+    "engine_choice": "is the engine's top choice,",
+    "brilliant_sacrifice": "is a brilliant sacrifice,",
+}
+
+
 # ---------------------------------------------------------------------------
 # Deterministic template (expert fallback / no-LLM rendering)
 # ---------------------------------------------------------------------------
@@ -117,7 +165,7 @@ def _claim_text(c: Claim, *, prefer_state: bool) -> str:
     return c.text
 
 
-def render_facts_template(facts: CommentFacts) -> str:
+def render_facts_template(facts: CommentFacts, *, archetype: str | None = None) -> str:
     """Guid-format rendering with deterministic phrasing rotation (per ply),
     so the pattern does not repeat verbatim move after move."""
     variant = facts.ply % 2
@@ -125,15 +173,18 @@ def render_facts_template(facts: CommentFacts) -> str:
     ev = eval_token(facts)
     move = _move_label(facts)
 
+    opener = _ARCHETYPE_OPENER.get(archetype or "")
+    base = f"{move} {opener} {facts.verdict}" if opener else f"{move} {facts.verdict}"
+
     parts: list[str] = []
     if variant == 0:
-        head = f"{move} {facts.verdict}"
+        head = base
         if pv:
             head += f" after {pv}"
         if ev:
             head += f" {ev}"
     else:
-        head = f"{move} {facts.verdict}"
+        head = base
         if pv:
             head += f": {pv}"
         if ev:
@@ -155,38 +206,59 @@ def render_facts_template(facts: CommentFacts) -> str:
                 " ".join(_claim_text(c, prefer_state=prefer_state) for c in merits)
             )
         if concessions:
-            if facts.concession_mode == "consequence":
-                # Claims start with the side's name, so "Now Black ..." reads
-                # naturally — but use the change-form to avoid "Now ... is now".
-                prefix = "Now " if variant == 0 else "The drawback: "
-                clauses = [c.text.rstrip(".") for c in concessions]
-            else:
-                prefix = "In return, " if variant == 0 else "On the other hand, "
-                clauses = [
-                    _claim_text(c, prefer_state=prefer_state).rstrip(".")
-                    for c in concessions
-                ]
-            # One sentence — a second bare concession would read as a merit.
-            parts.append(prefix + " and ".join(clauses) + ".")
+            # Immediate concessions are stated as fact; concessions that only
+            # develop deeper in the line are framed as a not-yet-certain risk.
+            imm = [c for c in concessions if c.realization != "envisioned"]
+            env = [c for c in concessions if c.realization == "envisioned"]
+            if imm:
+                if facts.concession_mode == "consequence":
+                    # Claims start with the side's name, so "Now Black ..." reads
+                    # naturally — but use the change-form to avoid "Now ... is now".
+                    prefix = "Now " if variant == 0 else "The drawback: "
+                    clauses = [c.text.rstrip(".") for c in imm]
+                else:
+                    prefix = "In return, " if variant == 0 else "On the other hand, "
+                    clauses = [
+                        _claim_text(c, prefer_state=prefer_state).rstrip(".")
+                        for c in imm
+                    ]
+                # One sentence — a second bare concession would read as a merit.
+                parts.append(prefix + " and ".join(clauses) + ".")
+            if env:
+                clauses = [c.text.rstrip(".") for c in env]
+                parts.append("Down the line, " + " and ".join(clauses) + ".")
 
     alt = facts.better_alternative
     if alt is not None:
         alt_pv = _alt_pv_token(alt)
-        if variant == 0:
-            s = f"Better was {alt.san}"
-            if alt.verdict:
-                s += f", which {alt.verdict}"
+        if not _alt_materially_better(facts):
+            # Roughly equal: present it as an option, not a miss.
+            s = f"A comparable alternative was {alt.san}"
             if alt_pv:
                 s += f" after {alt_pv}"
+            s += "."
+            if alt.claims:
+                s += " The point: " + " ".join(c.text for c in alt.claims)
         else:
-            s = f"A better move was {alt.san}"
-            if alt.verdict:
-                s += f", {_gerundize(alt.verdict)}"
-            if alt_pv:
-                s += f" after {alt_pv}"
-        s += "."
-        if alt.claims:
-            s += " " + " ".join(c.text for c in alt.claims)
+            if variant == 0:
+                s = f"Better was {alt.san}"
+                if alt.verdict:
+                    s += f", which {alt.verdict}"
+                if alt_pv:
+                    s += f" after {alt_pv}"
+            else:
+                s = f"A better move was {alt.san}"
+                if alt.verdict:
+                    s += f", {_gerundize(alt.verdict)}"
+                if alt_pv:
+                    s += f" after {alt_pv}"
+            s += "."
+            if alt.claims:
+                # The alternative's merits are what the mover passed up.
+                noun = _missed_noun(alt.claims)
+                s += f" {facts.mover} missed the {noun} here — " + " ".join(
+                    c.text for c in alt.claims
+                )
         parts.append(s)
     return " ".join(p for p in parts if p).strip()
 
@@ -227,10 +299,19 @@ GUID_COMPOSER_SYSTEM = (
     "('in return', 'at the cost of') for sound moves, or as the move's drawbacks "
     "('now the opponent ...') when the concession mode says 'consequence'. NEVER "
     "present a concession as an achievement of the move.\n"
+    "- TIMING: every claim is tagged <immediate> or <in the line>. State "
+    "<immediate> claims as fact. A claim tagged <in the line> is NOT yet true "
+    "after the move — it only develops deeper in the variation, so you MUST hedge "
+    "it ('may lead to', 'risks', 'could leave', 'is set to') and never assert it "
+    "as already achieved.\n"
     "- If REFUTATION is present, the text MUST name that move as what punishes "
     "the played move (it is the board-level reason the move fails).\n"
-    "- If BETTER ALTERNATIVE is present, end with one sentence naming it ('Better "
-    "was {move}...' or a varied equivalent) with its verdict, claims and PV token.\n"
+    "- If BETTER ALTERNATIVE is present, end with one sentence naming it. When its "
+    "Significance is 'materially better', frame its claims as the opportunity the "
+    "mover passed up: 'missed the chance to ...' for <immediate> claims, 'missed "
+    "the potential to ...' for <in the line> claims. When 'roughly equal', present "
+    "it neutrally as a comparable option, never as a miss. Always include its "
+    "verdict and PV token.\n"
     "- One paragraph. No lists, no headers, no engine-worship.\n"
 )
 
@@ -258,6 +339,26 @@ AUDIENCE_BLOCKS: dict[str, str] = {
     ),
 }
 
+ARCHETYPE_RULES: dict[str, str] = {
+    "engine_choice": (
+        "ARCHETYPE — engine's choice: the played move IS the engine's preferred "
+        "move. Open by confirming it as the top/optimal choice and say what it "
+        "leads to (from the verdict and claims). There is NO better alternative; "
+        "do not invent a flaw, a downside, or a 'but'.\n"
+    ),
+    "brilliant_sacrifice": (
+        "ARCHETYPE — brilliant sacrifice: the move gives up material yet the "
+        "evaluation holds or improves. Lead by naming it as a sacrifice and "
+        "explain why it works using the claims and verdict. You MAY mark it '!!'. "
+        "Do not call it dubious.\n"
+    ),
+    "inaccuracy_missed": (
+        "ARCHETYPE — inaccuracy / missed opportunity: open with what the move "
+        "passed up. Lead with the better alternative framed as the opportunity "
+        "missed (per the BETTER ALTERNATIVE rules), then the eval consequence.\n"
+    ),
+}
+
 ENRICHMENT_RULES = (
     "ENRICHMENT block (optional): intermediate and beginner MAY weave in at most "
     "one element (opening background or what this leads to later in the game) as "
@@ -272,6 +373,7 @@ def build_facts_user_prompt(
     facts: CommentFacts,
     *,
     enrichment: dict[str, Any] | None = None,
+    archetype: str | None = None,
 ) -> str:
     def _claim_line(c: Claim) -> str:
         line = f"- {c.text}"
@@ -281,6 +383,7 @@ def build_facts_user_prompt(
             line += f" [{c.flag_note}]"
         if c.features_involved:
             line += f" (features: {', '.join(c.features_involved[:3])})"
+        line += " <in the line>" if c.realization == "envisioned" else " <immediate>"
         return line
 
     merit_lines = [_claim_line(c) for c in facts.claims if not c.is_concession]
@@ -297,6 +400,8 @@ def build_facts_user_prompt(
         f"EVAL token (copy verbatim): {eval_token(facts)}",
         f"PV token (copy verbatim): {pv_token(facts)}",
     ]
+    if archetype and archetype != "neutral":
+        blocks.append(f"Move character: {archetype} (see ARCHETYPE rule)")
     if facts.refutation_san:
         blocks.append(f"REFUTATION (must be named): {facts.refutation_san}")
     blocks += [
@@ -310,14 +415,21 @@ def build_facts_user_prompt(
         ]
     alt = facts.better_alternative
     if alt is not None:
-        alt_claims = [f"- {c.text}" for c in alt.claims] or ["- (none)"]
+        alt_claims = [_claim_line(c) for c in alt.claims] or ["- (none)"]
+        gap = alt_gap_cp(facts)
+        significance = (
+            "roughly equal — present as a comparable option, NOT as a miss"
+            if gap is not None and gap < ALT_MATERIAL_GAP_CP
+            else "materially better — the mover passed up this opportunity"
+        )
         blocks += [
             "",
             "BETTER ALTERNATIVE:",
             f"Move: {alt.san}",
             f"Verdict: {alt.verdict}",
+            f"Significance: {significance}",
             f"PV token (copy verbatim): {_alt_pv_token(alt)}",
-            "Claims:",
+            "Claims (the gains the mover forwent):",
             *alt_claims,
         ]
     if enrichment:
@@ -433,6 +545,7 @@ async def compose_facts_comment(
     effort: str,
     enrichment: dict[str, Any] | None = None,
     level: str = DEFAULT_LEVEL,
+    key_moment_type: str | None = None,
 ) -> dict[str, Any]:
     """Render the facts at the audience level chosen at submit time.
 
@@ -440,7 +553,8 @@ async def compose_facts_comment(
     an LLM text violating the fact contract falls back to the template.
     """
     lvl = level if level in LEVELS else DEFAULT_LEVEL
-    template = render_facts_template(facts)
+    archetype = comment_archetype(key_moment_type)
+    template = render_facts_template(facts, archetype=archetype)
 
     configured = True
     try:
@@ -458,7 +572,9 @@ async def compose_facts_comment(
     system = (
         GUID_COMPOSER_SYSTEM + "\n" + AUDIENCE_BLOCKS[lvl] + "\n" + ENRICHMENT_RULES
     )
-    user = build_facts_user_prompt(facts, enrichment=enrichment)
+    if archetype in ARCHETYPE_RULES:
+        system += "\n" + ARCHETYPE_RULES[archetype]
+    user = build_facts_user_prompt(facts, enrichment=enrichment, archetype=archetype)
     candidate = ""
     try:
         raw = await service._llm_call_json_schema(

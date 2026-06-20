@@ -67,6 +67,11 @@ class Claim(BaseModel):
     # True when this claim favors the opponent of the mover and is kept as an
     # explicitly framed trade-off / consequence.
     is_concession: bool = False
+    # When the claimed feature change actually lands: "immediate" if it is
+    # already true right after the move, "envisioned" if the move only sets it
+    # up and it materializes deeper in the line. Drives hedged phrasing
+    # ("may lead to ...", "missed the potential to ...") in the composer.
+    realization: str = "immediate"
 
 
 class BestAlternative(BaseModel):

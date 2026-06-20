@@ -469,3 +469,202 @@ def test_line_feature_series_shape():
     # one point for the start position plus one per ply
     assert len(series["MATERIAL_BALANCE"]) == len(fens) + 1
     assert all(isinstance(v, int) for v in series["WHITE_PIECE_ACTIVITY"])
+
+
+def test_claim_realization_immediate_vs_envisioned():
+    from app.core.commentary.rules.engine import _claim_realization
+
+    c = Claim(rule_id="x", text="t", features_involved=["F"])
+    # change lands on the move (point 0 -> point 1): immediate
+    assert _claim_realization(c, {"F": [0, 100, 100]}) == "immediate"
+    # change only develops after the move (flat at ply 1, swings at the leaf)
+    assert _claim_realization(c, {"F": [0, 0, 100]}) == "envisioned"
+    # no meaningful swing at all: immediate (nothing to defer)
+    assert _claim_realization(c, {"F": [50, 51, 52]}) == "immediate"
+    # missing series: defaults to immediate
+    assert _claim_realization(c, {}) == "immediate"
+
+
+def test_template_hedges_envisioned_concession():
+    facts = _facts().model_copy(
+        update={
+            "claims": [
+                Claim(
+                    rule_id="x",
+                    text="Black's pawn structure has been weakened.",
+                    beneficiary="black",
+                    delta_cp=32,
+                    is_concession=True,
+                    realization="envisioned",
+                ),
+            ],
+        }
+    )
+    text = render_facts_template(facts)
+    # framed as a developing risk, not an accomplished fact
+    assert "Down the line, Black's pawn structure has been weakened." in text
+    assert "On the other hand" not in text
+    assert "Now Black" not in text
+
+
+def _alt(eval_cp: int, realization: str = "immediate") -> dict:
+    from app.models.comment_facts import BestAlternative
+
+    return {
+        "better_alternative": BestAlternative(
+            san="Rd8",
+            uci="d7d8",
+            eval_cp=eval_cp,
+            verdict="keeps the edge",
+            display_line=EnvisionedLine(
+                start_fen=START,
+                line_san=["Rd8"],
+                line_uci=["d7d8"],
+                fens=[START],
+                leaf_fen=START,
+            ),
+            claims=[
+                Claim(
+                    rule_id="r",
+                    text="Black's rooks become active on the open file.",
+                    beneficiary="black",
+                    delta_cp=15,
+                    realization=realization,
+                ),
+            ],
+        )
+    }
+
+
+def test_template_missed_chance_vs_potential():
+    base = _facts().model_copy(update={"mover": "Black", "eval_cp": 0})
+    # materially better alternative, gain lands at once -> "missed the chance"
+    immediate = base.model_copy(update=_alt(eval_cp=-300, realization="immediate"))
+    t_imm = render_facts_template(immediate)
+    assert "Black missed the chance here" in t_imm
+    # materially better, gain only develops in the line -> "missed the potential"
+    envis = base.model_copy(update=_alt(eval_cp=-300, realization="envisioned"))
+    assert "Black missed the potential here" in render_facts_template(envis)
+
+
+def test_template_comparable_alternative_not_a_miss():
+    base = _facts().model_copy(update={"mover": "Black", "eval_cp": 0})
+    # near-equal alternative -> comparable option, never framed as a miss
+    comparable = base.model_copy(update=_alt(eval_cp=-20))
+    text = render_facts_template(comparable)
+    assert "A comparable alternative was Rd8" in text
+    assert "missed" not in text
+
+
+def test_comment_archetype_mapping():
+    from app.core.commentary.phases.composer import comment_archetype
+
+    assert comment_archetype("brilliant") == "brilliant_sacrifice"
+    assert comment_archetype("best_move") == "engine_choice"
+    assert comment_archetype("great_move") == "engine_choice"
+    assert comment_archetype("inaccuracy") == "inaccuracy_missed"
+    assert comment_archetype("missed_opportunity") == "inaccuracy_missed"
+    assert comment_archetype("blunder") == "neutral"
+    assert comment_archetype(None) == "neutral"
+
+
+def test_template_archetype_openers():
+    facts = _facts()
+    assert "is the engine's top choice" in render_facts_template(
+        facts, archetype="engine_choice"
+    )
+    assert "is a brilliant sacrifice" in render_facts_template(
+        facts, archetype="brilliant_sacrifice"
+    )
+    # neutral / default keeps the plain verdict head
+    assert "top choice" not in render_facts_template(facts)
+
+
+def test_annotation_symbol_mapping():
+    from app.core.engine.analysis_retriever import _annotation_symbol
+
+    assert _annotation_symbol("brilliant") == "!!"
+    assert _annotation_symbol("best_move") == "!"
+    assert _annotation_symbol("great_move") == "!"
+    assert _annotation_symbol("inaccuracy") == "?!"
+    assert _annotation_symbol("mistake") == "?"
+    assert _annotation_symbol("blunder") == "??"
+    assert _annotation_symbol("critical_decision") is None
+    assert _annotation_symbol(None) is None
+
+
+def _me(**over):
+    from app.models.chess_events import MoveEvent, MoveEventType, MoveQuality
+
+    base = {
+        "move_index": 10,
+        "ply": 21,
+        "san": "Nd5",
+        "uci": "f4d5",
+        "fen_before": START,
+        "fen_after": START,
+        "phase": "mid",
+        "move_quality": MoveQuality.BEST,
+        "event_type": MoveEventType.BEST_MOVE_PLAYED,
+        "best_move_uci": "f4d5",
+    }
+    base.update(over)
+    return MoveEvent(**base)
+
+
+def _facts_with_material(series, mover="White", eval_cp=200, eval_before=50, claims=()):
+    return _facts().model_copy(
+        update={
+            "mover": mover,
+            "eval_cp": eval_cp,
+            "eval_before_cp": eval_before,
+            "claims": list(claims),
+            "display_line": EnvisionedLine(
+                start_fen=START,
+                line_san=["Nd5", "exd5", "Qxd5"],
+                line_uci=["f4d5", "e6d5", "d1d5"],
+                fens=[START, START, START],
+                leaf_fen=START,
+                feature_series={"MATERIAL_BALANCE": series},
+            ),
+        }
+    )
+
+
+def test_promote_brilliant_sacrifice():
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(key_moment_type=None)
+    # White gives up ~3 pawns along the line yet keeps a +2 eval -> brilliant
+    facts = _facts_with_material([0, -300, -300], eval_cp=200, eval_before=50)
+    assert _promote_key_moment(me, facts, facts.claims) == "brilliant"
+
+
+def test_promote_best_move_requires_claim():
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(key_moment_type=None)
+    # best move, no material dip, with a fired claim -> best_move
+    with_claim = _facts_with_material([10, 10, 10], claims=_facts().claims)
+    assert _promote_key_moment(me, with_claim, with_claim.claims) == "best_move"
+    # same move with NO claims (e.g. decided position) -> not promoted
+    no_claim = _facts_with_material([10, 10, 10], claims=())
+    assert _promote_key_moment(me, no_claim, []) is None
+
+
+def test_promote_leaves_non_best_untouched():
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(best_move_uci="a2a3", uci="h2h3", key_moment_type="inaccuracy")
+    facts = _facts_with_material([0, -300, -300])
+    # not the engine's move -> never brilliant/best, keeps its existing type
+    assert _promote_key_moment(me, facts, facts.claims) == "inaccuracy"
+
+
+def test_promote_losing_sacrifice_is_not_brilliant():
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(key_moment_type=None)
+    # material given up AND the mover ends up worse -> just a bad move, not brilliant
+    facts = _facts_with_material([0, -300, -300], eval_cp=-250, eval_before=50)
+    assert _promote_key_moment(me, facts, facts.claims) != "brilliant"

@@ -627,6 +627,7 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
                 "flag_note": c.flag_note,
                 "beneficiary": c.beneficiary,
                 "is_concession": c.is_concession,
+                "realization": c.realization,
             }
             for c in (claims or [])
         ]
@@ -879,6 +880,76 @@ def _resolve_comment_tokens(
         return []
 
 
+# Brilliant-sacrifice detection (post-facts): along the played PV the mover
+# gives up at least this much material yet keeps an equal-or-better eval.
+BRILLIANT_SAC_TROUGH_CP = 150
+
+
+def _played_is_best(me: MoveEvent) -> bool:
+    if me.best_move_uci and me.uci:
+        return me.best_move_uci == me.uci
+    return bool(me.move_quality and me.move_quality.value == "best")
+
+
+def _is_sacrifice(facts: Any) -> bool:
+    """The mover's material dips >= threshold somewhere along the played line."""
+    dl = facts.display_line
+    series = (dl.feature_series.get("MATERIAL_BALANCE") if dl else None) or []
+    if len(series) < 2:
+        return False
+    sign = 1 if facts.mover == "White" else -1
+    start = series[0]
+    trough = min(sign * (v - start) for v in series)
+    return trough <= -BRILLIANT_SAC_TROUGH_CP
+
+
+def _eval_holds_or_improves(facts: Any) -> bool:
+    """Mover is at least equal after the move and no worse than before it."""
+    if facts.eval_cp is None:
+        return facts.eval_mate is not None and (
+            (facts.eval_mate > 0) == (facts.mover == "White")
+        )
+    sign = 1 if facts.mover == "White" else -1
+    after = sign * facts.eval_cp
+    if after < 0:  # mover ends up worse — not a sound sacrifice
+        return False
+    if facts.eval_before_cp is None:
+        return True
+    return after >= sign * facts.eval_before_cp - 20
+
+
+def _promote_key_moment(me: MoveEvent, facts: Any, kept_claims: list) -> str | None:
+    """Upgrade the key-moment type using the now-available CommentFacts.
+
+    - ``brilliant``: a best-move sacrifice that holds/improves the eval (highest
+      priority — overrides whatever the detector flagged).
+    - ``best_move``: an instructive top move (>= 1 fired claim) that nothing
+      else flagged. Decisive positions self-exclude (their claims are emptied).
+    """
+    if _played_is_best(me):
+        if _is_sacrifice(facts) and _eval_holds_or_improves(facts):
+            return "brilliant"
+        if me.key_moment_type is None and kept_claims:
+            return "best_move"
+    return me.key_moment_type
+
+
+# Key-moment classification -> NAG-style move symbol shown in the move list.
+_ANNOTATION_BY_KEY_MOMENT: dict[str, str] = {
+    "brilliant": "!!",
+    "best_move": "!",
+    "great_move": "!",
+    "inaccuracy": "?!",
+    "missed_opportunity": "?!",
+    "mistake": "?",
+    "blunder": "??",
+}
+
+
+def _annotation_symbol(key_moment_type: str | None) -> str | None:
+    return _ANNOTATION_BY_KEY_MOMENT.get(key_moment_type or "")
+
+
 def assemble_game_json(state: EnginePipelineState) -> GameJson:
     """Build GameJson from pipeline state (engine + optional LLM fields)."""
     game = state.game
@@ -938,6 +1009,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
                 variations=variations,
                 comment=comment,
                 classification=key_moment,
+                annotation=_annotation_symbol(key_moment) if _side_ok else None,
                 is_key_moment=bool(me and me.key_moment_type and _side_ok),
                 resolved_tokens=resolved_tokens,
                 comment_facts=comment_facts_out,
@@ -1165,7 +1237,11 @@ async def run_engine_analysis_to_json(
                 last_claim_ply[key] = me.ply
                 kept.append(c)
             facts = facts.model_copy(update={"claims": kept, "muted_claims": muted})
-            move_events[mi] = me.model_copy(update={"comment_facts": facts})
+            new_km = _promote_key_moment(me, facts, kept)
+            update: dict[str, Any] = {"comment_facts": facts}
+            if new_km != me.key_moment_type:
+                update["key_moment_type"] = new_km
+            move_events[mi] = me.model_copy(update=update)
 
     opening_name = meta_opening_name
     opening_eco_ctx = meta_opening_eco

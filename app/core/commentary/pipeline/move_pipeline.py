@@ -89,6 +89,7 @@ class FactsComposeStage:
             effort=ctx.composer_effort,
             enrichment=enrichment,
             level=ctx.commentary_level,
+            key_moment_type=ctx.move_event.key_moment_type,
         )
         text, forbidden_hits = scrub_forbidden(str(result.get("text") or ""))
         ctx.final_text = text
