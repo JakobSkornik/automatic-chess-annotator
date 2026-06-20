@@ -742,15 +742,17 @@ def _resolve_move_comment(
 ) -> _MoveComment:
     """Resolve the comment cascade: opening -> LLM -> stub/facts/key-moment floor.
 
-    A non-selected commentary side stays fully silent (no fallback either).
+    Prose is reserved for key moments (an LLM pass ran for them); other
+    out-of-book moves carry no prose — their structured facts panel stands
+    alone. A non-selected commentary side stays fully silent.
     """
     mc = _MoveComment()
     if (row.phase_raw or "") == "early":
         mc.comment = _opening_comment(analyzed_move)
-    if move_event and move_event.is_critical and side_ok:
+    elif move_event and move_event.key_moment_type and side_ok:
         _apply_llm_comment(mc, analyzed_move)
-    if side_ok and not mc.comment:
-        mc.comment = _fallback_comment(move_event, key_moment)
+        if not mc.comment:
+            mc.comment = _fallback_comment(move_event, key_moment)
     return mc
 
 
@@ -915,9 +917,9 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
 
         facts = me.comment_facts if (me and _side_ok) else None
         resolved_tokens = _resolve_comment_tokens(comment, me)
-        comment_facts_out = (
-            _facts_to_json(facts) if (comment and facts is not None) else None
-        )
+        # Structured facts (MAIN LINE / BETTER WAS / charts) render for any
+        # analyzed move, independent of whether an LLM prose comment exists.
+        comment_facts_out = _facts_to_json(facts) if facts is not None else None
 
         # Academic reasoning trace ("how did we reach this conclusion").
         debug_out = _build_move_debug(

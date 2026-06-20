@@ -12,11 +12,11 @@ def decisive_eval_cp() -> int:
     """Half-width of the "still a real game" interval, in centipawns (Guid).
 
     When both the played move and the engine's suggestion evaluate beyond this
-    (default ±3.00), the position is already decided and imprecise moves should
+    (default ±6.00), the position is already decided and imprecise moves should
     not be flagged as mistakes/oversights. Tunable via ``DECISIVE_EVAL_CP``.
     """
     try:
-        return int(os.environ.get("DECISIVE_EVAL_CP", "300"))
+        return int(os.environ.get("DECISIVE_EVAL_CP", "600"))
     except ValueError:
         return 300
 

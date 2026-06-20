@@ -63,7 +63,8 @@ def llm_rendering_enabled() -> bool:
 
 def eval_token(facts: CommentFacts) -> str:
     if facts.eval_mate is not None:
-        return f"(#{abs(facts.eval_mate)}, {facts.engine}:{facts.depth})"
+        side = "White" if facts.eval_mate > 0 else "Black"
+        return f"(#{abs(facts.eval_mate)} for {side}, {facts.engine}:{facts.depth})"
     if facts.eval_cp is None:
         return ""
     # Show the eval STORY when the move moved the needle.
@@ -261,6 +262,9 @@ ENRICHMENT_RULES = (
     "ENRICHMENT block (optional): intermediate and beginner MAY weave in at most "
     "one element (opening background or what this leads to later in the game) as "
     "scene-setting; expert must ignore it entirely.\n"
+    "Do NOT open with or restate the opening name/ECO (e.g. 'In this <Opening>...'); "
+    "the reader already sees it. Reference an opening idea only if it directly "
+    "explains THIS move.\n"
 )
 
 

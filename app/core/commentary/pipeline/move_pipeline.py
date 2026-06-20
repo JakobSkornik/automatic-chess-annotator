@@ -68,7 +68,10 @@ class FactsComposeStage:
 
         enrichment: dict[str, Any] = {}
         gc = ctx.game_context
-        if gc.opening_name or gc.opening_eco:
+        # Opening scene-setting is only relevant while still in the opening;
+        # passing it on every key moment makes the model restate the opening
+        # line in every comment (Guid feedback).
+        if (gc.opening_name or gc.opening_eco) and ctx.move_event.phase == "opening":
             enrichment["opening"] = (
                 f"{gc.opening_name or ''} ({gc.opening_eco or ''})".strip()
             )

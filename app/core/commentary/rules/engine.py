@@ -61,7 +61,6 @@ THRESHOLDS: dict[str, int] = {
     "bad_bishop": 25,  # min |delta| before a bad-bishop change is worth stating
     "connected_rooks": 10,
     "min_claim_cp": 8,  # ignore fired rules weaker than this
-    "better_alternative_gap": 50,  # cp loss before the best move is shown
 }
 
 SIDES = ("WHITE", "BLACK")
@@ -1115,11 +1114,12 @@ def _alternative_merits(
 
 
 def _build_better_alternative(
-    ctx: _FactsCtx, main_claims: list[Claim], mq: str
+    ctx: _FactsCtx, main_claims: list[Claim]
 ) -> BestAlternative | None:
-    """The engine's preferred move + its merits, when the played move lost ground.
-
-    A ?/?? move always shows what was better (Guid); other moves need a real gap.
+    """The engine's preferred move + its merits, whenever a different move was
+    played — so the better line can always be visualized, regardless of how
+    small the gap is or whether it's the same piece (Guid). Uses the
+    already-computed PVs, so it costs no extra engine search.
     """
     me = ctx.me
     if not (
@@ -1128,11 +1128,6 @@ def _build_better_alternative(
         and me.best_move_eval_cp is not None
         and me.eval_after_cp is not None
     ):
-        return None
-    gap = me.best_move_eval_cp - me.eval_after_cp
-    gap_for_mover = gap if ctx.mover == "White" else -gap
-    force_alt = mq in ("mistake", "blunder")
-    if not (force_alt or gap_for_mover >= THRESHOLDS["better_alternative_gap"]):
         return None
 
     best_pv_uci = (
@@ -1222,7 +1217,7 @@ def build_comment_facts(
         if fallback is not None:
             claims = [fallback]
 
-    better = _build_better_alternative(ctx, claims, mq)
+    better = _build_better_alternative(ctx, claims)
     played_line = _with_feature_series(played_line, me.fen_before)
     if better is not None and better.display_line is not None:
         better = better.model_copy(
