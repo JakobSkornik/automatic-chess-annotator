@@ -661,6 +661,84 @@ def test_promote_leaves_non_best_untouched():
     assert _promote_key_moment(me, facts, facts.claims) == "inaccuracy"
 
 
+def test_merit_suppressed_when_move_backfires():
+    # 9...Bxc2-style mistake: a mover merit (damaged the opponent's pawns) plus
+    # the consequence (opponent won material). Black ends up clearly worse, so
+    # the misleading merit must be dropped, leaving the consequence.
+    import chess
+
+    from app.core.commentary.rules.engine import build_comment_facts
+    from app.models.chess_events import (
+        AnalyzedMoveData,
+        MoveEvent,
+        MoveEventType,
+        MoveQuality,
+    )
+
+    fen_before = "rnbqkb1r/pp3ppp/2p1pn2/4N1B1/6PP/2N5/PPPPQP2/R3KB1R b KQkq - 0 9"
+
+    def _claims_stub(diff, **kw):
+        return [
+            Claim(
+                rule_id="pawns",
+                text="White's pawn structure has been weakened.",
+                beneficiary="black",
+                features_involved=["WHITE_PAWN_DOUBLED"],
+                delta_cp=32,
+            ),
+            Claim(
+                rule_id="mat",
+                text="White has won a pawn.",
+                beneficiary="white",
+                is_concession=True,
+                features_involved=["MATERIAL_BALANCE"],
+                delta_cp=100,
+            ),
+        ]
+
+    # Drive build_comment_facts with stubbed rules so the test is deterministic.
+    import app.core.commentary.rules.engine as eng
+
+    orig = eng.run_rules
+    eng.run_rules = _claims_stub
+    try:
+        board = chess.Board(fen_before)
+        me = MoveEvent(
+            move_index=17,
+            ply=18,
+            san="Bxc2",
+            uci="g6c2",
+            fen_before=fen_before,
+            fen_after=board.fen(),
+            phase="mid",
+            move_quality=MoveQuality.MISTAKE,
+            event_type=MoveEventType.EVAL_SWING,
+            eval_after_cp=209,  # White-POV: Black (mover) is clearly worse
+            eval_before_cp=28,
+            best_move_uci="f6d7",
+            best_move_san="Nfd7",
+        )
+        row = AnalyzedMoveData(
+            index=17,
+            ply=18,
+            san="Bxc2",
+            uci="g6c2",
+            fen_before=fen_before,
+            fen_after=board.fen(),
+            score_cp=209,
+            phase_raw="mid",
+        )
+        facts = build_comment_facts(row, me, depth=16)
+    finally:
+        eng.run_rules = orig
+
+    assert facts is not None
+    texts = [c.text for c in facts.claims]
+    # the mover-merit is gone; the consequence remains
+    assert "White's pawn structure has been weakened." not in texts
+    assert any("won a pawn" in t for t in texts)
+
+
 def test_promote_losing_sacrifice_is_not_brilliant():
     from app.core.engine.analysis_retriever import _promote_key_moment
 
