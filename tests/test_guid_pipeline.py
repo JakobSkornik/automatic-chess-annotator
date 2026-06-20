@@ -469,3 +469,88 @@ def test_line_feature_series_shape():
     # one point for the start position plus one per ply
     assert len(series["MATERIAL_BALANCE"]) == len(fens) + 1
     assert all(isinstance(v, int) for v in series["WHITE_PIECE_ACTIVITY"])
+
+
+def test_claim_realization_immediate_vs_envisioned():
+    from app.core.commentary.rules.engine import _claim_realization
+
+    c = Claim(rule_id="x", text="t", features_involved=["F"])
+    # change lands on the move (point 0 -> point 1): immediate
+    assert _claim_realization(c, {"F": [0, 100, 100]}) == "immediate"
+    # change only develops after the move (flat at ply 1, swings at the leaf)
+    assert _claim_realization(c, {"F": [0, 0, 100]}) == "envisioned"
+    # no meaningful swing at all: immediate (nothing to defer)
+    assert _claim_realization(c, {"F": [50, 51, 52]}) == "immediate"
+    # missing series: defaults to immediate
+    assert _claim_realization(c, {}) == "immediate"
+
+
+def test_template_hedges_envisioned_concession():
+    facts = _facts().model_copy(
+        update={
+            "claims": [
+                Claim(
+                    rule_id="x",
+                    text="Black's pawn structure has been weakened.",
+                    beneficiary="black",
+                    delta_cp=32,
+                    is_concession=True,
+                    realization="envisioned",
+                ),
+            ],
+        }
+    )
+    text = render_facts_template(facts)
+    # framed as a developing risk, not an accomplished fact
+    assert "Down the line, Black's pawn structure has been weakened." in text
+    assert "On the other hand" not in text
+    assert "Now Black" not in text
+
+
+def _alt(eval_cp: int, realization: str = "immediate") -> dict:
+    from app.models.comment_facts import BestAlternative
+
+    return {
+        "better_alternative": BestAlternative(
+            san="Rd8",
+            uci="d7d8",
+            eval_cp=eval_cp,
+            verdict="keeps the edge",
+            display_line=EnvisionedLine(
+                start_fen=START,
+                line_san=["Rd8"],
+                line_uci=["d7d8"],
+                fens=[START],
+                leaf_fen=START,
+            ),
+            claims=[
+                Claim(
+                    rule_id="r",
+                    text="Black's rooks become active on the open file.",
+                    beneficiary="black",
+                    delta_cp=15,
+                    realization=realization,
+                ),
+            ],
+        )
+    }
+
+
+def test_template_missed_chance_vs_potential():
+    base = _facts().model_copy(update={"mover": "Black", "eval_cp": 0})
+    # materially better alternative, gain lands at once -> "missed the chance"
+    immediate = base.model_copy(update=_alt(eval_cp=-300, realization="immediate"))
+    t_imm = render_facts_template(immediate)
+    assert "Black missed the chance here" in t_imm
+    # materially better, gain only develops in the line -> "missed the potential"
+    envis = base.model_copy(update=_alt(eval_cp=-300, realization="envisioned"))
+    assert "Black missed the potential here" in render_facts_template(envis)
+
+
+def test_template_comparable_alternative_not_a_miss():
+    base = _facts().model_copy(update={"mover": "Black", "eval_cp": 0})
+    # near-equal alternative -> comparable option, never framed as a miss
+    comparable = base.model_copy(update=_alt(eval_cp=-20))
+    text = render_facts_template(comparable)
+    assert "A comparable alternative was Rd8" in text
+    assert "missed" not in text

@@ -106,6 +106,30 @@ def _gerundize(verdict: str) -> str:
     return verdict
 
 
+# Below this mover-POV gap the engine's move is a comparable option, not a miss.
+ALT_MATERIAL_GAP_CP = 50
+
+
+def alt_gap_cp(facts: CommentFacts) -> int | None:
+    """Mover-POV centipawns the alternative gains over the played move."""
+    alt = facts.better_alternative
+    if alt is None or alt.eval_cp is None or facts.eval_cp is None:
+        return None
+    gap = alt.eval_cp - facts.eval_cp  # White-POV
+    return gap if facts.mover == "White" else -gap
+
+
+def _alt_materially_better(facts: CommentFacts) -> bool:
+    gap = alt_gap_cp(facts)
+    return gap is None or gap >= ALT_MATERIAL_GAP_CP
+
+
+def _missed_noun(claims: list[Claim]) -> str:
+    """'chance' if the alternative's gain lands at once, 'potential' if it only
+    develops in the line (judged on the ordered-strongest claim)."""
+    return "potential" if claims and claims[0].realization == "envisioned" else "chance"
+
+
 # ---------------------------------------------------------------------------
 # Deterministic template (expert fallback / no-LLM rendering)
 # ---------------------------------------------------------------------------
@@ -155,38 +179,59 @@ def render_facts_template(facts: CommentFacts) -> str:
                 " ".join(_claim_text(c, prefer_state=prefer_state) for c in merits)
             )
         if concessions:
-            if facts.concession_mode == "consequence":
-                # Claims start with the side's name, so "Now Black ..." reads
-                # naturally — but use the change-form to avoid "Now ... is now".
-                prefix = "Now " if variant == 0 else "The drawback: "
-                clauses = [c.text.rstrip(".") for c in concessions]
-            else:
-                prefix = "In return, " if variant == 0 else "On the other hand, "
-                clauses = [
-                    _claim_text(c, prefer_state=prefer_state).rstrip(".")
-                    for c in concessions
-                ]
-            # One sentence — a second bare concession would read as a merit.
-            parts.append(prefix + " and ".join(clauses) + ".")
+            # Immediate concessions are stated as fact; concessions that only
+            # develop deeper in the line are framed as a not-yet-certain risk.
+            imm = [c for c in concessions if c.realization != "envisioned"]
+            env = [c for c in concessions if c.realization == "envisioned"]
+            if imm:
+                if facts.concession_mode == "consequence":
+                    # Claims start with the side's name, so "Now Black ..." reads
+                    # naturally — but use the change-form to avoid "Now ... is now".
+                    prefix = "Now " if variant == 0 else "The drawback: "
+                    clauses = [c.text.rstrip(".") for c in imm]
+                else:
+                    prefix = "In return, " if variant == 0 else "On the other hand, "
+                    clauses = [
+                        _claim_text(c, prefer_state=prefer_state).rstrip(".")
+                        for c in imm
+                    ]
+                # One sentence — a second bare concession would read as a merit.
+                parts.append(prefix + " and ".join(clauses) + ".")
+            if env:
+                clauses = [c.text.rstrip(".") for c in env]
+                parts.append("Down the line, " + " and ".join(clauses) + ".")
 
     alt = facts.better_alternative
     if alt is not None:
         alt_pv = _alt_pv_token(alt)
-        if variant == 0:
-            s = f"Better was {alt.san}"
-            if alt.verdict:
-                s += f", which {alt.verdict}"
+        if not _alt_materially_better(facts):
+            # Roughly equal: present it as an option, not a miss.
+            s = f"A comparable alternative was {alt.san}"
             if alt_pv:
                 s += f" after {alt_pv}"
+            s += "."
+            if alt.claims:
+                s += " The point: " + " ".join(c.text for c in alt.claims)
         else:
-            s = f"A better move was {alt.san}"
-            if alt.verdict:
-                s += f", {_gerundize(alt.verdict)}"
-            if alt_pv:
-                s += f" after {alt_pv}"
-        s += "."
-        if alt.claims:
-            s += " " + " ".join(c.text for c in alt.claims)
+            if variant == 0:
+                s = f"Better was {alt.san}"
+                if alt.verdict:
+                    s += f", which {alt.verdict}"
+                if alt_pv:
+                    s += f" after {alt_pv}"
+            else:
+                s = f"A better move was {alt.san}"
+                if alt.verdict:
+                    s += f", {_gerundize(alt.verdict)}"
+                if alt_pv:
+                    s += f" after {alt_pv}"
+            s += "."
+            if alt.claims:
+                # The alternative's merits are what the mover passed up.
+                noun = _missed_noun(alt.claims)
+                s += f" {facts.mover} missed the {noun} here — " + " ".join(
+                    c.text for c in alt.claims
+                )
         parts.append(s)
     return " ".join(p for p in parts if p).strip()
 
@@ -227,10 +272,19 @@ GUID_COMPOSER_SYSTEM = (
     "('in return', 'at the cost of') for sound moves, or as the move's drawbacks "
     "('now the opponent ...') when the concession mode says 'consequence'. NEVER "
     "present a concession as an achievement of the move.\n"
+    "- TIMING: every claim is tagged <immediate> or <in the line>. State "
+    "<immediate> claims as fact. A claim tagged <in the line> is NOT yet true "
+    "after the move — it only develops deeper in the variation, so you MUST hedge "
+    "it ('may lead to', 'risks', 'could leave', 'is set to') and never assert it "
+    "as already achieved.\n"
     "- If REFUTATION is present, the text MUST name that move as what punishes "
     "the played move (it is the board-level reason the move fails).\n"
-    "- If BETTER ALTERNATIVE is present, end with one sentence naming it ('Better "
-    "was {move}...' or a varied equivalent) with its verdict, claims and PV token.\n"
+    "- If BETTER ALTERNATIVE is present, end with one sentence naming it. When its "
+    "Significance is 'materially better', frame its claims as the opportunity the "
+    "mover passed up: 'missed the chance to ...' for <immediate> claims, 'missed "
+    "the potential to ...' for <in the line> claims. When 'roughly equal', present "
+    "it neutrally as a comparable option, never as a miss. Always include its "
+    "verdict and PV token.\n"
     "- One paragraph. No lists, no headers, no engine-worship.\n"
 )
 
@@ -281,6 +335,7 @@ def build_facts_user_prompt(
             line += f" [{c.flag_note}]"
         if c.features_involved:
             line += f" (features: {', '.join(c.features_involved[:3])})"
+        line += " <in the line>" if c.realization == "envisioned" else " <immediate>"
         return line
 
     merit_lines = [_claim_line(c) for c in facts.claims if not c.is_concession]
@@ -310,14 +365,21 @@ def build_facts_user_prompt(
         ]
     alt = facts.better_alternative
     if alt is not None:
-        alt_claims = [f"- {c.text}" for c in alt.claims] or ["- (none)"]
+        alt_claims = [_claim_line(c) for c in alt.claims] or ["- (none)"]
+        gap = alt_gap_cp(facts)
+        significance = (
+            "roughly equal — present as a comparable option, NOT as a miss"
+            if gap is not None and gap < ALT_MATERIAL_GAP_CP
+            else "materially better — the mover passed up this opportunity"
+        )
         blocks += [
             "",
             "BETTER ALTERNATIVE:",
             f"Move: {alt.san}",
             f"Verdict: {alt.verdict}",
+            f"Significance: {significance}",
             f"PV token (copy verbatim): {_alt_pv_token(alt)}",
-            "Claims:",
+            "Claims (the gains the mover forwent):",
             *alt_claims,
         ]
     if enrichment:

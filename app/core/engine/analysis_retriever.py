@@ -627,6 +627,7 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
                 "flag_note": c.flag_note,
                 "beneficiary": c.beneficiary,
                 "is_concession": c.is_concession,
+                "realization": c.realization,
             }
             for c in (claims or [])
         ]

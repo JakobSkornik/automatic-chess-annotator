@@ -1023,6 +1023,46 @@ def _line_feature_series(
     return series
 
 
+# A claim is "immediate" when at least this fraction of its total (start->leaf)
+# feature swing has already happened by the position right after the move; below
+# it, the change only develops deeper in the line ("envisioned").
+REALIZE_FRACTION = 0.5
+REALIZE_EPS_CP = 10  # below this magnitude there is no swing worth deferring
+
+
+def _claim_realization(claim: Claim, feature_series: dict[str, list[int]]) -> str:
+    """immediate vs envisioned, judged on the claim's dominant feature trajectory.
+
+    ``feature_series[name]`` is the per-point White-POV cp series along the line
+    (point 0 = start, point 1 = right after the move, last = envisioned leaf)."""
+    dom: list[int] | None = None
+    dom_total = 0
+    for name in claim.features_involved:
+        series = feature_series.get(name)
+        if not series or len(series) < 2:
+            continue
+        total = series[-1] - series[0]
+        if dom is None or abs(total) > abs(dom_total):
+            dom, dom_total = series, total
+    if dom is None or len(dom) < 2:
+        return "immediate"
+    total = dom[-1] - dom[0]
+    moved = dom[1] - dom[0]
+    if abs(total) < REALIZE_EPS_CP:
+        return "immediate"
+    same_sign = (moved >= 0) == (total >= 0)
+    if same_sign and abs(moved) >= REALIZE_FRACTION * abs(total):
+        return "immediate"
+    return "envisioned"
+
+
+def _annotate_realization(
+    claims: list[Claim], feature_series: dict[str, list[int]]
+) -> None:
+    for c in claims:
+        c.realization = _claim_realization(c, feature_series)
+
+
 @dataclass
 class _FactsCtx:
     """Shared per-move inputs for the CommentFacts builder helpers."""
@@ -1219,12 +1259,16 @@ def build_comment_facts(
 
     better = _build_better_alternative(ctx, claims)
     played_line = _with_feature_series(played_line, me.fen_before)
+    # Now that the per-ply trajectory exists, tag each claim as realized on the
+    # move ("immediate") or only deeper in the line ("envisioned").
+    _annotate_realization(claims, played_line.feature_series)
     if better is not None and better.display_line is not None:
         better = better.model_copy(
             update={
                 "display_line": _with_feature_series(better.display_line, me.fen_before)
             }
         )
+        _annotate_realization(better.claims, better.display_line.feature_series)
 
     return CommentFacts(
         ply=me.ply,
