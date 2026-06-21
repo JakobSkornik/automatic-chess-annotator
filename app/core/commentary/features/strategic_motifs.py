@@ -73,9 +73,17 @@ def _strict_bad_bishop_board(board: chess.Board, color: chess.Color) -> bool:
     for b_sq in board.pieces(chess.BISHOP, color):
         light = _sq_light(b_sq)
         n_same = sum(1 for ps in own_pawns if _sq_light(ps) == light)
-        if n_same >= 4:
+        if n_same >= PAWN_CHAIN_MIN:
             return True
     return False
+
+
+PAWN_CHAIN_MIN = 4  # pawns in a diagonal chain to count as a chain
+SAME_COLOR_PAWNS_MIN = 3  # own pawns on the bishop's color = bad bishop
+SWING_CONFIRM_CP = 40  # eval swing that corroborates a strategic motif
+QUIET_EVAL_CP = 80  # |eval| under which the position is 'quiet'
+NEAR_STALEMATE_MOVES = 3
+CRAMPED_MOVES = 8
 
 
 def detect_strategic_motifs(
@@ -92,17 +100,31 @@ def detect_strategic_motifs(
     plan_comparison: PlanComparison | None = None,
 ) -> list[StrategicMotif]:
     """Return strategic/endgame motif tags (best-effort heuristics)."""
-    hf = hidden_features if isinstance(hidden_features, dict) else {}
+    hidden_features = hidden_features if isinstance(hidden_features, dict) else {}
     motifs: list[StrategicMotif] = []
 
     piece_after = board_after.piece_at(move.to_square)
     if piece_after is None:
         return []
     mover = piece_after.color
-    w = hf.get("white") if isinstance(hf.get("white"), dict) else {}
-    b = hf.get("black") if isinstance(hf.get("black"), dict) else {}
-    ps = hf.get("pawnStructure") if isinstance(hf.get("pawnStructure"), dict) else {}
-    hf.get("material") if isinstance(hf.get("material"), dict) else {}
+    w = (
+        hidden_features.get("white")
+        if isinstance(hidden_features.get("white"), dict)
+        else {}
+    )
+    b = (
+        hidden_features.get("black")
+        if isinstance(hidden_features.get("black"), dict)
+        else {}
+    )
+    ps = (
+        hidden_features.get("pawnStructure")
+        if isinstance(hidden_features.get("pawnStructure"), dict)
+        else {}
+    )
+    hidden_features.get("material") if isinstance(
+        hidden_features.get("material"), dict
+    ) else {}
 
     # --- From hidden feature extractors (positional_features) ---
     out_w = w.get("outposts") if isinstance(w.get("outposts"), dict) else {}
@@ -199,7 +221,11 @@ def detect_strategic_motifs(
 
     if has_oppo_race and piece_after.piece_type == chess.PAWN:
         tf = chess.square_file(move.to_square)
-        if tf in (3, 4) and eval_swing_cp is not None and abs(eval_swing_cp) >= 40:
+        if (
+            tf in (3, 4)
+            and eval_swing_cp is not None
+            and abs(eval_swing_cp) >= SWING_CONFIRM_CP
+        ):
             motifs.append(StrategicMotif.CENTRAL_COUNTER_VS_WING_ATTACK)
     if (
         has_oppo_race
@@ -211,7 +237,10 @@ def detect_strategic_motifs(
             if chess.square_file(move.to_square) <= 2 and eval_swing_cp <= -40:
                 motifs.append(StrategicMotif.WRONG_WING_PIECE_IN_RACE)
         if mover == chess.BLACK and br >= 5 and wr <= 2:
-            if chess.square_file(move.to_square) >= 5 and eval_swing_cp >= 40:
+            if (
+                chess.square_file(move.to_square) >= 5
+                and eval_swing_cp >= SWING_CONFIRM_CP
+            ):
                 motifs.append(StrategicMotif.WRONG_WING_PIECE_IN_RACE)
 
     if _backward_enemy_pawn_exists(board_after, mover):
@@ -342,7 +371,7 @@ def detect_strategic_motifs(
                     break
 
         if eval_after_cp is not None and abs(eval_after_cp) < MATE_SCORE - 500:
-            if board_after.legal_moves.count() <= 3 and rq == 0:
+            if board_after.legal_moves.count() <= NEAR_STALEMATE_MOVES and rq == 0:
                 motifs.append(StrategicMotif.ZUGZWANG)
 
         # KRPKR: crude Lucena / Philidor labels
@@ -378,7 +407,10 @@ def detect_strategic_motifs(
                 board_after.pieces(chess.QUEEN, chess.BLACK)
             )
             if w_maj <= 1 and b_maj <= 1 and eval_after_cp is not None:
-                if abs(eval_after_cp) < 80 and board_after.legal_moves.count() <= 8:
+                if (
+                    abs(eval_after_cp) < QUIET_EVAL_CP
+                    and board_after.legal_moves.count() <= CRAMPED_MOVES
+                ):
                     motifs.append(StrategicMotif.FORTRESS)
 
         # Triangulation: king moved to same-colored square twice in 3 king moves — omitted (needs history)

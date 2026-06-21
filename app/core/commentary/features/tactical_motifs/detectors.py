@@ -1,10 +1,9 @@
-"""Heuristic tactical motif detection from board state before/after a move."""
+"""Per-motif tactical heuristics (fork, skewer, deflection, x-ray, ...) plus the
+material helpers they share."""
 
 from __future__ import annotations
 
 import chess
-
-from app.models.chess_events import TacticalMotif
 
 MATE_SCORE = 1_000_000
 
@@ -16,6 +15,10 @@ PIECE_VALUES = {
     chess.QUEEN: 9,
     chess.KING: 100,
 }
+
+
+MINOR_PIECE_VALUE = 3  # value cutoff: a minor piece or better (knight/bishop+)
+OPENING_FULLMOVE_MAX = 4  # zwischenzug heuristic only applies this early
 
 
 def _material_sum(board: chess.Board, color: chess.Color) -> int:
@@ -41,7 +44,10 @@ def _fork_after_move(
             continue
         if not board_after.is_attacked_by(mover_color, sq):
             continue
-        if p.piece_type == chess.KING or PIECE_VALUES.get(p.piece_type, 0) >= 3:
+        if (
+            p.piece_type == chess.KING
+            or PIECE_VALUES.get(p.piece_type, 0) >= MINOR_PIECE_VALUE
+        ):
             count += 1
     return count >= 2
 
@@ -62,7 +68,7 @@ def _skewer_heuristic(
         if tgt_sq not in board_after.attacks(moved_to):
             continue
         v1 = PIECE_VALUES.get(p.piece_type, 0)
-        if v1 < 3:
+        if v1 < MINOR_PIECE_VALUE:
             continue
         df = _sign(chess.square_file(tgt_sq) - chess.square_file(moved_to))
         dr = _sign(chess.square_rank(tgt_sq) - chess.square_rank(moved_to))
@@ -97,7 +103,10 @@ def _removal_of_guard(board_before: chess.Board, move: chess.Move) -> bool:
         p = board_before.piece_at(tgt)
         if not p or p.color != enemy or tgt == victim_sq:
             continue
-        if PIECE_VALUES.get(p.piece_type, 0) < 3 and p.piece_type != chess.KING:
+        if (
+            PIECE_VALUES.get(p.piece_type, 0) < MINOR_PIECE_VALUE
+            and p.piece_type != chess.KING
+        ):
             continue
         if victim_sq in board_before.attackers(enemy, tgt):
             return True
@@ -121,7 +130,7 @@ def _deflection_attack(
             continue
         if sq not in board_after.attacks(move.to_square):
             continue
-        if PIECE_VALUES.get(p.piece_type, 0) < 3:
+        if PIECE_VALUES.get(p.piece_type, 0) < MINOR_PIECE_VALUE:
             continue
         if sq not in board_before.attacks(move.from_square):
             return True
@@ -142,7 +151,10 @@ def _overloaded_defender(board_before: chess.Board, move: chess.Move) -> bool:
         p = board_before.piece_at(tgt)
         if not p or p.color != enemy or tgt == victim_sq:
             continue
-        if PIECE_VALUES.get(p.piece_type, 0) < 3 and p.piece_type != chess.KING:
+        if (
+            PIECE_VALUES.get(p.piece_type, 0) < MINOR_PIECE_VALUE
+            and p.piece_type != chess.KING
+        ):
             continue
         if victim_sq in board_before.attackers(enemy, tgt):
             n += 1
@@ -191,7 +203,7 @@ def _interference_block(
     if (
         not board_before.is_capture(move)
         and not board_after.is_check()
-        and board_before.fullmove_number <= 4
+        and board_before.fullmove_number <= OPENING_FULLMOVE_MAX
         and piece.piece_type in (chess.PAWN, chess.KNIGHT)
     ):
         return False
@@ -208,7 +220,10 @@ def _interference_block(
             tp = board_before.piece_at(tgt_sq)
             if not tp or tp.color != mover_color:
                 continue
-            if PIECE_VALUES.get(tp.piece_type, 0) < 3 and tp.piece_type != chess.KING:
+            if (
+                PIECE_VALUES.get(tp.piece_type, 0) < MINOR_PIECE_VALUE
+                and tp.piece_type != chess.KING
+            ):
                 continue
             between_bb = chess.between(atk_sq, tgt_sq)
             if inter_sq not in chess.SquareSet(between_bb):
@@ -293,7 +308,7 @@ def _x_ray_attack(
                 p.color == enemy
                 and seen_own
                 and p.piece_type != chess.KING
-                and PIECE_VALUES.get(p.piece_type, 0) >= 3
+                and PIECE_VALUES.get(p.piece_type, 0) >= MINOR_PIECE_VALUE
             ):
                 return True
             break
@@ -312,7 +327,7 @@ def _double_attack_non_fork(
             continue
         if sq not in board_after.attacks(moved_to):
             continue
-        if PIECE_VALUES.get(p.piece_type, 0) >= 3:
+        if PIECE_VALUES.get(p.piece_type, 0) >= MINOR_PIECE_VALUE:
             n += 1
     return n >= 2 and not _fork_after_move(board_after, moved_to, mover_color)
 
@@ -403,140 +418,3 @@ def _back_rank_threat(board_after: chess.Board, mover_color: chess.Color) -> boo
         ):
             return True
     return False
-
-
-def detect_tactical_motifs(
-    board_before: chess.Board,
-    board_after: chess.Board,
-    move: chess.Move,
-    eval_before_cp: int | None,
-    eval_after_cp: int | None,
-) -> list[TacticalMotif]:
-    """Return detected tactical motifs for the played move."""
-    motifs: list[TacticalMotif] = []
-    piece_after = board_after.piece_at(move.to_square)
-    if piece_after is None:
-        return motifs
-
-    moved_color = piece_after.color
-
-    if board_after.is_checkmate():
-        motifs.append(TacticalMotif.MATING_NET)
-
-    if board_after.is_check():
-        checkers = board_after.checkers()
-        if len(checkers) >= 2:
-            motifs.append(TacticalMotif.DOUBLE_CHECK)
-        elif move.to_square not in checkers:
-            motifs.append(TacticalMotif.DISCOVERED_CHECK)
-
-    if _fork_after_move(board_after, move.to_square, moved_color):
-        motifs.append(TacticalMotif.FORK)
-
-    if _back_rank_threat(board_after, moved_color):
-        motifs.append(TacticalMotif.BACK_RANK_THREAT)
-
-    if eval_after_cp is not None and abs(eval_after_cp) > MATE_SCORE - 1000:
-        if TacticalMotif.MATING_NET not in motifs:
-            motifs.append(TacticalMotif.MATING_NET)
-
-    mat_before = _material_sum(board_before, moved_color)
-    mat_after = _material_sum(board_after, moved_color)
-    if (
-        mat_after < mat_before - 1
-        and eval_before_cp is not None
-        and eval_after_cp is not None
-    ):
-        is_white = moved_color == chess.WHITE
-        gain = (
-            (eval_after_cp - eval_before_cp)
-            if is_white
-            else (eval_before_cp - eval_after_cp)
-        )
-        if gain >= 50:
-            motifs.append(TacticalMotif.SACRIFICE)
-
-    enemy = not moved_color
-    for sq in chess.SQUARES:
-        pie = board_after.piece_at(sq)
-        if pie and pie.color == enemy and pie.piece_type != chess.KING:
-            try:
-                if board_after.is_pinned(enemy, sq):
-                    motifs.append(TacticalMotif.PIN)
-                    break
-            except Exception:
-                pass
-
-    if _skewer_heuristic(board_after, move.to_square, moved_color):
-        motifs.append(TacticalMotif.SKEWER)
-
-    if _removal_of_guard(board_before, move):
-        motifs.append(TacticalMotif.REMOVAL_OF_GUARD)
-
-    if _deflection_attack(board_before, board_after, move, moved_color):
-        motifs.append(TacticalMotif.DEFLECTION)
-
-    if _overloaded_defender(board_before, move):
-        motifs.append(TacticalMotif.OVERLOADED_PIECE)
-
-    if _decoy_sacrifice(board_before, board_after, move, moved_color):
-        motifs.append(TacticalMotif.DECOY)
-
-    if _interference_block(board_before, board_after, move, moved_color):
-        motifs.append(TacticalMotif.INTERFERENCE)
-
-    if _zwischenzug_check(board_before, board_after, move):
-        motifs.append(TacticalMotif.ZWISCHENZUG)
-
-    if _quiet_move_threatens_major(board_before, board_after, move, moved_color):
-        motifs.append(TacticalMotif.QUIET_MOVE_THREAT)
-
-    if _x_ray_attack(board_after, move.to_square, moved_color):
-        motifs.append(TacticalMotif.X_RAY)
-
-    if _double_attack_non_fork(board_after, move.to_square, moved_color):
-        motifs.append(TacticalMotif.DOUBLE_ATTACK)
-
-    if _clearance_move(board_before, move, moved_color):
-        motifs.append(TacticalMotif.CLEARANCE)
-
-    if board_before.is_capture(move) and board_before.is_attacked_by(
-        enemy, move.from_square
-    ):
-        motifs.append(TacticalMotif.DESPERADO)
-
-    if (
-        board_before.is_capture(move)
-        and piece_after.piece_type == chess.PAWN
-        and mat_after < mat_before
-        and eval_before_cp is not None
-        and eval_after_cp is not None
-    ):
-        is_w = moved_color == chess.WHITE
-        drop = (
-            (eval_after_cp - eval_before_cp)
-            if is_w
-            else (eval_before_cp - eval_after_cp)
-        )
-        if drop <= 40:
-            motifs.append(TacticalMotif.POSITIONAL_PAWN_SAC)
-
-    if board_before.is_capture(move):
-        victim = board_before.piece_at(move.to_square)
-        attacker = board_before.piece_at(move.from_square)
-        if (
-            victim
-            and victim.piece_type == chess.QUEEN
-            and attacker
-            and attacker.piece_type
-            in (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN)
-        ):
-            motifs.append(TacticalMotif.TRADE_TO_DEFUSE_ATTACK)
-
-    seen: set[TacticalMotif] = set()
-    out: list[TacticalMotif] = []
-    for m in motifs:
-        if m not in seen:
-            seen.add(m)
-            out.append(m)
-    return out

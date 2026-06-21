@@ -7,6 +7,21 @@ logger = logging.getLogger(__name__)
 
 # Default retention for analyzed games: 3 months.
 DEFAULT_MAX_AGE_SECONDS = 90 * 24 * 60 * 60
+CLEANUP_INTERVAL_SECONDS = 600  # re-scan every 10 minutes
+
+
+def _remove_stale_files(directory: str, now: float, max_age_seconds: int) -> None:
+    for filename in os.listdir(directory):
+        filepath = os.path.join(directory, filename)
+        if not os.path.isfile(filepath):
+            continue
+        if now - os.path.getmtime(filepath) <= max_age_seconds:
+            continue
+        try:
+            os.remove(filepath)
+            logger.info(f"Deleted old file: {filename}")
+        except Exception as e:
+            logger.error(f"Failed to delete {filename}: {e}")
 
 
 async def cleanup_old_files(
@@ -21,19 +36,8 @@ async def cleanup_old_files(
 
     while True:
         try:
-            now = time.time()
-            for filename in os.listdir(directory):
-                filepath = os.path.join(directory, filename)
-                if os.path.isfile(filepath):
-                    file_age = now - os.path.getmtime(filepath)
-                    if file_age > max_age_seconds:
-                        try:
-                            os.remove(filepath)
-                            logger.info(f"Deleted old file: {filename}")
-                        except Exception as e:
-                            logger.error(f"Failed to delete {filename}: {e}")
-
-            await asyncio.sleep(600)  # Check every 10 minutes
+            _remove_stale_files(directory, time.time(), max_age_seconds)
+            await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
         except Exception as e:
             logger.error(f"Cleanup task error: {e}")
-            await asyncio.sleep(600)
+            await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)

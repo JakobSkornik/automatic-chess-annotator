@@ -48,9 +48,11 @@ app.include_router(jobs.router)
 
 @app.get("/")
 def read_root():
+    """Liveness root endpoint."""
     return {"message": "API is running."}
 
 
 @app.get("/health")
 def health():
+    """Health-check endpoint."""
     return {"ok": True}

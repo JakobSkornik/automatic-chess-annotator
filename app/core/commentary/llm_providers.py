@@ -156,10 +156,17 @@ def _usage_total_anthropic(msg: Any) -> int:
 
 @runtime_checkable
 class LlmProvider(Protocol):
-    @property
-    def name(self) -> str: ...
+    """A pluggable LLM backend. Every provider exposes a stable name, a
+    configuration check, and a JSON-schema-constrained completion call."""
 
-    def is_configured(self) -> bool: ...
+    @property
+    def name(self) -> str:
+        """Stable provider key (e.g. 'openai', 'anthropic')."""
+        ...
+
+    def is_configured(self) -> bool:
+        """True when credentials/config are present, so a call can be attempted."""
+        ...
 
     async def json_schema_call(
         self,
@@ -171,7 +178,9 @@ class LlmProvider(Protocol):
         schema: dict[str, Any],
         schema_name: str,
         max_output_tokens: int | None = None,
-    ) -> tuple[str, int]: ...
+    ) -> tuple[str, int]:
+        """Run a schema-constrained completion; return (raw_text, token_usage)."""
+        ...
 
 
 class OpenAIProvider:
@@ -384,6 +393,7 @@ class CursorProvider:
 
 
 def make_llm_provider(provider_key: str | None = None) -> LlmProvider:
+    """Build the configured LLM provider for ``provider_key`` (falls back to the default)."""
     k = (
         (provider_key or os.environ.get("LLM_DEFAULT_PROVIDER") or "openai")
         .strip()

@@ -21,3 +21,6 @@ data/pgn
 
 logs/
 .cursor/
+.pytest_cache/
+.ruff_cache/
+.coverage

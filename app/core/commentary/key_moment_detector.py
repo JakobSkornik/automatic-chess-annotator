@@ -44,6 +44,152 @@ KEY_MOMENT_PRIORITY: dict[str, int] = {
 }
 
 
+# --- Score-swing key-moment bands (centipawns, mover-POV) ---
+BLUNDER_SWING_CP = -200
+MISTAKE_SWING_CP = -100
+INACCURACY_SWING_CP = -50
+PRESSURE_EVAL_CP = 100  # |eval| under which a side is "under pressure" (good_defense)
+MISSED_OPPORTUNITY_CP = 200  # best move this much better than the move played
+
+# --- PV-comparison key-moment thresholds (centipawns) ---
+GREAT_MOVE_GAP_CP = 80  # best move clearly better than the 2nd best
+CRITICAL_TOP2_GAP_CP = 20  # top two moves this close = a real decision
+CRITICAL_EVAL_SWING_CP = 60  # tangible swing required to call a move critical
+CRITICAL_MATERIAL_SWING_CP = 100  # material story forks by this much
+CRITICAL_KING_EXPOSURE_JUMP = 2  # king-exposure story forks by this much
+
+# --- Strategic-trigger thresholds ---
+KING_SAFETY_CRISIS_EXPOSURE_JUMP = 3
+INITIATIVE_MOBILITY_DELTA = 8
+INITIATIVE_ATTACKERS_DELTA = 2
+ACTIVATION_CENTRALIZATION_GAIN = 1.0
+ACTIVATION_PASSIVE_MAX = 1.5  # only from a passive (low-centralization) start
+
+
+def _eval_swing_class(perspective_change: int, decided: bool) -> list[str]:
+    """Blunder/mistake/inaccuracy from the mover-POV eval drop (live games only)."""
+    if decided:
+        return []
+    if perspective_change <= BLUNDER_SWING_CP:
+        return ["blunder"]
+    if perspective_change <= MISTAKE_SWING_CP:
+        return ["mistake"]
+    if perspective_change <= INACCURACY_SWING_CP:
+        return ["inaccuracy"]
+    return []
+
+
+def _good_defense(
+    prev_score: int | None, is_white_move: bool, perspective_change: int
+) -> list[str]:
+    """Holding or improving the eval while under pressure (bad for the mover)."""
+    if prev_score is None or perspective_change < 0:
+        return []
+    under_pressure = (
+        prev_score <= -PRESSURE_EVAL_CP
+        if is_white_move
+        else prev_score >= PRESSURE_EVAL_CP
+    )
+    return ["good_defense"] if under_pressure else []
+
+
+def _missed_opportunity(
+    pvs_for_move: list[list[Move]] | None,
+    current_move: Move,
+    is_white_move: bool,
+    decided: bool,
+) -> list[str]:
+    """The engine's best move was much better than the one played."""
+    if decided or not (pvs_for_move and pvs_for_move[0]):
+        return []
+    best = pvs_for_move[0][0]
+    if not best or best.score is None or current_move.score is None:
+        return []
+    diff = best.score - current_move.score
+    if not is_white_move:
+        diff = -diff
+    return ["missed_opportunity"] if diff >= MISSED_OPPORTUNITY_CP else []
+
+
+def _great_move(
+    pvs_for_move: list[list[Move]] | None, current_move: Move, is_white_move: bool
+) -> list[str]:
+    """The played move is best and clearly better than the second choice."""
+    if not pvs_for_move or len(pvs_for_move) < 2:
+        return []
+    pv1 = pvs_for_move[0][0] if pvs_for_move[0] else None
+    pv2 = pvs_for_move[1][0] if pvs_for_move[1] else None
+    if not pv1 or not pv2 or getattr(pv1, "move", None) != current_move.move:
+        return []
+    if pv1.score is None or pv2.score is None:
+        return []
+    gap = pv1.score - pv2.score if is_white_move else pv2.score - pv1.score
+    return ["great_move"] if gap >= GREAT_MOVE_GAP_CP else []
+
+
+def _king_story_forks(prev_hf: dict, curr_hf: dict) -> bool:
+    """A king-exposure swing big enough to make the choice critical."""
+    for clr in ("white", "black"):
+        pe = (prev_hf.get(clr) or {}).get("kingExposure")
+        ce = (curr_hf.get(clr) or {}).get("kingExposure")
+        if (
+            isinstance(pe, (int, float))
+            and isinstance(ce, (int, float))
+            and abs(ce - pe) >= CRITICAL_KING_EXPOSURE_JUMP
+        ):
+            return True
+    return False
+
+
+def _material_story_forks(prev_hf: dict, curr_hf: dict) -> bool:
+    """A material swing big enough to make the choice critical."""
+
+    def total(hidden_features: dict):
+        diff = (hidden_features.get("material") or {}).get("diff")
+        return diff.get("total") if isinstance(diff, dict) else None
+
+    pd, cd = total(prev_hf), total(curr_hf)
+    return (
+        isinstance(pd, (int, float))
+        and isinstance(cd, (int, float))
+        and abs(cd - pd) >= CRITICAL_MATERIAL_SWING_CP
+    )
+
+
+def _king_safety_crisis(curr_hf: dict, prev_hf: dict, side: str) -> list[str]:
+    curr = (curr_hf.get(side) or {}).get("kingExposure")
+    prev = (prev_hf.get(side) or {}).get("kingExposure")
+    if curr is None or prev is None:
+        return []
+    return (
+        ["king_safety_crisis"]
+        if curr - prev >= KING_SAFETY_CRISIS_EXPOSURE_JUMP
+        else []
+    )
+
+
+def _initiative_shift(curr_hf: dict, prev_hf: dict, side: str) -> list[str]:
+    cm = (curr_hf.get(side) or {}).get("mobility")
+    pm = (prev_hf.get(side) or {}).get("mobility")
+    ca = (curr_hf.get(side) or {}).get("attackingPieces")
+    pa = (prev_hf.get(side) or {}).get("attackingPieces")
+    if any(v is None for v in (cm, pm, ca, pa)):
+        return []
+    gained_mobility = cm - pm >= INITIATIVE_MOBILITY_DELTA
+    gained_attackers = ca - pa >= INITIATIVE_ATTACKERS_DELTA
+    return ["initiative_shift"] if gained_mobility and gained_attackers else []
+
+
+def _piece_activation(curr_hf: dict, prev_hf: dict, side: str) -> list[str]:
+    curr = (curr_hf.get(side) or {}).get("centralization")
+    prev = (prev_hf.get(side) or {}).get("centralization")
+    if curr is None or prev is None:
+        return []
+    from_passive = prev <= ACTIVATION_PASSIVE_MAX
+    big_gain = curr - prev >= ACTIVATION_CENTRALIZATION_GAIN
+    return ["piece_activation"] if big_gain and from_passive else []
+
+
 class KeyMomentDetector:
     """Detects key moments in a chess game.
 
@@ -119,130 +265,75 @@ class KeyMomentDetector:
         *,
         pv1_change_count: int = 0,
     ) -> list[str]:
-        results: list[str] = []
-
         is_white_move = current_move.depth % 2 == 1
         score_change = current_move.score - previous_move.score  # type: ignore[operator]
-
-        # Adjust for mover's perspective (both scores are White POV after each ply)
         perspective_change = score_change if is_white_move else -score_change
         prev_hf = (previous_move.hiddenFeatures or {}) if previous_move else {}
-        curr_hf = (
-            (current_move.hiddenFeatures or {}) if current_move.hiddenFeatures else {}
-        )
+        curr_hf = current_move.hiddenFeatures or {}
+        self._log_score(current_move, previous_move, is_white_move, perspective_change)
 
-        log_msg = (
-            f"Move {current_move.depth} ({'White' if is_white_move else 'Black'}): "
-            f"Prev={previous_move.score}, Curr={current_move.score}, "
-            f"PerspChange={perspective_change}"
-        )
-        logger.info(log_msg)
-
-        # Already-decided position: when both the played result and the
-        # best-play baseline are beyond the decisive interval, an imprecise
-        # move is not a real mistake (Guid) — skip the negative classifications.
+        # Already-decided position: an imprecise move past the decisive interval
+        # is not a real mistake (Guid) — the negative triggers self-suppress.
         decisive = decisive_eval_cp()
         decided = (
             abs(current_move.score) > decisive and abs(previous_move.score) > decisive
         )
+        return [
+            *_eval_swing_class(perspective_change, decided),
+            *_good_defense(previous_move.score, is_white_move, perspective_change),
+            *_missed_opportunity(pvs_for_move, current_move, is_white_move, decided),
+            *_great_move(pvs_for_move, current_move, is_white_move),
+            *self._critical_decision(
+                pvs_for_move, current_move, previous_move, prev_hf, curr_hf
+            ),
+        ]
 
-        # -- Blunder / Mistake / Inaccuracy (only while the game is still live) --
-        if not decided:
-            if perspective_change <= -200:
-                results.append("blunder")
-            elif perspective_change <= -100:
-                results.append("mistake")
-            elif perspective_change <= -50:
-                results.append("inaccuracy")
+    @staticmethod
+    def _log_score(
+        current_move: Move,
+        previous_move: Move,
+        is_white_move: bool,
+        perspective_change: int,
+    ) -> None:
+        logger.info(
+            "Move %s (%s): Prev=%s, Curr=%s, PerspChange=%s",
+            current_move.depth,
+            "White" if is_white_move else "Black",
+            previous_move.score,
+            current_move.score,
+            perspective_change,
+        )
 
-        # -- Good defense: under pressure (bad eval for side to move) but holds or improves --
-        prev_s = previous_move.score
-        if prev_s is not None:
-            if is_white_move and prev_s <= -100 and perspective_change >= 0:
-                results.append("good_defense")
-            if not is_white_move and prev_s >= 100 and perspective_change >= 0:
-                results.append("good_defense")
+    def _critical_decision(
+        self,
+        pvs_for_move: list[list[Move]] | None,
+        current_move: Move,
+        previous_move: Move,
+        prev_hf: dict,
+        curr_hf: dict,
+    ) -> list[str]:
+        """Top-two moves are close but the position forks (structure/king/material)."""
+        if not pvs_for_move or len(pvs_for_move) < 2:
+            return []
+        pv1 = pvs_for_move[0][0] if pvs_for_move[0] else None
+        pv2 = pvs_for_move[1][0] if pvs_for_move[1] else None
+        if not pv1 or not pv2 or pv1.score is None or pv2.score is None:
+            return []
+        if abs(pv1.score - pv2.score) > CRITICAL_TOP2_GAP_CP:
+            return []
+        forks = (
+            self._structure_forks(pv1, pv2)
+            or _king_story_forks(prev_hf, curr_hf)
+            or _material_story_forks(prev_hf, curr_hf)
+        )
+        eval_swing_abs = abs(current_move.score - previous_move.score)  # type: ignore[operator]
+        if eval_swing_abs >= CRITICAL_EVAL_SWING_CP and forks:
+            return ["critical_decision"]
+        return []
 
-        # -- Missed opportunity (PV-based) — also suppressed once decided --
-        if not decided and pvs_for_move and pvs_for_move[0]:
-            best_move_in_pv = pvs_for_move[0][0]
-            if best_move_in_pv and best_move_in_pv.score is not None:
-                opportunity_diff = best_move_in_pv.score - current_move.score  # type: ignore[operator]
-                if not is_white_move:
-                    opportunity_diff = -opportunity_diff
-                if opportunity_diff >= 200:
-                    results.append("missed_opportunity")
-
-        # NOTE: "brilliant" (a sacrifice) is detected after CommentFacts exist,
-        # from the material trajectory along the engine PV — a single-ply material
-        # diff misses sacrifices whose loss only registers once the opponent
-        # captures on the next ply. See _promote_key_moment in analysis_retriever.
-
-        # -- Great move: best move + significantly better than 2nd best --
-        if pvs_for_move and len(pvs_for_move) >= 2:
-            pv1_first = pvs_for_move[0][0] if pvs_for_move[0] else None
-            pv2_first = pvs_for_move[1][0] if pvs_for_move[1] else None
-            played_is_best = (
-                pv1_first and getattr(pv1_first, "move", None) == current_move.move
-            )
-            if played_is_best and pv1_first and pv2_first:
-                s1 = pv1_first.score
-                s2 = pv2_first.score
-                if s1 is not None and s2 is not None:
-                    gap = s1 - s2 if is_white_move else s2 - s1
-                    if gap >= 80:
-                        results.append("great_move")
-
-        # -- Critical decision: top-2 PVs close but different structure, or king/material story forks --
-        if pvs_for_move and len(pvs_for_move) >= 2:
-            pv1_first = pvs_for_move[0][0] if pvs_for_move[0] else None
-            pv2_first = pvs_for_move[1][0] if pvs_for_move[1] else None
-            if (
-                pv1_first
-                and pv2_first
-                and pv1_first.score is not None
-                and pv2_first.score is not None
-            ):
-                gap = abs(pv1_first.score - pv2_first.score)
-                if gap <= 20:
-                    ps1 = self._pawn_structure_type(pv1_first)
-                    ps2 = self._pawn_structure_type(pv2_first)
-                    king_brk = False
-                    for clr in ("white", "black"):
-                        pe = (prev_hf.get(clr) or {}).get("kingExposure")
-                        ce = (curr_hf.get(clr) or {}).get("kingExposure")
-                        if isinstance(pe, (int, float)) and isinstance(
-                            ce, (int, float)
-                        ):
-                            if abs(ce - pe) >= 2:
-                                king_brk = True
-                    mat_brk = False
-                    pm = prev_hf.get("material") or {}
-                    cm = curr_hf.get("material") or {}
-                    pd = (
-                        (pm.get("diff") or {}).get("total")
-                        if isinstance(pm.get("diff"), dict)
-                        else None
-                    )
-                    cd = (
-                        (cm.get("diff") or {}).get("total")
-                        if isinstance(cm.get("diff"), dict)
-                        else None
-                    )
-                    if isinstance(pd, (int, float)) and isinstance(cd, (int, float)):
-                        if abs(cd - pd) >= 100:
-                            mat_brk = True
-                    struct_diff = bool(ps1 and ps2 and ps1 != ps2)
-                    # Require a tangible eval swing (White POV cp ladder) — tiny blips are noise.
-                    eval_swing_abs = abs(current_move.score - previous_move.score)  # type: ignore[operator]
-                    if eval_swing_abs >= 60 and (struct_diff or king_brk or mat_brk):
-                        results.append("critical_decision")
-
-        return results
-
-    # ------------------------------------------------------------------
-    # Strategic / feature-based triggers
-    # ------------------------------------------------------------------
+    def _structure_forks(self, pv1: Move, pv2: Move) -> bool:
+        ps1, ps2 = self._pawn_structure_type(pv1), self._pawn_structure_type(pv2)
+        return bool(ps1 and ps2 and ps1 != ps2)
 
     def _strategic_triggers(
         self,
@@ -250,85 +341,52 @@ class KeyMomentDetector:
         previous_move: Move | None,
         pvs_for_move: list[list[Move]] | None,
     ) -> list[str]:
-        results: list[str] = []
         curr_hf = current_move.hiddenFeatures or {}
         prev_hf = (previous_move.hiddenFeatures if previous_move else None) or {}
+        side = "white" if current_move.depth % 2 == 1 else "black"
+        return [
+            *self._structural_transformation(curr_hf),
+            *_king_safety_crisis(curr_hf, prev_hf, side),
+            *_initiative_shift(curr_hf, prev_hf, side),
+            *_piece_activation(curr_hf, prev_hf, side),
+            *self._opening_transition(current_move),
+            *self._endgame_transition(current_move),
+        ]
 
-        is_white = current_move.depth % 2 == 1
-        side = "white" if is_white else "black"
-
-        # -- Structural transformation: pawn structure type changed --
+    def _structural_transformation(self, curr_hf: dict) -> list[str]:
         curr_ps = (curr_hf.get("pawnStructure") or {}).get("centerType")
-        if (
+        changed = (
             self._prev_pawn_structure_type
             and curr_ps
             and curr_ps != self._prev_pawn_structure_type
-        ):
-            results.append("structural_transformation")
+        )
+        return ["structural_transformation"] if changed else []
 
-        # -- King safety crisis: exposure score jumps >= 3 --
-        curr_exposure = (curr_hf.get(side) or {}).get("kingExposure")
-        prev_exposure = (prev_hf.get(side) or {}).get("kingExposure")
-        if curr_exposure is not None and prev_exposure is not None:
-            if curr_exposure - prev_exposure >= 3:
-                results.append("king_safety_crisis")
-
-        # -- Initiative shift: mobility delta >= 8 AND attacking pieces delta >= 2 --
-        curr_mobility = (curr_hf.get(side) or {}).get("mobility")
-        prev_mobility = (prev_hf.get(side) or {}).get("mobility")
-        curr_attacking = (curr_hf.get(side) or {}).get("attackingPieces")
-        prev_attacking = (prev_hf.get(side) or {}).get("attackingPieces")
-        if all(
-            v is not None
-            for v in [curr_mobility, prev_mobility, curr_attacking, prev_attacking]
-        ):
-            mob_delta = curr_mobility - prev_mobility  # type: ignore[operator]
-            atk_delta = curr_attacking - prev_attacking  # type: ignore[operator]
-            if mob_delta >= 8 and atk_delta >= 2:
-                results.append("initiative_shift")
-
-        # -- Piece activation: centralization improves a lot from a passive starting point --
-        curr_cent = (curr_hf.get(side) or {}).get("centralization")
-        prev_cent = (prev_hf.get(side) or {}).get("centralization")
-        if curr_cent is not None and prev_cent is not None:
-            if curr_cent - prev_cent >= 1.0 and prev_cent <= 1.5:
-                results.append("piece_activation")
-
-        # -- Opening transition: first move out of book (phase leaves "early") --
-        if (
+    def _opening_transition(self, current_move: Move) -> list[str]:
+        left_book = (
             not self._fired_opening_transition
             and self._prev_phase in ("early", "opening")
             and current_move.phase
             and current_move.phase not in ("early", "opening")
-        ):
-            results.append("opening_transition")
-            self._fired_opening_transition = True
-            self._last_book_depth = current_move.depth
+        )
+        if not left_book:
+            return []
+        self._fired_opening_transition = True
+        self._last_book_depth = current_move.depth
+        return ["opening_transition"]
 
-        # -- Endgame transition: phase changes from mid to end (once per game) --
-        if (
-            (
-                self._prev_phase
-                and current_move.phase
-                and not self._fired_endgame_transition
-            )
-            and self._prev_phase
-            in (
-                "opening",
-                "mid",
-                "middlegame",
-                "early",
-            )
+    def _endgame_transition(self, current_move: Move) -> list[str]:
+        entered_endgame = (
+            self._prev_phase
             and current_move.phase
-            in (
-                "end",
-                "endgame",
-            )
-        ):
-            results.append("endgame_transition")
-            self._fired_endgame_transition = True
-
-        return results
+            and not self._fired_endgame_transition
+            and self._prev_phase in ("opening", "mid", "middlegame", "early")
+            and current_move.phase in ("end", "endgame")
+        )
+        if not entered_endgame:
+            return []
+        self._fired_endgame_transition = True
+        return ["endgame_transition"]
 
     # ------------------------------------------------------------------
     # Helpers
@@ -337,18 +395,18 @@ class KeyMomentDetector:
     def _update_tracking(self, move: Move) -> None:
         """Update internal tracking state after processing a move."""
         self._prev_phase = move.phase
-        hf = move.hiddenFeatures or {}
-        ps = hf.get("pawnStructure")
+        hidden_features = move.hiddenFeatures or {}
+        ps = hidden_features.get("pawnStructure")
         if isinstance(ps, dict):
             self._prev_pawn_structure_type = ps.get("centerType")
 
     @staticmethod
     def _pawn_structure_type(move: Move) -> str | None:
         """Extract pawn structure center type from a move's hiddenFeatures."""
-        hf = move.hiddenFeatures
-        if not isinstance(hf, dict):
+        hidden_features = move.hiddenFeatures
+        if not isinstance(hidden_features, dict):
             return None
-        ps = hf.get("pawnStructure")
+        ps = hidden_features.get("pawnStructure")
         if not isinstance(ps, dict):
             return None
         return ps.get("centerType")

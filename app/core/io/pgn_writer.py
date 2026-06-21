@@ -59,22 +59,28 @@ def _flatten_tokens(text: str) -> tuple[str, list[list[str]]]:
 # Positional-assessment NAGs (ChessBase glyphs) from the White-POV evaluation:
 #   $10 =  ·  $14 ⩲  ·  $15 ⩱  ·  $16 ±  ·  $17 ∓  ·  $18 +−  ·  $19 −+
 # Thresholds in centipawns (White POV); |cp| < 25 reads as "equal".
+# Advantage-bracket edges (|cp|, White POV) mapping to assessment NAGs.
+SLIGHT_EDGE_CP = 25
+CLEAR_EDGE_CP = 75
+BIG_EDGE_CP = 150
+
+
 def _assessment_nag(cp: int | None, mate: int | None) -> int | None:
     if mate is not None:
         return 18 if mate > 0 else 19
     if cp is None:
         return None
-    if cp >= 150:
+    if cp >= BIG_EDGE_CP:
         return 18
-    if cp >= 75:
+    if cp >= CLEAR_EDGE_CP:
         return 16
-    if cp >= 25:
+    if cp >= SLIGHT_EDGE_CP:
         return 14
-    if cp > -25:
+    if cp > -SLIGHT_EDGE_CP:
         return 10
-    if cp > -75:
+    if cp > -CLEAR_EDGE_CP:
         return 15
-    if cp > -150:
+    if cp > -BIG_EDGE_CP:
         return 17
     return 19
 
@@ -174,9 +180,10 @@ def _try_add_line(
             )
 
 
-def game_json_to_pgn(gj: GameJson) -> str:
-    game = chess.pgn.Game()
-    md = gj.metadata
+LeafEval = tuple[int | None, int | None, int | None]
+
+
+def _build_pgn_headers(game: chess.pgn.Game, md) -> None:
     game.headers["Event"] = md.eventId or "?"
     game.headers["White"] = md.white or "?"
     game.headers["Black"] = md.black or "?"
@@ -189,92 +196,112 @@ def game_json_to_pgn(gj: GameJson) -> str:
         game.headers["Opening"] = md.opening
     game.headers["Annotator"] = "automatic-chess-annotator"
 
+
+def _legal_move_or_none(board: chess.Board, move: GameMove) -> chess.Move | None:
+    try:
+        mv = chess.Move.from_uci(move.uci)
+    except Exception:
+        logger.warning("PGN export: bad uci %s — stopping", move.uci)
+        return None
+    if mv not in board.legal_moves:
+        logger.warning("PGN export: illegal %s at %s — stopping", move.uci, board.fen())
+        return None
+    return mv
+
+
+def _flush_diverging_continuations(
+    board_before: chess.Board,
+    parent: chess.pgn.GameNode,
+    move_san: str,
+    pending: list[tuple[list[str], LeafEval]],
+) -> list[tuple[list[str], LeafEval]]:
+    """Continuations that still match become shorter; those that diverge here are
+    written out as variations. Returns the continuations still matching."""
+    still_matching: list[tuple[list[str], LeafEval]] = []
+    for cont, leaf in pending:
+        if cont and cont[0] == move_san:
+            rest = cont[1:]
+            if rest:
+                still_matching.append((rest, leaf))
+        elif len(cont) >= 2:
+            _try_add_line(board_before, parent, cont, *leaf)
+    return still_matching
+
+
+def _tag_move_nags(node: chess.pgn.GameNode, move: GameMove) -> None:
+    nag = _nag_for_move(move)
+    if nag:
+        node.nags.add(nag)
+    if move.score is not None:
+        assess = _assessment_nag(move.score.cp, move.score.mate)
+        if assess:
+            node.nags.add(assess)
+
+
+def _annotate_move_node(
+    node: chess.pgn.GameNode,
+    parent: chess.pgn.GameNode,
+    board_before: chess.Board,
+    move: GameMove,
+    default_depth: int | None,
+    pending: list[tuple[list[str], LeafEval]],
+) -> None:
+    """Attach the move's eval tag + prose, deferring/adding its comment PV lines."""
+    comment_bits: list[str] = []
+    move_depth = (move.comment_facts or {}).get("depth", default_depth)
+    ev = _eval_tag(move, move_depth)
+    if ev:
+        comment_bits.append(ev)
+
+    if move.comment:
+        plain, pv_lines = _flatten_tokens(move.comment)
+        if plain:
+            comment_bits.append(plain)
+        for sans in pv_lines:
+            if not sans:
+                continue
+            if sans[0] != move.san:
+                # A genuine alternative ("Better was ..."): a variation here.
+                _try_add_line(
+                    board_before, parent, sans, *_alt_eval(move, sans[0], default_depth)
+                )
+                continue
+            # The displayed continuation: defer it so it becomes a variation only
+            # where it diverges from the game (avoids duplicate moves).
+            if len(sans) > 1:
+                pending.append((sans[1:], _facts_eval(move, default_depth)))
+
+    if comment_bits:
+        node.comment = " ".join(comment_bits).strip()
+
+
+def game_json_to_pgn(gj: GameJson) -> str:
+    """Render a finished GameJson as annotated PGN (comments, evals, NAGs, variations)."""
+    game = chess.pgn.Game()
+    _build_pgn_headers(game, gj.metadata)
     default_depth = gj.analysis_info.depth if gj.analysis_info else None
 
     board = chess.Board()
     node: chess.pgn.GameNode = game
-    # Continuation lines from comments that so far match the actual game: they
-    # only become variations at the ply where they diverge (otherwise they would
-    # duplicate the mainline, e.g. "4. Nf3 (4. Nf3 e6 ...)"). Each entry carries
-    # the line's leaf eval (cp, mate, depth) so its end can be annotated.
-    LeafEval = tuple[int | None, int | None, int | None]
-    pending_continuations: list[tuple[list[str], LeafEval]] = []
+    # Continuations that still match the game so far; they only become variations
+    # at the ply where they diverge. Each carries its leaf eval for annotation.
+    pending: list[tuple[list[str], LeafEval]] = []
     for move in gj.moves:
-        try:
-            mv = chess.Move.from_uci(move.uci)
-        except Exception:
-            logger.warning("PGN export: bad uci %s — stopping", move.uci)
-            break
-        if mv not in board.legal_moves:
-            logger.warning(
-                "PGN export: illegal %s at %s — stopping", move.uci, board.fen()
-            )
+        mv = _legal_move_or_none(board, move)
+        if mv is None:
             break
         board_before = board.copy(stack=False)
         parent = node
-
-        still_matching: list[tuple[list[str], LeafEval]] = []
-        for cont, leaf in pending_continuations:
-            if cont and cont[0] == move.san:
-                rest = cont[1:]
-                if rest:
-                    still_matching.append((rest, leaf))
-                # fully played out in the game -> nothing to add
-            elif len(cont) >= 2:
-                # Diverges here: a true alternative to this move.
-                _try_add_line(board_before, parent, cont, *leaf)
-        pending_continuations = still_matching
-
+        pending = _flush_diverging_continuations(
+            board_before, parent, move.san, pending
+        )
         node = node.add_main_variation(mv)
         board.push(mv)
-
-        nag = _nag_for_move(move)
-        if nag:
-            node.nags.add(nag)
-        # Positional-assessment glyph (=, ⩲, ±, +−, …) from this move's eval.
-        if move.score is not None:
-            assess = _assessment_nag(move.score.cp, move.score.mate)
-            if assess:
-                node.nags.add(assess)
-
-        comment_bits: list[str] = []
-        move_depth = (move.comment_facts or {}).get("depth", default_depth)
-        ev = _eval_tag(move, move_depth)
-        if ev:
-            comment_bits.append(ev)
-
-        move_comment = move.comment
-        if move_comment:
-            plain, pv_lines = _flatten_tokens(move_comment)
-            if plain:
-                comment_bits.append(plain)
-            for sans in pv_lines:
-                if not sans:
-                    continue
-                if sans[0] == move.san:
-                    # The displayed continuation (starts with the played move):
-                    # defer it — it becomes a variation only where it diverges
-                    # from the game (avoids duplicating the next mainline move).
-                    # Its leaf eval is the move's own optimal-play evaluation.
-                    if len(sans) > 1:
-                        pending_continuations.append(
-                            (sans[1:], _facts_eval(move, default_depth))
-                        )
-                else:
-                    # An alternative to the played move (e.g. "Better was ..."):
-                    # a true variation at the same point, ending at its own eval.
-                    _try_add_line(
-                        board_before,
-                        parent,
-                        sans,
-                        *_alt_eval(move, sans[0], default_depth),
-                    )
-
-        if comment_bits:
-            node.comment = " ".join(comment_bits).strip()
+        _tag_move_nags(node, move)
+        _annotate_move_node(node, parent, board_before, move, default_depth, pending)
 
     # Continuations still matching at the end of the game extend past it.
-    for cont, leaf in pending_continuations:
+    for cont, leaf in pending:
         if len(cont) >= 2:
             _try_add_line(board, node, cont, *leaf)
 

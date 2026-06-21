@@ -28,6 +28,7 @@ _game_seq: dict[str, int] = {}
 
 
 def is_enabled() -> bool:
+    """True when per-game LLM JSONL logging is enabled (LOG_LLM_TO_FILE)."""
     return os.environ.get("LOG_LLM_TO_FILE", "").strip().lower() in ("1", "true")
 
 
@@ -37,6 +38,7 @@ def set_game_context(game_id: str | None) -> Any:
 
 
 def reset_game_context(token: Any) -> None:
+    """Clear the active game-id context (pair with set_game_context)."""
     _GAME_ID.reset(token)
 
 
@@ -55,6 +57,7 @@ def set_move_context(
 
 
 def reset_move_context(tokens: tuple[Any, Any, Any]) -> None:
+    """Restore the ply/episode/pass-label context tokens."""
     t0, t1, t2 = tokens
     _PASS_LABEL.reset(t2)
     _EPISODE_INDEX.reset(t1)
@@ -75,6 +78,38 @@ def _lock_for_game(game_id: str) -> threading.Lock:
         if game_id not in _game_locks:
             _game_locks[game_id] = threading.Lock()
         return _game_locks[game_id]
+
+
+_CHARS_PER_TOKEN_EST = 4  # rough chars-per-token for the prompt-size estimate
+
+
+def _utc_timestamp() -> str:
+    dt = datetime.now(timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
+
+
+def _optional_context_fields() -> dict[str, Any]:
+    """The ply / episode / pass-label context, included only when set."""
+    fields: dict[str, Any] = {}
+    for ctx_var, key in (
+        (_PLY, "ply"),
+        (_EPISODE_INDEX, "episode_index"),
+        (_PASS_LABEL, "pass_label"),
+    ):
+        value = ctx_var.get()
+        if value is not None:
+            fields[key] = value
+    return fields
+
+
+def _append_call_record(gid: str, record: dict[str, Any]) -> None:
+    path = _path_for_game(gid)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError as e:
+        logger.warning("llm_call_log: failed to write %s: %s", path, e)
 
 
 def log_call(
@@ -98,18 +133,12 @@ def log_call(
         return None
 
     safe_gid = _sanitized_game_id(gid)
-    lk = _lock_for_game(safe_gid)
-    with lk:
+    with _lock_for_game(safe_gid):
         seq = _game_seq.get(safe_gid, 0) + 1
         _game_seq[safe_gid] = seq
-
-        dt = datetime.now(timezone.utc)
-        ms = dt.microsecond // 1000
-        ts = dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{ms:03d}Z"
-
         record: dict[str, Any] = {
             "seq": seq,
-            "ts": ts,
+            "ts": _utc_timestamp(),
             "game_id": gid,
             "pass_name": pass_name,
             "model": model,
@@ -121,26 +150,11 @@ def log_call(
             "error": error,
             "prompt_chars": len(system) + len(user),
             "response_chars": len(response),
-            "prompt_token_est": (len(system) + len(user)) // 4,
+            "prompt_token_est": (len(system) + len(user)) // _CHARS_PER_TOKEN_EST,
             "system": system,
             "user": user,
             "response": response,
+            **_optional_context_fields(),
         }
-        ply_v = _PLY.get()
-        if ply_v is not None:
-            record["ply"] = ply_v
-        ep_v = _EPISODE_INDEX.get()
-        if ep_v is not None:
-            record["episode_index"] = ep_v
-        pl_v = _PASS_LABEL.get()
-        if pl_v is not None:
-            record["pass_label"] = pl_v
-        path = _path_for_game(gid)
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            line = json.dumps(record, ensure_ascii=False)
-            with path.open("a", encoding="utf-8") as f:
-                f.write(line + "\n")
-        except OSError as e:
-            logger.warning("llm_call_log: failed to write %s: %s", path, e)
+        _append_call_record(gid, record)
         return seq

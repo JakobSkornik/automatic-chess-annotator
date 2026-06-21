@@ -65,7 +65,6 @@ class AdvancedCommentService:
         if _log_llm_prompts_enabled():
             _debug_log_prompt(f"json_schema:{schema_name}", system_prompt, user_text)
         resolved_model = model or resolve_model(self.provider_name, "composer")
-        pass_name = f"json_schema:{schema_name}"
         t0 = time.perf_counter()
         raw: str | None = None
         usage: int | None = None
@@ -82,35 +81,57 @@ class AdvancedCommentService:
                 max_output_tokens=max_output_tokens,
             )
             self._last_token_usage = usage
-            logger.info(
-                "LLM JSON pass %s token_usage≈%s",
-                schema_name,
-                self._last_token_usage,
-            )
+            logger.info("LLM JSON pass %s token_usage≈%s", schema_name, usage)
             ok = True
             return (raw or "").strip()
         except Exception as e:
             err = repr(e)
             raise
         finally:
-            elapsed_ms = (time.perf_counter() - t0) * 1000
-            if ok and usage is None:
-                logger.warning(
-                    "LLM json_schema call completed without usage metadata "
-                    "(schema_name=%s model=%s)",
-                    schema_name,
-                    resolved_model,
-                )
-            log_llm_call(
-                pass_name=pass_name,
+            self._log_completed_call(
+                schema_name=schema_name,
                 system=system_prompt,
                 user=user_text,
-                response=(raw or "") if raw is not None else "",
+                raw=raw,
                 model=resolved_model,
                 effort=effort,
-                schema_name=schema_name,
-                token_usage=usage,
-                elapsed_ms=elapsed_ms,
+                usage=usage,
+                elapsed_ms=(time.perf_counter() - t0) * 1000,
                 ok=ok,
-                error=err,
+                err=err,
             )
+
+    @staticmethod
+    def _log_completed_call(
+        *,
+        schema_name: str,
+        system: str,
+        user: str,
+        raw: str | None,
+        model: str,
+        effort: str,
+        usage: int | None,
+        elapsed_ms: float,
+        ok: bool,
+        err: str | None,
+    ) -> None:
+        if ok and usage is None:
+            logger.warning(
+                "LLM json_schema call completed without usage metadata "
+                "(schema_name=%s model=%s)",
+                schema_name,
+                model,
+            )
+        log_llm_call(
+            pass_name=f"json_schema:{schema_name}",
+            system=system,
+            user=user,
+            response=raw or "",
+            model=model,
+            effort=effort,
+            schema_name=schema_name,
+            token_usage=usage,
+            elapsed_ms=elapsed_ms,
+            ok=ok,
+            error=err,
+        )

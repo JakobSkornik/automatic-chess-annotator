@@ -18,6 +18,10 @@ class OpeningInfo:
     variation: str | None = None
 
 
+ECO_CODE_LEN = 3  # letter + two digits, e.g. 'B01'
+FEN_POSITION_FIELDS = 4  # board, turn, castling, en-passant define the position
+
+
 def mainline_uci_list(game: chess.pgn.Game) -> list[str]:
     """UCI plies in mainline order."""
     out: list[str] = []
@@ -34,8 +38,8 @@ def _fen_lookup_variants(fen: str) -> list[str]:
     seen: list[str] = []
     for candidate in (
         fen,
-        " ".join(parts[:4]) + " 0 1" if len(parts) >= 4 else fen,
-        " ".join(parts[:4]) + " - 0 1" if len(parts) >= 4 else fen,
+        " ".join(parts[:4]) + " 0 1" if len(parts) >= FEN_POSITION_FIELDS else fen,
+        " ".join(parts[:4]) + " - 0 1" if len(parts) >= FEN_POSITION_FIELDS else fen,
     ):
         if candidate not in seen:
             seen.append(candidate)
@@ -50,7 +54,7 @@ def parse_pgn_eco_tag(headers: chess.pgn.Headers) -> str | None:
     raw = (headers.get("ECO") or "").strip().strip('"')
     if not raw:
         return None
-    if len(raw) != 3 or raw[0] not in "ABCDEabcde" or not raw[1:].isdigit():
+    if len(raw) != ECO_CODE_LEN or raw[0] not in "ABCDEabcde" or not raw[1:].isdigit():
         logger.warning(
             "Invalid ECO PGN tag %r — ignoring; internal book will be used", raw
         )
@@ -114,6 +118,22 @@ def detect_opening(
     return b.match(uci_moves)
 
 
+def _uci_sequence(moves_str: str) -> list[str]:
+    """SAN move-list string -> UCI prefix list; empty on any parse failure."""
+    board = chess.Board()
+    uci_sequence: list[str] = []
+    try:
+        for san_move in moves_str.split():
+            if "." in san_move:
+                continue
+            move = board.parse_san(san_move)
+            uci_sequence.append(move.uci())
+            board.push(move)
+    except Exception:
+        return []
+    return uci_sequence
+
+
 class ECOBook:
     """ECO lookup: longest UCI-prefix match, then FEN (transposition) fallback."""
 
@@ -143,21 +163,9 @@ class ECOBook:
                     variation=entry.get("v"),
                 )
                 self._by_fen[fen_key] = info
-                moves_str = entry.get("moves", "")
-                board = chess.Board()
-                uci_sequence: list[str] = []
-                try:
-                    for san_move in moves_str.split():
-                        if "." in san_move:
-                            continue
-                        move = board.parse_san(san_move)
-                        uci_sequence.append(move.uci())
-                        board.push(move)
-                    if uci_sequence:
-                        key = " ".join(uci_sequence)
-                        self._by_uci[key] = info
-                except Exception:
-                    continue
+                uci_sequence = _uci_sequence(entry.get("moves", ""))
+                if uci_sequence:
+                    self._by_uci[" ".join(uci_sequence)] = info
         logger.info(
             "ECO book: %s UCI prefixes, %s FEN keys",
             len(self._by_uci),
