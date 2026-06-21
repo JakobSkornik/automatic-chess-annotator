@@ -38,7 +38,7 @@ class PhaseClassifier:
     def __init__(self, eco_book: ECOBook | None = None) -> None:
         self._eco = eco_book or ECOBook()
 
-    def in_book(self, uci_prefix: list[str]) -> bool:
+    def is_in_book(self, uci_prefix: list[str]) -> bool:
         """True while the ECO book covers every ply played so far."""
         if not uci_prefix:
             return False
@@ -46,7 +46,7 @@ class PhaseClassifier:
         return info is not None and matched >= len(uci_prefix)
 
     def classify(self, board_after: chess.Board, uci_prefix: list[str]) -> str:
-        if self.in_book(uci_prefix):
+        if self.is_in_book(uci_prefix):
             return "early"
         if minor_major_piece_count(board_after) < endgame_piece_threshold():
             return "end"

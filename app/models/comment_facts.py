@@ -117,6 +117,7 @@ class CommentFacts(BaseModel):
     concession_mode: str = "tradeoff"
 
     def feature_refs(self) -> list[str]:
+        """Distinct feature names referenced across all claims, in first-seen order."""
         seen: list[str] = []
         for c in self.claims:
             for f in c.features_involved:

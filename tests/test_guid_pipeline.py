@@ -697,7 +697,8 @@ def test_merit_suppressed_when_move_backfires():
         ]
 
     # Drive build_comment_facts with stubbed rules so the test is deterministic.
-    import app.core.commentary.rules.engine as eng
+    # build_comment_facts calls run_rules via the facts_builder module namespace.
+    import app.core.commentary.rules.facts_builder as eng
 
     orig = eng.run_rules
     eng.run_rules = _claims_stub

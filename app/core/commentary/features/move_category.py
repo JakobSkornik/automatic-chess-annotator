@@ -11,45 +11,69 @@ from app.models.chess_events import (
     StrategicMotif,
 )
 
+# Move-category thresholds.
+UNDER_PRESSURE_CP = 100  # |eval| at/below which the mover is defending
+DEFENSIVE_HOLD_TOLERANCE_CP = 40
+BOOK_PLY_MAX = 22  # an in-theory best move counts as book up to this ply
+BOOK_NEAR_PLY_MAX = 16
+BOOK_NEAR_LOSS_CP = 35
 
-def classify_move_event(me: MoveEvent) -> MoveCategory:
+
+def classify_move_event(move_event: MoveEvent) -> MoveCategory:
     """
     Deterministic category from motifs, eval, opening, and PV hints.
     Order follows mentor plan: tactical / quality / defensive / book / prophylactic / forcing / positional.
     """
-    if me.tactical_motifs:
+    if move_event.tactical_motifs:
         return MoveCategory.TACTICAL
 
-    if me.move_quality == MoveQuality.BLUNDER or me.move_quality == MoveQuality.MISTAKE:
+    if (
+        move_event.move_quality == MoveQuality.BLUNDER
+        or move_event.move_quality == MoveQuality.MISTAKE
+    ):
         return MoveCategory.CRITICAL
-    if me.move_quality == MoveQuality.INACCURACY:
+    if move_event.move_quality == MoveQuality.INACCURACY:
         return MoveCategory.INACCURACY
 
-    if me.eval_before_cp is not None and me.eval_before_cp <= -100:
-        if me.eval_after_cp is not None and me.eval_after_cp >= me.eval_before_cp - 40:
+    if (
+        move_event.eval_before_cp is not None
+        and move_event.eval_before_cp <= -UNDER_PRESSURE_CP
+    ):
+        if (
+            move_event.eval_after_cp is not None
+            and move_event.eval_after_cp
+            >= move_event.eval_before_cp - DEFENSIVE_HOLD_TOLERANCE_CP
+        ):
             return MoveCategory.DEFENSIVE
 
     if (
-        me.phase == "opening"
-        and me.opening_eco
-        and me.ply <= 22
-        and me.best_move_uci
-        and me.uci == me.best_move_uci
+        move_event.phase == "opening"
+        and move_event.opening_eco
+        and move_event.ply <= BOOK_PLY_MAX
+        and move_event.best_move_uci
+        and move_event.uci == move_event.best_move_uci
     ):
         return MoveCategory.BOOK
-    if me.phase == "opening" and me.opening_eco and me.ply <= 16:
+    if (
+        move_event.phase == "opening"
+        and move_event.opening_eco
+        and move_event.ply <= BOOK_NEAR_PLY_MAX
+    ):
         loss = 0
-        if me.eval_after_cp is not None and me.best_move_eval_cp is not None:
-            loss = abs(me.best_move_eval_cp - me.eval_after_cp)
-        if loss <= 35:
+        if (
+            move_event.eval_after_cp is not None
+            and move_event.best_move_eval_cp is not None
+        ):
+            loss = abs(move_event.best_move_eval_cp - move_event.eval_after_cp)
+        if loss <= BOOK_NEAR_LOSS_CP:
             return MoveCategory.BOOK
 
-    if StrategicMotif.PROPHYLAXIS in me.strategic_motifs:
+    if StrategicMotif.PROPHYLAXIS in move_event.strategic_motifs:
         return MoveCategory.PROPHYLACTIC
 
     try:
-        b = chess.Board(me.fen_before)
-        m = chess.Move.from_uci(me.uci)
+        b = chess.Board(move_event.fen_before)
+        m = chess.Move.from_uci(move_event.uci)
         if b.is_capture(m) or b.gives_check(m):
             return MoveCategory.FORCING
     except Exception:

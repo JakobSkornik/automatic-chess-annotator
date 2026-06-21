@@ -61,6 +61,9 @@ def _extract_pgn_snapshot(pgn_string: str) -> tuple[PgnMetadata | None, int]:
     return meta, n
 
 
+PGN_PREVIEW_CHARS = 500
+
+
 class QueueManager:
     def __init__(self):
         self.job_queue: asyncio.Queue = asyncio.Queue()
@@ -111,6 +114,7 @@ class QueueManager:
         commentary_level: str | None = None,
         comment_side: str | None = None,
     ) -> str:
+        """Enqueue a new analysis job and return its generated id."""
         job_id = str(uuid.uuid4())
         self._enqueue_seq += 1
         seq = self._enqueue_seq
@@ -131,8 +135,8 @@ class QueueManager:
             "pgn_headers": pgn_headers,
             "move_count": move_count,
             "error": None,
-            "pgn_preview": (pgn_string[:500] + "…")
-            if len(pgn_string) > 500
+            "pgn_preview": (pgn_string[:PGN_PREVIEW_CHARS] + "…")
+            if len(pgn_string) > PGN_PREVIEW_CHARS
             else pgn_string,
         }
         self.jobs[job_id] = job_data
@@ -141,12 +145,14 @@ class QueueManager:
         return job_id
 
     def get_job_status(self, job_id: str) -> JobResponse | None:
+        """Public status view of a job, or None if the id is unknown."""
         job = self.jobs.get(job_id)
         if not job:
             return None
         return self._job_to_response(job)
 
     def list_jobs(self, limit: int = 20) -> list[JobResponse]:
+        """The most-recently-created jobs first, capped at limit."""
         items = sorted(
             self.jobs.values(),
             key=lambda j: (-j["created_at"], -j.get("enqueue_seq", 0)),
@@ -156,15 +162,18 @@ class QueueManager:
     def update_job_status(
         self, job_id: str, status: JobStatus, progress: float = 0.0, message: str = ""
     ):
+        """Update a job status, progress and message in place."""
         if job_id in self.jobs:
             self.jobs[job_id]["status"] = status
             self.jobs[job_id]["progress"] = progress
             self.jobs[job_id]["message"] = message
 
     def get_job_data(self, job_id: str) -> dict | None:
+        """The raw internal job dict (engine-pipeline use), or None."""
         return self.jobs.get(job_id)
 
     def mark_failed(self, job_id: str, error: str):
+        """Mark a job failed and record its error message."""
         if job_id in self.jobs:
             self.jobs[job_id]["status"] = JobStatus.FAILED
             self.jobs[job_id]["progress"] = 0.0
@@ -179,15 +188,19 @@ class QueueManager:
         self.commentary_buffer.setdefault(job_id, []).append(entry)
 
     def get_buffered_commentary(self, job_id: str) -> list[dict[str, Any]]:
+        """Buffered commentary messages for a job (replayed to late clients)."""
         return list(self.commentary_buffer.get(job_id, []))
 
     def clear_commentary_buffer(self, job_id: str) -> None:
+        """Drop the commentary replay buffer for a job."""
         self.commentary_buffer.pop(job_id, None)
 
     def add_job_ws(self, job_id: str, ws: WebSocket) -> None:
+        """Register a WebSocket client for a job for live updates."""
         self.ws_connections.setdefault(job_id, []).append(ws)
 
     def remove_job_ws(self, job_id: str, ws: WebSocket) -> None:
+        """Detach a WebSocket client; forget the job once none remain."""
         conns = self.ws_connections.get(job_id)
         if not conns:
             return
@@ -199,6 +212,7 @@ class QueueManager:
     async def broadcast_to_job_ws(
         self, job_id: str, msg_type: str, payload: dict[str, Any]
     ) -> None:
+        """Send a message to every WebSocket client connected to a job."""
         message = {"type": msg_type, "payload": payload}
         for ws in list(self.ws_connections.get(job_id, [])):
             try:

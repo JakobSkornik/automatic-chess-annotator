@@ -45,9 +45,9 @@ def scan_pv_motifs(
         board_after = board.copy()
 
         try:
-            hf = hidden_features_fn(board_after)
+            hidden_features = hidden_features_fn(board_after)
         except Exception:
-            hf = {}
+            hidden_features = {}
 
         tact = detect_tactical_motifs(
             board_before,
@@ -60,7 +60,7 @@ def scan_pv_motifs(
             board_before,
             board_after,
             move,
-            hf if isinstance(hf, dict) else {},
+            hidden_features if isinstance(hidden_features, dict) else {},
             eval_after_cp=None,
             eval_before_cp=prev_eval,
             phase=phase,

@@ -113,13 +113,17 @@ def _parse_eval(content: str) -> float | None:
         return None
 
 
+# Piece letter + a 2-char square name, e.g. 'Nd7'.
+MIN_PIECE_SQUARE_LEN = 3
+
+
 def _parse_piece_square(content: str) -> dict[str, str] | None:
     """
     Expect piece letter (PNBRQK) + square, e.g. Nd7, Bg5.
     Highlights the destination square.
     """
     c = (content or "").strip()
-    if len(c) < 3:
+    if len(c) < MIN_PIECE_SQUARE_LEN:
         return None
     piece = c[0].upper()
     if piece not in "PNBRQK":
@@ -130,6 +134,42 @@ def _parse_piece_square(content: str) -> dict[str, str] | None:
     if sq[0] not in "abcdefgh" or sq[1] not in "12345678":
         return None
     return {"piece": piece, "square": sq}
+
+
+def _resolve_pv_token(
+    content: str, fen_before: str, fen_after: str
+) -> dict[str, Any] | None:
+    """Guid display lines start WITH the played move (replay from fen_before);
+    plain continuations start after it (fen_after). Keep whichever covers more."""
+    best_fen: str | None = None
+    best_line: list[dict[str, str]] | None = None
+    for candidate_fen in (fen_before, fen_after):
+        line = _resolve_pv_line(content, candidate_fen)
+        if line and (best_line is None or len(line) > len(best_line)):
+            best_fen, best_line = candidate_fen, line
+    return {"line": best_line, "start_fen": best_fen} if best_line else None
+
+
+def _resolve_token_data(
+    t: str, content: str, fen_before: str, fen_after: str
+) -> dict[str, Any] | None:
+    """Resolve one known token to its interactive ``data`` payload (or None)."""
+    if t == "pv":
+        return _resolve_pv_token(content, fen_before, fen_after)
+    if t == "move":
+        return _resolve_single_move(content, fen_before) or None
+    if t == "square":
+        sq = _parse_square(content)
+        return {"square": sq} if sq else None
+    if t == "file":
+        f = _parse_file(content)
+        return {"file": f} if f else None
+    if t == "eval":
+        ev = _parse_eval(content)
+        return {"pawns": ev} if ev is not None else None
+    if t == "piece":
+        return _parse_piece_square(content) or None
+    return None
 
 
 def resolve_tokens(
@@ -146,72 +186,29 @@ def resolve_tokens(
     Each item: {type, raw, start, end, content, data?}
     `data` is None if unknown type or resolution failed.
     """
-    parsed = parse_tokens(text)
-    resolved: list[dict[str, Any]] = []
     default_fen = chess.Board().fen()
-    fb = fen_before or default_fen
-    fa = fen_after or default_fen
+    fen_before = fen_before or default_fen
+    fen_after = fen_after or default_fen
 
-    for p in parsed:
+    resolved: list[dict[str, Any]] = []
+    for p in parse_tokens(text):
         t = p["type"]
-        content = p["content"]
-        raw = p["raw"]
-        start = p["start"]
-        end = p["end"]
         entry: dict[str, Any] = {
             "type": t,
-            "raw": raw,
-            "content": content,
-            "start": start,
-            "end": end,
+            "raw": p["raw"],
+            "content": p["content"],
+            "start": p["start"],
+            "end": p["end"],
             "data": None,
         }
-
-        if t not in KNOWN_TYPES:
-            resolved.append(entry)
-            continue
-
-        data: dict[str, Any] | None = None
-        try:
-            if t == "pv":
-                # Guid display lines start WITH the played move (replay from
-                # fen_before); plain continuations start after it (fen_after).
-                # Try both and keep the resolution that covers more plies.
-                best_fen: str | None = None
-                best_line: list[dict[str, str]] | None = None
-                for candidate_fen in (fb, fa):
-                    line = _resolve_pv_line(content, candidate_fen)
-                    if line and (best_line is None or len(line) > len(best_line)):
-                        best_fen = candidate_fen
-                        best_line = line
-                if best_line:
-                    data = {"line": best_line, "start_fen": best_fen}
-            elif t == "move":
-                m = _resolve_single_move(content, fb)
-                if m:
-                    data = m
-            elif t == "square":
-                sq = _parse_square(content)
-                if sq:
-                    data = {"square": sq}
-            elif t == "file":
-                f = _parse_file(content)
-                if f:
-                    data = {"file": f}
-            elif t == "eval":
-                ev = _parse_eval(content)
-                if ev is not None:
-                    data = {"pawns": ev}
-            elif t == "piece":
-                ps = _parse_piece_square(content)
-                if ps:
-                    data = ps
-        except Exception:
-            data = None
-
-        entry["data"] = data
+        if t in KNOWN_TYPES:
+            try:
+                entry["data"] = _resolve_token_data(
+                    t, p["content"], fen_before, fen_after
+                )
+            except Exception:
+                entry["data"] = None
         resolved.append(entry)
-
     return resolved
 
 
