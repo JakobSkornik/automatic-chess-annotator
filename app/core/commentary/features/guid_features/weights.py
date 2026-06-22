@@ -38,6 +38,7 @@ WEIGHTS: dict[str, float] = {
         chess.QUEEN: 3,
     },
     "back_rank_weakness": -15,
+    "castling_rights": 6,  # per retained castling right (flexibility to castle)
     "center_control": 4,  # per attack on d4/e4/d5/e5
     "space": 1,  # per safe square controlled in enemy half
     "piece_activity": 2,  # per weighted mobility unit
@@ -111,6 +112,8 @@ CHART_FEATURES: list[str] = [
     "BLACK_ROOK_ON_SEVENTH",
     "WHITE_KING_SHIELD",
     "BLACK_KING_SHIELD",
+    "WHITE_CASTLING_RIGHTS",
+    "BLACK_CASTLING_RIGHTS",
     "WHITE_KING_TROPISM",
     "BLACK_KING_TROPISM",
     "WHITE_KING_ACTIVITY",

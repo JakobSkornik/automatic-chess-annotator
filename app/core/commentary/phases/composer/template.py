@@ -3,9 +3,15 @@ used whenever an LLM rendering fails the fact contract."""
 
 from __future__ import annotations
 
+from app.core.commentary.rules.constants import INFERIOR_ALT_WEAKER_CP
 from app.models.comment_facts import Claim, CommentFacts
 
-from .framing import _ARCHETYPE_OPENER, _is_alt_materially_better, _missed_noun
+from .framing import (
+    _ARCHETYPE_OPENER,
+    _is_alt_materially_better,
+    _missed_noun,
+    alt_gap_cp,
+)
 from .tokens import _alt_pv_token, _gerundize, _move_label, eval_token, pv_token
 
 LONG_LINE_PLIES = 6  # lines this long describe the envisioned position (state form)
@@ -76,6 +82,25 @@ def _render_alternative(facts: CommentFacts, variant: int) -> str | None:
     if alt is None:
         return None
     alt_pv = _alt_pv_token(alt)
+    if alt.is_inferior:
+        # The played move WAS best; contrast it with the runner-up. Wording
+        # depends on the gap: clearly worse -> "Weaker was", else "comparable".
+        gap = alt_gap_cp(facts)  # mover-POV; <= 0 for a runner-up
+        clearly_weaker = gap is None or -gap >= INFERIOR_ALT_WEAKER_CP
+        lead = (
+            f"Weaker was {alt.san}"
+            if clearly_weaker
+            else (f"A comparable alternative was {alt.san}")
+        )
+        s = lead
+        if alt.verdict:
+            s += f", which {alt.verdict}"
+        if alt_pv:
+            s += f" after {alt_pv}"
+        s += "."
+        if alt.claims:
+            s += " " + " ".join(c.text for c in alt.claims)
+        return s
     if not _is_alt_materially_better(facts):
         # Roughly equal: present it as an option, not a miss.
         s = f"A comparable alternative was {alt.san}"

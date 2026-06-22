@@ -315,6 +315,16 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
             flag=back_rank,
         )
 
+        # --- castling rights (retained flexibility to castle either side) ---
+        castling_rights = int(board.has_kingside_castling_rights(color)) + int(
+            board.has_queenside_castling_rights(color)
+        )
+        put(
+            f"{prefix}_CASTLING_RIGHTS",
+            sign * castling_rights * _w("castling_rights"),
+            flag=castling_rights,
+        )
+
         # --- tropism (own pieces toward enemy king) ---
         tropism = 0.0
         if enemy_king is not None:
@@ -407,6 +417,10 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
     put(
         "MATERIAL_BALANCE",
         out["WHITE_MATERIAL"].value_cp + out["BLACK_MATERIAL"].value_cp,
+    )
+    put(
+        "CASTLING_RIGHTS",
+        out["WHITE_CASTLING_RIGHTS"].value_cp + out["BLACK_CASTLING_RIGHTS"].value_cp,
     )
 
     return out

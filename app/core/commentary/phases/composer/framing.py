@@ -48,7 +48,9 @@ def comment_archetype(key_moment_type: str | None) -> str:
     return "neutral"
 
 
+# NB: openers must not contain any phrase in forbidden_phrases.FORBIDDEN_REGEX,
+# or the scrub pass strips it mid-sentence and leaves debris ("is the ,").
 _ARCHETYPE_OPENER: dict[str, str] = {
-    "engine_choice": "is the engine's top choice,",
+    "engine_choice": "is the strongest move here,",
     "brilliant_sacrifice": "is a brilliant sacrifice,",
 }

@@ -27,10 +27,18 @@ def forbidden_hit_strings(text: str) -> list[str]:
     return out
 
 
+# Grammatical debris a mid-sentence removal can leave, e.g. removing "engine's
+# top choice" from "is the engine's top choice," yields "is the ,".
+_DANGLING_DET = re.compile(r"\b(is|was|are|were)\s+(?:the|a|an)\s*(?=[,.;:])", re.I)
+
+
 def scrub_forbidden(text: str) -> tuple[str, list[str]]:
     """Remove forbidden phrases; returns (cleaned_text, unique hits before removal)."""
     hits = forbidden_hit_strings(text)
     cleaned = FORBIDDEN_REGEX.sub("", text or "")
+    # Tidy any "is the ," / "was a ." left where a phrase was removed.
+    cleaned = _DANGLING_DET.sub(r"\1", cleaned)
+    cleaned = re.sub(r"\s+([,.;:])", r"\1", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip(), hits

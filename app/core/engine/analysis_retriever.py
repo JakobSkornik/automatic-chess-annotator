@@ -145,6 +145,13 @@ def _build_game_move(
         classification=key_moment,
         annotation=_annotation_symbol(key_moment) if side_ok else None,
         is_key_moment=bool(move_event and move_event.key_moment_type and side_ok),
+        final_comment=bool(
+            comment
+            and move_event
+            and move_event.key_moment_type
+            and side_ok
+            and not move_event.brief_commentary
+        ),
         resolved_tokens=_resolve_comment_tokens(comment, move_event),
         comment_facts=_facts_to_json(facts) if facts is not None else None,
         debug=_build_move_debug(

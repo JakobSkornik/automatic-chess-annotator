@@ -41,9 +41,13 @@ def _apply_back_to_back_key_moment_suppression(
             last_ply, last_type = move_event.ply, key_moment
 
 
-# Brilliant-sacrifice detection (post-facts): along the played PV the mover
-# gives up at least this much material yet keeps an equal-or-better eval.
-BRILLIANT_SAC_TROUGH_CP = 150
+# Brilliant-sacrifice detection (post-facts). A real sacrifice keeps the mover
+# DOWN this much material at the END of the played line — material regained
+# within the sequence (a recapture/clearance such as knight-for-bishop) is NOT
+# a sacrifice (Guid). It must also leave the mover clearly winning, so the
+# sacrifice demonstrably works; a move that merely holds equality is not "!!".
+BRILLIANT_SAC_LEAF_CP = 150
+BRILLIANT_MIN_EVAL_CP = 100
 
 
 def _played_is_best(move_event: MoveEvent) -> bool:
@@ -53,30 +57,26 @@ def _played_is_best(move_event: MoveEvent) -> bool:
 
 
 def _is_sacrifice(facts: Any) -> bool:
-    """The mover's material dips >= threshold somewhere along the played line."""
+    """Material is still down for the mover at the END of the line. A transient
+    dip that is regained within the sequence is not a sacrifice."""
     dl = facts.display_line
     series = (dl.feature_series.get("MATERIAL_BALANCE") if dl else None) or []
     if len(series) < 2:
         return False
     sign = 1 if facts.mover == "White" else -1
-    start = series[0]
-    trough = min(sign * (v - start) for v in series)
-    return trough <= -BRILLIANT_SAC_TROUGH_CP
+    leaf_deficit = sign * (series[-1] - series[0])
+    return leaf_deficit <= -BRILLIANT_SAC_LEAF_CP
 
 
-def _eval_holds_or_improves(facts: Any) -> bool:
-    """Mover is at least equal after the move and no worse than before it."""
+def _eval_clearly_winning(facts: Any) -> bool:
+    """The mover is clearly better after the move — i.e. the sacrifice works.
+    Merely holding equality does not make a move brilliant."""
     if facts.eval_cp is None:
         return facts.eval_mate is not None and (
             (facts.eval_mate > 0) == (facts.mover == "White")
         )
     sign = 1 if facts.mover == "White" else -1
-    after = sign * facts.eval_cp
-    if after < 0:  # mover ends up worse — not a sound sacrifice
-        return False
-    if facts.eval_before_cp is None:
-        return True
-    return after >= sign * facts.eval_before_cp - 20
+    return sign * facts.eval_cp >= BRILLIANT_MIN_EVAL_CP
 
 
 def _promote_key_moment(
@@ -84,13 +84,13 @@ def _promote_key_moment(
 ) -> str | None:
     """Upgrade the key-moment type using the now-available CommentFacts.
 
-    - ``brilliant``: a best-move sacrifice that holds/improves the eval (highest
-      priority — overrides whatever the detector flagged).
+    - ``brilliant``: a best move that gives up material lasting to the line's
+      end yet stays clearly winning (highest priority).
     - ``best_move``: an instructive top move (>= 1 fired claim) that nothing
       else flagged. Decisive positions self-exclude (their claims are emptied).
     """
     if _played_is_best(move_event):
-        if _is_sacrifice(facts) and _eval_holds_or_improves(facts):
+        if _is_sacrifice(facts) and _eval_clearly_winning(facts):
             return "brilliant"
         if move_event.key_moment_type is None and kept_claims:
             return "best_move"
