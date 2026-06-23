@@ -12,13 +12,15 @@ def decisive_eval_cp() -> int:
     """Half-width of the "still a real game" interval, in centipawns (Guid).
 
     When both the played move and the engine's suggestion evaluate beyond this
-    (default ±6.00), the position is already decided and imprecise moves should
-    not be flagged as mistakes/oversights. Tunable via ``DECISIVE_EVAL_CP``.
+    (default ±2.00, per Guid's 2006 World-Champions paper), the position is
+    already decided: a player with a winning/lost game often plays a "good
+    enough" or practical move rather than the engine's best, so imprecise moves
+    there must not be flagged as mistakes. Tunable via ``DECISIVE_EVAL_CP``.
     """
     try:
-        return int(os.environ.get("DECISIVE_EVAL_CP", "600"))
+        return int(os.environ.get("DECISIVE_EVAL_CP", "200"))
     except ValueError:
-        return 300
+        return 200
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +54,7 @@ PRESSURE_EVAL_CP = 100  # |eval| under which a side is "under pressure" (good_de
 MISSED_OPPORTUNITY_CP = 200  # best move this much better than the move played
 
 # --- PV-comparison key-moment thresholds (centipawns) ---
-GREAT_MOVE_GAP_CP = 80  # best move clearly better than the 2nd best
+GREAT_MOVE_GAP_CP = 120  # best move clearly better than the 2nd best
 CRITICAL_TOP2_GAP_CP = 20  # top two moves this close = a real decision
 CRITICAL_EVAL_SWING_CP = 60  # tangible swing required to call a move critical
 CRITICAL_MATERIAL_SWING_CP = 100  # material story forks by this much
@@ -111,10 +113,26 @@ def _missed_opportunity(
     return ["missed_opportunity"] if diff >= MISSED_OPPORTUNITY_CP else []
 
 
+def _is_recapture(current_move: Move, previous_move: Move | None) -> bool:
+    """The played move captures on the very square the opponent just moved to —
+    an obvious forced recapture, not an instructive 'great' find (Guid)."""
+    cur = getattr(current_move, "move", None)
+    prev = getattr(previous_move, "move", None) if previous_move else None
+    if not cur or not prev or len(cur) < 4 or len(prev) < 4:
+        return False
+    return cur[2:4] == prev[2:4]
+
+
 def _great_move(
-    pvs_for_move: list[list[Move]] | None, current_move: Move, is_white_move: bool
+    pvs_for_move: list[list[Move]] | None,
+    current_move: Move,
+    is_white_move: bool,
+    previous_move: Move | None = None,
 ) -> list[str]:
-    """The played move is best and clearly better than the second choice."""
+    """The played move is best and clearly better than the second choice.
+
+    Obvious recaptures are excluded: a forced recapture often has a large gap to
+    the (bad) alternative of not recapturing, but it is not a 'great' move."""
     if not pvs_for_move or len(pvs_for_move) < 2:
         return []
     pv1 = pvs_for_move[0][0] if pvs_for_move[0] else None
@@ -122,6 +140,8 @@ def _great_move(
     if not pv1 or not pv2 or getattr(pv1, "move", None) != current_move.move:
         return []
     if pv1.score is None or pv2.score is None:
+        return []
+    if _is_recapture(current_move, previous_move):
         return []
     gap = pv1.score - pv2.score if is_white_move else pv2.score - pv1.score
     return ["great_move"] if gap >= GREAT_MOVE_GAP_CP else []
@@ -282,7 +302,7 @@ class KeyMomentDetector:
             *_eval_swing_class(perspective_change, decided),
             *_good_defense(previous_move.score, is_white_move, perspective_change),
             *_missed_opportunity(pvs_for_move, current_move, is_white_move, decided),
-            *_great_move(pvs_for_move, current_move, is_white_move),
+            *_great_move(pvs_for_move, current_move, is_white_move, previous_move),
             *self._critical_decision(
                 pvs_for_move, current_move, previous_move, prev_hf, curr_hf
             ),

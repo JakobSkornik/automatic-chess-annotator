@@ -56,6 +56,7 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
             "eval_cp": alt.eval_cp,
             "display_line": _line(alt.display_line),
             "claims": _claims(alt.claims),
+            "is_inferior": alt.is_inferior,
         }
     return out
 

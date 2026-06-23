@@ -182,6 +182,62 @@ def _build_better_alternative(
     )
 
 
+def _build_inferior_alternative(
+    ctx: _FactsCtx, main_claims: list[Claim]
+) -> BestAlternative | None:
+    """When the engine's best move was actually played, surface the runner-up
+    (2nd-best PV) as a contrast for the "!" — so the reader sees what the move was
+    chosen over (Guid). The wording later adapts to the gap: a clearly-worse
+    runner-up reads as "weaker", a near-equal one as "a comparable alternative".
+    Uses the already-computed PVs, so no extra search.
+    """
+    move_event = ctx.move_event
+    if not (move_event.best_move_uci and move_event.best_move_uci == move_event.uci):
+        return None
+    if move_event.eval_after_cp is None:
+        return None
+    pvs = ctx.row.pvs or []
+    second = pvs[1][0] if len(pvs) >= 2 and pvs[1] else None
+    if second is None or getattr(second, "move", None) is None or second.score is None:
+        return None
+
+    played_cp, _ = _decode_eval(move_event.eval_after_cp)
+    second_cp, second_mate = _decode_eval(second.score)
+    if played_cp is None or second_cp is None:  # mate-coded line: skip the contrast
+        return None
+    second_uci = str(second.move)
+    if second_uci == move_event.uci:  # degenerate: 2nd PV repeats the played move
+        return None
+    try:
+        second_san = ctx.board_before.san(chess.Move.from_uci(second_uci))
+    except (ValueError, chess.IllegalMoveError):
+        second_san = second_uci
+    second_pv_uci = [str(m.move) for m in pvs[1] if getattr(m, "move", None)]
+    alt_line = envisioned_for_best_move(
+        move_event.fen_before, second_pv_uci, best_eval_cp=second_cp, depth=ctx.depth
+    )
+    alt_diff = diff_vectors(
+        ctx.start_vec, compute_feature_vector_fen(alt_line.leaf_fen)
+    )
+    alt_claims = run_rules(
+        alt_diff,
+        phase=ctx.phase_raw,
+        mover=ctx.mover.upper(),
+        eval_cp=second_cp,
+        start_board=ctx.board_before,
+        leaf_board=chess.Board(alt_line.leaf_fen),
+    )
+    return BestAlternative(
+        san=second_san,
+        uci=second_uci,
+        eval_cp=second_cp,
+        verdict=verdict_for_eval(second_cp, second_mate),
+        display_line=alt_line,
+        claims=_alternative_merits(alt_claims, main_claims, ctx.mover),
+        is_inferior=True,
+    )
+
+
 def _with_feature_series(line: EnvisionedLine, fen_before: str) -> EnvisionedLine:
     """Attach the full per-feature progression along the line (for the charts)."""
     return line.model_copy(
@@ -296,7 +352,9 @@ def build_comment_facts(
         leaf_vec=leaf_vec,
         refutation_san=refutation_san,
     )
-    better = _build_better_alternative(ctx, claims)
+    better = _build_better_alternative(ctx, claims) or _build_inferior_alternative(
+        ctx, claims
+    )
     played_line, better = _attach_series_and_realization(
         played_line, claims, better, move_event.fen_before
     )

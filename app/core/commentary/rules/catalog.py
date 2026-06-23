@@ -31,6 +31,7 @@ from .piece_rules import (
     rule_rook_activity,
     rule_strong_knight,
 )
+from .threat_rules import rule_threats
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ def order_claims_for_mover(claims: list[Claim], mover: str) -> list[Claim]:
 
 ALL_RULES: list[Rule] = [
     rule_material,
+    rule_threats,
     rule_pawn_structure,
     rule_doubled_pawns,
     rule_bishop_pair,

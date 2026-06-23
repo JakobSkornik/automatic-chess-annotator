@@ -71,7 +71,7 @@ def rule_strong_knight(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)} establishes a strong knight{where}.",
                     text_state=f"{_side_label(side)} has a strong knight{where}.",
                     features_involved=[name, cent],
-                    delta_cp=d,
+                    delta_cp=ctx.claim_cp(name),
                     flag_note=ctx.flag_change(name),
                 )
             )
@@ -82,7 +82,7 @@ def rule_strong_knight(ctx: _Ctx) -> list[Claim]:
                     beneficiary=_benef_opp(side),
                     text=f"{_side_label(side)} no longer has a strong knight.",
                     features_involved=[name, cent],
-                    delta_cp=-d,
+                    delta_cp=ctx.claim_cp(name),
                     flag_note=ctx.flag_change(name),
                 )
             )
@@ -171,7 +171,7 @@ def rule_rook_activity(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)}'s rooks become more active on the open files.",
                     text_state=f"{_side_label(side)}'s rooks are active on the open files.",
                     features_involved=feats,
-                    delta_cp=d,
+                    delta_cp=ctx.claim_cp(feats[0]) + ctx.claim_cp(feats[1]),
                 )
             )
     return out
@@ -180,12 +180,10 @@ def rule_rook_activity(ctx: _Ctx) -> list[Claim]:
 def rule_king_safety(ctx: _Ctx) -> list[Claim]:
     out: list[Claim] = []
     for side in SIDES:
-        feats = [
-            f"{side}_KING_SHIELD",
-            f"{side}_KING_ZONE_ATTACKERS",
-            f"{side}_BACK_RANK",
-        ]
-        d = sum(_toward(side, ctx.delta(f)) for f in feats)
+        name = f"{side}_KING_DANGER"
+        # KING_DANGER is stored negative for the attacked side, so a positive
+        # mover-POV delta means that side's king got safer; negative = pressured.
+        d = _toward(side, ctx.delta(name))
         opp = "BLACK" if side == "WHITE" else "WHITE"
         opp_tropism = _toward(opp, ctx.delta(f"{opp}_KING_TROPISM"))
         if (
@@ -198,7 +196,7 @@ def rule_king_safety(ctx: _Ctx) -> list[Claim]:
                     beneficiary=_benef_opp(side),
                     text=f"{_side_label(side)}'s king comes under pressure.",
                     text_state=f"{_side_label(side)}'s king is under pressure.",
-                    features_involved=[*feats, f"{opp}_KING_TROPISM"],
+                    features_involved=[name, f"{opp}_KING_TROPISM"],
                     delta_cp=-d,
                 )
             )
@@ -212,7 +210,7 @@ def rule_king_safety(ctx: _Ctx) -> list[Claim]:
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)}'s king is now safer.",
                     text_state=f"{_side_label(side)}'s king is safe.",
-                    features_involved=[*feats, f"{opp}_KING_TROPISM"],
+                    features_involved=[name, f"{opp}_KING_TROPISM"],
                     delta_cp=d,
                 )
             )
@@ -247,6 +245,9 @@ def rule_piece_activity(ctx: _Ctx) -> list[Claim]:
         return out
     for side in SIDES:
         name = f"{side}_PIECE_ACTIVITY"
+        # `d` is now a mobility-square swing (PIECE_ACTIVITY is a natural count).
+        # The claim's delta_cp is scaled to a cp-comparable importance so it ranks
+        # and clears min_claim_cp alongside the centipawn-scaled features.
         d = _toward(side, ctx.delta(name))
         if d >= THRESHOLDS["piece_activity"]:
             out.append(
@@ -256,7 +257,7 @@ def rule_piece_activity(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)} has improved the activity of the pieces.",
                     text_state=f"{_side_label(side)}'s pieces are actively placed.",
                     features_involved=[name],
-                    delta_cp=d,
+                    delta_cp=ctx.claim_cp(name),
                 )
             )
         elif -d >= THRESHOLDS["piece_activity"]:
@@ -267,7 +268,7 @@ def rule_piece_activity(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)}'s pieces become more passive.",
                     text_state=f"{_side_label(side)}'s pieces are passive.",
                     features_involved=[name],
-                    delta_cp=-d,
+                    delta_cp=ctx.claim_cp(name),
                 )
             )
     return out

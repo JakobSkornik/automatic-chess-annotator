@@ -9,6 +9,7 @@ from typing import Any
 import chess
 from chess.pgn import Game
 
+from app.core.commentary.rules.constants import INFERIOR_ALT_WEAKER_CP
 from app.models.chess_events import AnalyzedMoveData, MoveEvent
 from app.models.GameJson import Variation
 from app.models.Move import Move
@@ -85,6 +86,34 @@ def _fallback_comment(
     )
 
 
+# A "!"/"!!" annotation can stand on its own — these classifications mark a good
+# move without obliging a comment. (Negative ones always have a consequence to
+# explain, so they are never silenced.)
+_OPTIONAL_ANNOTATIONS = frozenset({"best_move", "great_move", "brilliant"})
+
+
+def _nothing_instructive_to_say(move_event: MoveEvent) -> bool:
+    """True when an optional "!"-type move has no instructive content. The
+    annotation then stands alone rather than emitting a hollow "Best move" line
+    (Guid: if there is nothing smart to say, say nothing).
+
+    There is something to say when either (a) a rule fired a claim, or (b) the
+    second-best move is *clearly* weaker, so the contrast itself is instructive.
+    A merely-comparable runner-up adds nothing."""
+    if move_event.key_moment_type not in _OPTIONAL_ANNOTATIONS:
+        return False
+    facts = move_event.comment_facts
+    if facts is None:
+        return True
+    if facts.claims:
+        return False
+    alt = facts.better_alternative
+    if alt is not None and alt.is_inferior:
+        gap = abs((alt.eval_cp or 0) - (facts.eval_cp or 0))
+        return gap < INFERIOR_ALT_WEAKER_CP
+    return alt is None
+
+
 def _resolve_move_comment(
     row: AnalyzedMoveData,
     analyzed_move: Move,
@@ -104,7 +133,10 @@ def _resolve_move_comment(
         mc.comment = _opening_comment(analyzed_move)
     elif move_event and move_event.key_moment_type and side_ok:
         _apply_llm_comment(mc, analyzed_move)
-        if not mc.comment:
+        # Say nothing rather than emit a hollow floor line for an optional "!"
+        # move that carries no instructive facts (Guid). The LLM comment, if it
+        # found something to say, is still honored above.
+        if not mc.comment and not _nothing_instructive_to_say(move_event):
             mc.comment = _fallback_comment(move_event, key_moment)
     return mc
 

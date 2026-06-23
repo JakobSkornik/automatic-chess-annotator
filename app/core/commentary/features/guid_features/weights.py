@@ -29,8 +29,6 @@ WEIGHTS: dict[str, float] = {
     "pawn_duo": 4,  # per side-by-side pawn pair
     "pawn_advance": 2,  # per rank past the 2nd, per pawn
     "passed_pawn_by_rank": [0, 0, 10, 15, 25, 40, 60, 0],  # index = relative rank
-    "king_shield_pawn": 8,  # per shield pawn in front of the king
-    "king_zone_attacker": -10,  # per enemy piece eyeing the king zone
     "king_tropism_piece": {
         chess.KNIGHT: 2,
         chess.BISHOP: 1,
@@ -38,9 +36,9 @@ WEIGHTS: dict[str, float] = {
         chess.QUEEN: 3,
     },
     "back_rank_weakness": -15,
+    "castling_rights": 6,  # per retained castling right (flexibility to castle)
     "center_control": 4,  # per attack on d4/e4/d5/e5
     "space": 1,  # per safe square controlled in enemy half
-    "piece_activity": 2,  # per weighted mobility unit
     "king_activity": 5,  # endgame: per ring step toward the center
     "outside_passer": 18,  # endgame: per outside passed pawn
     "passer_king_escort": 4,  # endgame: own king close to own passer
@@ -109,8 +107,14 @@ CHART_FEATURES: list[str] = [
     "BLACK_ROOK_OPEN_FILE",
     "WHITE_ROOK_ON_SEVENTH",
     "BLACK_ROOK_ON_SEVENTH",
-    "WHITE_KING_SHIELD",
-    "BLACK_KING_SHIELD",
+    "WHITE_KING_DANGER",
+    "BLACK_KING_DANGER",
+    "WHITE_CASTLING_RIGHTS",
+    "BLACK_CASTLING_RIGHTS",
+    "WHITE_WEAK_ENEMIES",
+    "BLACK_WEAK_ENEMIES",
+    "WHITE_HANGING",
+    "BLACK_HANGING",
     "WHITE_KING_TROPISM",
     "BLACK_KING_TROPISM",
     "WHITE_KING_ACTIVITY",

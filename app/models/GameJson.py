@@ -41,6 +41,10 @@ class GameMove(BaseModel):
     # (drives the move-list dot) — not the template-floor facts that every
     # analyzed move carries.
     is_key_moment: bool = False
+    # True when this move carries a substantive comment that would actually be
+    # used in the final annotated game (a key moment with real prose, not a
+    # back-to-back stub) — lets a reviewer see the curated commentary set.
+    final_comment: bool = False
     resolved_tokens: list[dict[str, Any]] = []
     # Trimmed CommentFacts for the structured comment renderer (assessment /
     # reasons / better alternative, each with its own line).
@@ -56,9 +60,13 @@ class GameMetadata(BaseModel):
     black: str
     result: str
     eventId: str | None = None
+    site: str | None = None
+    round: str | None = None
+    date: str | None = None
     whiteElo: int | None = None
     blackElo: int | None = None
     opening: str | None = None
+    opening_eco: str | None = None
     # Pre-analysis options the commentary was generated with
     commentary_level: str | None = None  # beginner | intermediate | expert
     comment_side: str | None = None  # white | black | both

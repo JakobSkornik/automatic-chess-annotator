@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.commentary.rules.constants import INFERIOR_ALT_WEAKER_CP
 from app.models.comment_facts import Claim, CommentFacts
 
 from .framing import ALT_MATERIAL_GAP_CP, alt_gap_cp
@@ -58,6 +59,9 @@ GUID_COMPOSER_SYSTEM = (
     "the potential to ...' for <in the line> claims. When 'roughly equal', present "
     "it neutrally as a comparable option, never as a miss. Always include its "
     "verdict and PV token.\n"
+    "- If INFERIOR ALTERNATIVE is present instead, the played move was the best: "
+    "add one sentence contrasting it with that weaker runner-up (why the played "
+    "move was better), using its verdict and PV token. Never frame it as a miss.\n"
     "- One paragraph. No lists, no headers, no engine-worship.\n"
 )
 
@@ -87,15 +91,20 @@ AUDIENCE_BLOCKS: dict[str, str] = {
 
 ARCHETYPE_RULES: dict[str, str] = {
     "engine_choice": (
-        "ARCHETYPE — engine's choice: the played move IS the engine's preferred "
-        "move. Open by confirming it as the top/optimal choice and say what it "
-        "leads to (from the verdict and claims). There is NO better alternative; "
-        "do not invent a flaw, a downside, or a 'but'.\n"
+        "ARCHETYPE — best move: the played move is the strongest available. Open "
+        "by affirming it as the best/most accurate move (do NOT mention the engine "
+        "or 'engine's choice') and say what it leads to (from the verdict and "
+        "claims). There is no BETTER alternative, so do not invent a flaw, a "
+        "downside, or a 'but' — though if an INFERIOR ALTERNATIVE is provided you "
+        "may contrast it to show why the played move is stronger.\n"
     ),
     "brilliant_sacrifice": (
         "ARCHETYPE — brilliant sacrifice: the move gives up material yet the "
-        "evaluation holds or improves. Lead by naming it as a sacrifice and "
-        "explain why it works using the claims and verdict. You MAY mark it '!!'. "
+        "side to move comes out clearly better. Lead by calling it a sacrifice "
+        "and explain why it works using the claims and verdict. You MAY mark it "
+        "'!!'. Do NOT name the specific sacrificed piece — you are not told "
+        "which piece is given up, so write 'a sacrifice' or 'sacrifices "
+        "material', never e.g. 'bishop sacrifice' or 'rook sacrifice'. "
         "Do not call it dubious.\n"
     ),
     "inaccuracy_missed": (
@@ -131,6 +140,25 @@ def _alternative_block(facts: CommentFacts) -> list[str]:
     alt = facts.better_alternative
     if alt is None:
         return []
+    if alt.is_inferior:
+        gap = alt_gap_cp(facts)  # mover-POV; <= 0 for a runner-up
+        standing = (
+            "clearly weaker — contrast it to show why the played move is stronger"
+            if gap is None or -gap >= INFERIOR_ALT_WEAKER_CP
+            else "roughly as good — present as a comparable option, not a mistake"
+        )
+        return [
+            "",
+            "RUNNER-UP ALTERNATIVE (the played move was the best; this is the "
+            "second-best — use it only as a contrast, NEVER as a move that was "
+            "missed):",
+            f"Move: {alt.san}",
+            f"Verdict: {alt.verdict}",
+            f"Standing: {standing}",
+            f"PV token (copy verbatim): {_alt_pv_token(alt)}",
+            "Claims (what this line would have given):",
+            *([_claim_prompt_line(c) for c in alt.claims] or ["- (none)"]),
+        ]
     gap = alt_gap_cp(facts)
     significance = (
         "roughly equal — present as a comparable option, NOT as a miss"

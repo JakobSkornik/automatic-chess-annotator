@@ -75,7 +75,9 @@ class Claim(BaseModel):
 
 
 class BestAlternative(BaseModel):
-    """The engine-preferred move, with its own envisioned line and claims."""
+    """An alternative move with its own envisioned line and claims. Usually the
+    engine-preferred (better) move; when ``is_inferior`` it is instead the
+    clearly-worse runner-up shown to contrast a top move that was played."""
 
     san: str
     uci: str
@@ -83,6 +85,7 @@ class BestAlternative(BaseModel):
     verdict: str = ""
     display_line: EnvisionedLine | None = None
     claims: list[Claim] = Field(default_factory=list)
+    is_inferior: bool = False
 
 
 class CommentFacts(BaseModel):

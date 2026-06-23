@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import chess
 
+from .features.king import king_danger as king_danger_feature
+from .features.pawns import backward as backward_feature
+from .features.pawns import doubled as doubled_feature
+from .features.pawns import isolated as isolated_feature
+from .features.pawns import phalanx as phalanx_feature
+from .features.pieces import bishop_pawns as bishop_pawns_feature
+from .features.pieces import outpost as outpost_feature
+from .features.pieces import rook_on_file as rook_on_file_feature
+from .features.threats import hanging as hanging_feature
+from .features.threats import weak_enemies as weak_enemies_feature
 from .geometry import (
     _center_ring_bonus,
     _chebyshev,
-    _is_backward,
-    _is_isolated,
     _is_passed,
-    _pawn_files,
     _relative_rank,
 )
+from .mobility import mobility_count
 from .weights import (
     CENTER_SQUARES,
     WEIGHTS,
@@ -38,7 +46,6 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
         enemy = not color
         enemy_king = board.king(enemy)
         own_king = board.king(color)
-        files = _pawn_files(board, color)
         pawns = list(board.pieces(chess.PAWN, color))
         knights = list(board.pieces(chess.KNIGHT, color))
         bishops = list(board.pieces(chess.BISHOP, color))
@@ -59,84 +66,44 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
             flag=len(pawns) + len(knights) + len(bishops) + len(rooks) + len(queens),
         )
 
-        # --- pawn structure ---
-        doubled = sum(len(sqs) - 1 for sqs in files.values() if len(sqs) > 1)
-        isolated = sum(1 for sq in pawns if _is_isolated(files, sq))
-        backward = sum(
-            1
-            for sq in pawns
-            if not _is_isolated(files, sq) and _is_backward(board, sq, color)
-        )
+        # --- pawn structure (Stockfish predicates; values are natural counts) ---
+        doubled = doubled_feature.count(board, color)
+        isolated = isolated_feature.count(board, color)
+        backward = backward_feature.count(board, color)
+        duos = phalanx_feature.count(board, color)
         passed = [sq for sq in pawns if _is_passed(board, sq, color)]
-        duos = 0
-        pawn_set = set(pawns)
-        for sq in pawns:
-            f, r = chess.square_file(sq), chess.square_rank(sq)
-            if f < 7 and chess.square(f + 1, r) in pawn_set:
-                duos += 1
+        passed_value_cp = sum(_passed_value(_relative_rank(sq, color)) for sq in passed)
         advances = sum(max(0, _relative_rank(sq, color) - 1) for sq in pawns)
+        # The aggregate stays a weighted centipawn score — it combines
+        # heterogeneous pawn features, which raw counts cannot meaningfully sum.
+        pawn_struct_cp = (
+            doubled * _w("pawn_doubled")
+            + isolated * _w("pawn_isolated")
+            + backward * _w("pawn_backward")
+            + duos * _w("pawn_duo")
+            + passed_value_cp
+        )
 
-        put(f"{prefix}_PAWN_DOUBLED", sign * doubled * _w("pawn_doubled"), flag=doubled)
-        put(
-            f"{prefix}_PAWN_ISOLATED",
-            sign * isolated * _w("pawn_isolated"),
-            flag=isolated,
-        )
-        put(
-            f"{prefix}_PAWN_BACKWARD",
-            sign * backward * _w("pawn_backward"),
-            flag=backward,
-        )
+        put(f"{prefix}_PAWN_DOUBLED", sign * doubled, flag=doubled)
+        put(f"{prefix}_PAWN_ISOLATED", sign * isolated, flag=isolated)
+        put(f"{prefix}_PAWN_BACKWARD", sign * backward, flag=backward)
         put(
             f"{prefix}_WEAK_PAWNS",
-            sign * (isolated * _w("pawn_isolated") + backward * _w("pawn_backward")),
+            sign * (isolated + backward),
             flag=isolated + backward,
         )
-        put(
-            f"{prefix}_PAWN_PASSED",
-            sign * sum(_passed_value(_relative_rank(sq, color)) for sq in passed),
-            flag=len(passed),
-        )
-        put(f"{prefix}_PAWN_DUO", sign * duos * _w("pawn_duo"), flag=duos)
+        put(f"{prefix}_PAWN_PASSED", sign * passed_value_cp, flag=len(passed))
+        put(f"{prefix}_PAWN_DUO", sign * duos, flag=duos)
         put(
             f"{prefix}_PAWN_ADVANCES",
             sign * advances * _w("pawn_advance"),
             flag=len(pawns),
         )
 
-        # --- knights ---
-        outposts = 0
-        centralization = 0
-        for sq in knights:
-            centralization += _center_ring_bonus(sq)
-            rel = _relative_rank(sq, color)
-            if 3 <= rel <= 5:
-                defended = any(
-                    board.piece_at(att) is not None
-                    and board.piece_at(att).piece_type == chess.PAWN
-                    and board.piece_at(att).color == color
-                    for att in board.attackers(color, sq)
-                )
-                # can an enemy pawn ever kick it? (no enemy pawn on adjacent
-                # file that is in front of or level with the knight)
-                assailable = False
-                f, r = chess.square_file(sq), chess.square_rank(sq)
-                for esq in board.pieces(chess.PAWN, not color):
-                    if abs(chess.square_file(esq) - f) != 1:
-                        continue
-                    er = chess.square_rank(esq)
-                    if (color == chess.WHITE and er > r) or (
-                        color == chess.BLACK and er < r
-                    ):
-                        assailable = True
-                        break
-                if defended and not assailable:
-                    outposts += 1
-        put(
-            f"{prefix}_KNIGHTS_OUTPOSTS",
-            sign * outposts * _w("knight_outpost"),
-            flag=len(knights),
-        )
+        # --- knights (outpost is a Stockfish predicate; value is a count) ---
+        outposts = outpost_feature.count(board, color)
+        centralization = sum(_center_ring_bonus(sq) for sq in knights)
+        put(f"{prefix}_KNIGHTS_OUTPOSTS", sign * outposts, flag=outposts)
         put(
             f"{prefix}_KNIGHTS_CENTRALIZATION",
             sign * centralization * _w("knight_centralization"),
@@ -147,7 +114,6 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
         pair = _w("bishop_pair") if len(bishops) >= 2 else 0
         put(f"{prefix}_BISHOP_PAIR", sign * pair, flag=len(bishops))
 
-        pawns_on_color = 0
         bishop_mobility = 0
         bad_bishops = 0
         for sq in bishops:
@@ -160,7 +126,6 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
                 if ((chess.square_file(p) + chess.square_rank(p)) % 2 == 1)
                 == bishop_color_light
             ]
-            pawns_on_color += len(same_color_pawns)
             mob = len(board.attacks(sq))
             bishop_mobility += mob
             # Bad bishop (Ch.6 / Watson): own pawns on its color weighted by
@@ -178,10 +143,11 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
             # "bad" and floods comments with solved/created flicker.
             if weighted >= 7 and mob <= 3:
                 bad_bishops += 1
+        bishop_pawns = bishop_pawns_feature.count(board, color)
         put(
             f"{prefix}_BISHOP_PLUS_PAWNS_ON_COLOR",
-            sign * pawns_on_color * _w("bishop_pawn_on_color"),
-            flag=len(bishops),
+            sign * bishop_pawns,
+            flag=bishop_pawns,
         )
         put(
             f"{prefix}_BISHOPS_MOBILITY",
@@ -194,20 +160,13 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
             flag=bad_bishops,
         )
 
-        # --- rooks ---
-        open_files_cnt = 0
-        half_open_cnt = 0
+        # --- rooks (open / semi-open files are Stockfish predicates; counts) ---
+        open_files_cnt = rook_on_file_feature.open_file_count(board, color)
+        half_open_cnt = rook_on_file_feature.semi_open_file_count(board, color)
         seventh = 0
         behind_passer = 0
-        enemy_files = _pawn_files(board, enemy)
         for sq in rooks:
             f = chess.square_file(sq)
-            own_pawns_on_f = files.get(f, [])
-            enemy_pawns_on_f = enemy_files.get(f, [])
-            if not own_pawns_on_f and not enemy_pawns_on_f:
-                open_files_cnt += 1
-            elif not own_pawns_on_f:
-                half_open_cnt += 1
             if _relative_rank(sq, color) == 6:
                 seventh += 1
             for p in passed:
@@ -223,14 +182,10 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
             r1, r2 = rooks[0], rooks[1]
             if r2 in board.attacks(r1):
                 connected = 1
-        put(
-            f"{prefix}_ROOK_OPEN_FILE",
-            sign * open_files_cnt * _w("rook_open_file"),
-            flag=open_files_cnt,
-        )
+        put(f"{prefix}_ROOK_OPEN_FILE", sign * open_files_cnt, flag=open_files_cnt)
         put(
             f"{prefix}_ROOK_HALF_OPEN_FILE",
-            sign * half_open_cnt * _w("rook_half_open_file"),
+            sign * half_open_cnt,
             flag=half_open_cnt,
         )
         put(
@@ -249,52 +204,22 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
             flag=connected,
         )
 
-        # --- king safety ---
-        shield = 0
-        zone_attackers = 0
+        # --- king safety (Stockfish king-danger core; bad for the attacked side) ---
+        danger = king_danger_feature.king_danger(board, color)
+        put(f"{prefix}_KING_DANGER", -sign * danger, flag=danger)
+
+        # back-rank weakness (our own measure): king on back rank with no luft
         back_rank = 0
         if own_king is not None:
             kf, kr = chess.square_file(own_king), chess.square_rank(own_king)
             step = 1 if color == chess.WHITE else -1
-            for df in (-1, 0, 1):
-                f = kf + df
-                if f < 0 or f > 7:
-                    continue
-                for dr in (1, 2):
-                    r = kr + step * dr
-                    if r < 0 or r > 7:
-                        continue
-                    p = board.piece_at(chess.square(f, r))
-                    if (
-                        p is not None
-                        and p.piece_type == chess.PAWN
-                        and p.color == color
-                    ):
-                        shield += 1
-                        break
-            zone = [own_king] + [
-                s for s in chess.SQUARES if _chebyshev(s, own_king) == 1
-            ]
-            attackers_seen = set()
-            for zsq in zone:
-                for att in board.attackers(enemy, zsq):
-                    ap = board.piece_at(att)
-                    if (
-                        ap is not None
-                        and ap.piece_type != chess.PAWN
-                        and ap.piece_type != chess.KING
-                    ):
-                        attackers_seen.add(att)
-            zone_attackers = len(attackers_seen)
-            # back-rank weakness: king on back rank with no luft
             if _relative_rank(own_king, color) == 0:
                 luft = False
                 for df in (-1, 0, 1):
                     f = kf + df
                     if f < 0 or f > 7:
                         continue
-                    r = kr + step
-                    sq2 = chess.square(f, r)
+                    sq2 = chess.square(f, kr + step)
                     p = board.piece_at(sq2)
                     if p is None and not board.is_attacked_by(enemy, sq2):
                         luft = True
@@ -302,17 +227,19 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
                 if not luft:
                     back_rank = 1
         put(
-            f"{prefix}_KING_SHIELD", sign * shield * _w("king_shield_pawn"), flag=shield
-        )
-        put(
-            f"{prefix}_KING_ZONE_ATTACKERS",
-            sign * zone_attackers * _w("king_zone_attacker"),
-            flag=zone_attackers,
-        )
-        put(
             f"{prefix}_BACK_RANK",
             sign * back_rank * _w("back_rank_weakness"),
             flag=back_rank,
+        )
+
+        # --- castling rights (retained flexibility to castle either side) ---
+        castling_rights = int(board.has_kingside_castling_rights(color)) + int(
+            board.has_queenside_castling_rights(color)
+        )
+        put(
+            f"{prefix}_CASTLING_RIGHTS",
+            sign * castling_rights * _w("castling_rights"),
+            flag=castling_rights,
         )
 
         # --- tropism (own pieces toward enemy king) ---
@@ -324,10 +251,9 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
         put(f"{prefix}_KING_TROPISM", sign * tropism, flag=None)
 
         # --- activity / space / center ---
-        activity = 0
-        for ptype in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN):
-            for sq in board.pieces(ptype, color):
-                activity += len(board.attacks(sq))
+        # Piece activity = Stockfish mobility: reachable squares in the mobility
+        # area (a natural count, not the engine's tuned cp bonus).
+        activity = mobility_count(board, color)
         center = sum(len(board.attackers(color, c)) for c in CENTER_SQUARES)
         space = 0
         enemy_half = range(4, 8) if color == chess.WHITE else range(0, 4)
@@ -335,13 +261,15 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
             for f in range(8):
                 if board.is_attacked_by(color, chess.square(f, r)):
                     space += 1
-        put(
-            f"{prefix}_PIECE_ACTIVITY",
-            sign * activity * _w("piece_activity"),
-            flag=None,
-        )
+        put(f"{prefix}_PIECE_ACTIVITY", sign * activity, flag=activity)
         put(f"{prefix}_CENTER_CONTROL", sign * center * _w("center_control"), flag=None)
         put(f"{prefix}_SPACE", sign * space * _w("space"), flag=None)
+
+        # --- threats (Stockfish; counts of enemy pieces under pressure) ---
+        weak = weak_enemies_feature.count(board, color)
+        hanging = hanging_feature.count(board, color)
+        put(f"{prefix}_WEAK_ENEMIES", sign * weak, flag=weak)
+        put(f"{prefix}_HANGING", sign * hanging, flag=hanging)
 
         # --- endgame pack (computed always; rules apply them in phase 'end') ---
         king_act = _center_ring_bonus(own_king) if own_king is not None else 0
@@ -376,18 +304,8 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
         )
 
         side_data[color] = {
-            "pawn_struct": (
-                out[f"{prefix}_PAWN_DOUBLED"].value_cp
-                + out[f"{prefix}_PAWN_ISOLATED"].value_cp
-                + out[f"{prefix}_PAWN_BACKWARD"].value_cp
-                + out[f"{prefix}_PAWN_PASSED"].value_cp
-                + out[f"{prefix}_PAWN_DUO"].value_cp
-            ),
-            "king_safety": (
-                out[f"{prefix}_KING_SHIELD"].value_cp
-                + out[f"{prefix}_KING_ZONE_ATTACKERS"].value_cp
-                + out[f"{prefix}_BACK_RANK"].value_cp
-            ),
+            "pawn_struct": sign * pawn_struct_cp,
+            "king_safety": out[f"{prefix}_KING_DANGER"].value_cp,
             "tropism": out[f"{prefix}_KING_TROPISM"].value_cp,
         }
 
@@ -407,6 +325,10 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
     put(
         "MATERIAL_BALANCE",
         out["WHITE_MATERIAL"].value_cp + out["BLACK_MATERIAL"].value_cp,
+    )
+    put(
+        "CASTLING_RIGHTS",
+        out["WHITE_CASTLING_RIGHTS"].value_cp + out["BLACK_CASTLING_RIGHTS"].value_cp,
     )
 
     return out

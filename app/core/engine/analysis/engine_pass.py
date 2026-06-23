@@ -68,6 +68,8 @@ class AnalysisRetriever:
                 else None
             ),
             event=headers.get("Event", ""),
+            site=headers.get("Site", ""),
+            round=headers.get("Round", ""),
             opening=headers.get("Opening", ""),
             eco=parse_pgn_eco_tag(headers),
             result=headers.get("Result", ""),

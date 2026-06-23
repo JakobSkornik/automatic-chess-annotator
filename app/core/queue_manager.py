@@ -49,6 +49,8 @@ def _extract_pgn_snapshot(pgn_string: str) -> tuple[PgnMetadata | None, int]:
         whiteElo=white_elo,
         blackElo=black_elo,
         event=h.get("Event", ""),
+        site=h.get("Site", ""),
+        round=h.get("Round", ""),
         opening=opening,
         eco=eco or None,
         result=h.get("Result", "*"),

@@ -570,14 +570,18 @@ def test_comment_archetype_mapping():
 
 def test_template_archetype_openers():
     facts = _facts()
-    assert "is the engine's top choice" in render_facts_template(
-        facts, archetype="engine_choice"
-    )
+    head = render_facts_template(facts, archetype="engine_choice")
+    assert "is the strongest move here" in head
+    # The opener must not contain a phrase the forbidden-phrase scrub strips
+    # (which would otherwise leave debris like "is the ,").
+    from app.core.commentary.forbidden_phrases import scrub_forbidden
+
+    assert scrub_forbidden(head)[0] == head
     assert "is a brilliant sacrifice" in render_facts_template(
         facts, archetype="brilliant_sacrifice"
     )
     # neutral / default keeps the plain verdict head
-    assert "top choice" not in render_facts_template(facts)
+    assert "strongest move here" not in render_facts_template(facts)
 
 
 def test_annotation_symbol_mapping():
@@ -747,3 +751,325 @@ def test_promote_losing_sacrifice_is_not_brilliant():
     # material given up AND the mover ends up worse -> just a bad move, not brilliant
     facts = _facts_with_material([0, -300, -300], eval_cp=-250, eval_before=50)
     assert _promote_key_moment(me, facts, facts.claims) != "brilliant"
+
+
+def test_decisive_interval_demotes_when_both_outside():
+    # 33...Rg3-style: played +4.80 and best +2.84 both outside [-2,2] (White
+    # winning either way) -> not a mistake (Guid 2006 paper's discard rule).
+    from app.core.commentary.event_extractor import _move_quality_for
+    from app.models.chess_events import MoveQuality
+
+    # loss large, but both evals decisive -> GOOD, not blunder/mistake
+    assert (
+        _move_quality_for(196, best_eval=284, cur_score=480, played_is_best=False)
+        == MoveQuality.GOOD
+    )
+    # a real blunder from a live position (best inside [-2,2]) is still punished
+    assert _move_quality_for(
+        196, best_eval=20, cur_score=-180, played_is_best=False
+    ) in (
+        MoveQuality.MISTAKE,
+        MoveQuality.BLUNDER,
+    )
+
+
+def test_brilliant_not_fired_when_material_regained():
+    # 20.Nxb5-style: knight given but bishop+pawn regained -> material UP at the
+    # leaf -> not a sacrifice -> not brilliant.
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(key_moment_type=None)
+    facts = _facts_with_material([0, -300, 100], eval_cp=36, eval_before=20)
+    assert _promote_key_moment(me, facts, facts.claims) != "brilliant"
+
+
+def test_brilliant_not_fired_when_only_holds_equality():
+    # 24...Rfe8-style: material down at the leaf but the eval is only ~equal,
+    # not winning -> not a "!!" brilliancy.
+    from app.core.engine.analysis_retriever import _promote_key_moment
+
+    me = _me(key_moment_type=None)
+    facts = _facts_with_material([0, -200, -200], eval_cp=16, eval_before=0)
+    assert _promote_key_moment(me, facts, facts.claims) != "brilliant"
+
+
+def _mv(uci: str, score: float):
+    from app.models.Move import Move
+
+    return Move(
+        id=0,
+        position=START,
+        move=uci,
+        context="",
+        depth=20,
+        isAnalyzed=True,
+        piece="N",
+        score=score,
+    )
+
+
+def test_great_move_excludes_obvious_recapture():
+    from app.core.commentary.key_moment_detector import _great_move
+
+    # White recaptures on d4 (opponent just played ...xd4) — obvious, not great.
+    played = _mv("e5d4", 150)
+    prev = _mv("c6d4", -150)
+    pvs = [[played], [_mv("a1a2", -50)]]  # huge gap to the (bad) alternative
+    assert _great_move(pvs, played, True, prev) == []
+    # Same gap, but the move is NOT a recapture -> great_move fires.
+    nonrecap = _mv("f3e5", 150)
+    pvs2 = [[nonrecap], [_mv("a1a2", -50)]]
+    assert _great_move(pvs2, nonrecap, True, prev) == ["great_move"]
+
+
+def test_great_move_needs_clear_gap():
+    from app.core.commentary.key_moment_detector import _great_move
+
+    best = _mv("f3e5", 100)
+    pvs = [[best], [_mv("a1a2", 50)]]  # only 50cp gap -> below threshold
+    assert _great_move(pvs, best, True, None) == []
+
+
+def test_template_inferior_alternative_is_contrast_not_miss():
+    from app.models.comment_facts import BestAlternative
+
+    facts = _facts().model_copy(
+        update={
+            "mover": "White",
+            "eval_cp": 250,
+            "better_alternative": BestAlternative(
+                san="Qe2",
+                uci="d1e2",
+                eval_cp=80,
+                verdict="only keeps a slight edge",
+                is_inferior=True,
+                display_line=EnvisionedLine(
+                    start_fen=START,
+                    line_san=["Qe2"],
+                    line_uci=["d1e2"],
+                    fens=[START],
+                    leaf_fen=START,
+                ),
+            ),
+        }
+    )
+    text = render_facts_template(facts)
+    assert "Qe2" in text
+    assert "missed" not in text.lower()
+
+
+def test_say_nothing_for_empty_optional_annotation():
+    from app.core.engine.analysis.comment_assembly import _nothing_instructive_to_say
+
+    # "!" move with no facts at all -> nothing instructive -> stay silent.
+    assert _nothing_instructive_to_say(_me(key_moment_type="great_move")) is True
+    # "!" move with fired claims -> there IS something to say.
+    with_claims = _facts_with_material([10, 10, 10], claims=_facts().claims)
+    assert (
+        _nothing_instructive_to_say(
+            _me(key_moment_type="great_move", comment_facts=with_claims)
+        )
+        is False
+    )
+    # A negative annotation always has a consequence to explain -> never silenced.
+    assert _nothing_instructive_to_say(_me(key_moment_type="mistake")) is False
+
+
+def test_castling_rights_feature():
+    from app.core.commentary.features.guid_features import compute_feature_vector_fen
+
+    start = compute_feature_vector_fen(
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    )
+    # Both sides hold both rights -> +2 flag each, net 0.
+    assert start["WHITE_CASTLING_RIGHTS"].flag == 2
+    assert start["BLACK_CASTLING_RIGHTS"].flag == 2
+    assert start["CASTLING_RIGHTS"].value_cp == 0
+
+    # White has castled (no rights), Black still holds both -> Black favored.
+    asym = compute_feature_vector_fen(
+        "rnbqk2r/pppp1ppp/5n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 0 1"
+    )
+    assert asym["WHITE_CASTLING_RIGHTS"].flag == 0
+    assert asym["BLACK_CASTLING_RIGHTS"].flag == 2
+    assert asym["CASTLING_RIGHTS"].value_cp < 0  # White-POV: Black has the edge
+
+
+def test_template_inferior_comparable_vs_weaker():
+    from app.models.comment_facts import BestAlternative
+
+    def render(alt_cp):
+        f = _facts().model_copy(
+            update={
+                "mover": "White",
+                "eval_cp": 250,
+                "better_alternative": BestAlternative(
+                    san="Qe2",
+                    uci="d1e2",
+                    eval_cp=alt_cp,
+                    verdict="keeps an edge",
+                    is_inferior=True,
+                    display_line=EnvisionedLine(
+                        start_fen=START,
+                        line_san=["Qe2"],
+                        line_uci=["d1e2"],
+                        fens=[START],
+                        leaf_fen=START,
+                    ),
+                ),
+            }
+        )
+        return render_facts_template(f)
+
+    weaker = render(80)  # 170cp worse -> clearly weaker
+    assert "Weaker was Qe2" in weaker
+    assert "missed" not in weaker.lower()
+    comparable = render(240)  # 10cp worse -> comparable
+    assert "comparable alternative was Qe2" in comparable
+
+
+def test_mobility_matches_stockfish_area_definition():
+    import chess
+
+    from app.core.commentary.features.guid_features.mobility import (
+        _mobility_area,
+        mobility_count,
+    )
+
+    # Symmetric in the initial position.
+    b = chess.Board()
+    assert mobility_count(b, chess.WHITE) == mobility_count(b, chess.BLACK)
+
+    # Squares attacked by an enemy pawn are NOT in the mobility area.
+    b2 = chess.Board("rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 2")
+    area = _mobility_area(b2, chess.WHITE)
+    # ...e5 pawn attacks d4 and f4 -> excluded for White.
+    assert chess.D4 not in area
+    assert chess.F4 not in area
+
+    # A pinned knight contributes zero mobility (Stockfish). Bishop b4 pins the
+    # knight d2 to the king e1 along the a5–e1 diagonal (c3 empty between them).
+    pin = chess.Board("4k3/8/8/8/1b6/8/3N4/4K3 w - - 0 1")
+    from app.core.commentary.features.guid_features.mobility import _piece_mobility
+
+    assert pin.is_pinned(chess.WHITE, chess.D2)
+    area_w = _mobility_area(pin, chess.WHITE)
+    assert _piece_mobility(pin, chess.D2, chess.WHITE, area_w) == 0
+
+
+def test_piece_activity_feature_is_square_count():
+    import chess
+
+    from app.core.commentary.features.guid_features import compute_feature_vector
+    from app.core.commentary.features.guid_features.mobility import mobility_count
+
+    b = chess.Board(
+        "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+    )
+    vec = compute_feature_vector(b)
+    # Value is the raw mobility count (natural unit), White-POV signed.
+    assert vec["WHITE_PIECE_ACTIVITY"].value_cp == mobility_count(b, chess.WHITE)
+    assert vec["WHITE_PIECE_ACTIVITY"].flag == mobility_count(b, chess.WHITE)
+
+
+def test_sf_pawn_predicates():
+    import chess
+
+    from app.core.commentary.features.guid_features.features.pawns import (
+        backward,
+        doubled,
+        isolated,
+        phalanx,
+    )
+
+    # Start position: no doubled / isolated / backward pawns.
+    start = chess.Board()
+    assert doubled.count(start, chess.WHITE) == 0
+    assert isolated.count(start, chess.WHITE) == 0
+    assert backward.count(start, chess.WHITE) == 0
+
+    # White doubled on the c-file (c2,c3), no b/d pawns -> 1 doubled, and both
+    # c-pawns isolated.
+    dbl = chess.Board("4k3/8/8/8/8/2P5/2P5/4K3 w - - 0 1")
+    assert doubled.count(dbl, chess.WHITE) == 1
+    assert isolated.count(dbl, chess.WHITE) == 2
+
+    # A supported doubled pawn is NOT counted (Stockfish): c3 behind-supported by b2.
+    supported = chess.Board("4k3/8/8/8/8/2P5/1P1P4/4K3 w - - 0 1")
+    assert doubled.count(supported, chess.WHITE) == 0
+
+    # Phalanx: pawns side by side on d4/e4.
+    phal = chess.Board("4k3/8/8/8/3PP3/8/8/4K3 w - - 0 1")
+    assert phalanx.count(phal, chess.WHITE) == 2
+
+
+def test_pawn_features_use_natural_counts():
+    import chess
+
+    from app.core.commentary.features.guid_features import compute_feature_vector
+
+    # White: doubled+isolated c-pawns; the feature value is the raw count.
+    vec = compute_feature_vector(chess.Board("4k3/8/8/8/8/2P5/2P5/4K3 w - - 0 1"))
+    assert vec["WHITE_PAWN_DOUBLED"].value_cp == 1
+    assert vec["WHITE_PAWN_DOUBLED"].flag == 1
+    assert vec["WHITE_PAWN_ISOLATED"].value_cp == 2
+    # The aggregate stays a weighted centipawn score (non-zero, negative for White).
+    assert vec["EVALUATE_PAWNS"].value_cp < 0
+
+
+def test_sf_piece_predicates():
+    import chess
+
+    from app.core.commentary.features.guid_features.features.pieces import (
+        outpost,
+        rook_on_file,
+    )
+
+    # Knight on e5, pawn-supported from d4, no enemy pawns to challenge -> outpost.
+    op = chess.Board("4k3/8/8/4N3/3P4/8/8/4K3 w - - 0 1")
+    assert outpost.count(op, chess.WHITE) == 1
+
+    # An enemy pawn that can attack the square denies the outpost (Stockfish span).
+    denied = chess.Board("4k3/5p2/8/4N3/3P4/8/8/4K3 w - - 0 1")
+    assert outpost.count(denied, chess.WHITE) == 0
+
+    # Rook on a fully open a-file; rook on a semi-open d-file (enemy pawn only).
+    rooks = chess.Board("3rk3/3p4/8/8/8/8/8/R3K3 w - - 0 1")
+    assert rook_on_file.open_file_count(rooks, chess.WHITE) == 1
+    assert rook_on_file.semi_open_file_count(rooks, chess.BLACK) == 0  # own pawn d7
+
+
+def test_sf_threats_hanging_and_weak():
+    import chess
+
+    from app.core.commentary.features.guid_features.features.threats import (
+        hanging,
+        weak_enemies,
+    )
+
+    # White queen attacks an undefended black knight on d5 -> weak and hanging.
+    b = chess.Board("4k3/8/8/3n4/8/8/8/3QK3 w - - 0 1")
+    assert weak_enemies.count(b, chess.WHITE) == 1
+    assert hanging.count(b, chess.WHITE) == 1
+    # No threats the other way.
+    assert hanging.count(b, chess.BLACK) == 0
+
+    # A defended knight (by a pawn) is not weak.
+    defended = chess.Board("4k3/8/4p3/3n4/8/8/8/3QK3 w - - 0 1")
+    assert weak_enemies.count(defended, chess.WHITE) == 0
+
+
+def test_sf_king_danger():
+    import chess
+
+    from app.core.commentary.features.guid_features import compute_feature_vector
+    from app.core.commentary.features.guid_features.features.king import king_danger
+
+    # Quiet start: no king danger either side.
+    assert king_danger.king_danger(chess.Board(), chess.WHITE) == 0
+
+    # Black queen + bishop swarming the white king -> White king danger > 0,
+    # and the feature is negative for White (the side under attack).
+    b = chess.Board("rnb1k1nr/pppp1ppp/8/8/1b6/5q2/PPPPP1PP/RNBQKBNR w KQkq - 0 1")
+    assert king_danger.king_danger(b, chess.WHITE) > 0
+    assert compute_feature_vector(b)["WHITE_KING_DANGER"].value_cp < 0
