@@ -19,6 +19,7 @@ THRESHOLDS: dict[str, int] = {
     "connected_rooks": 10,
     "passer_advance": 15,
     "min_claim_cp": 8,  # ignore fired rules weaker than this
+    "material_standing": 200,  # min standing edge (cp) to restate when unchanged
 }
 
 # Natural-count features (mobility squares, pawn counts) store their value in
@@ -38,6 +39,7 @@ COUNT_CLAIM_CP: dict[str, int] = {
     "BISHOP_PLUS_PAWNS_ON_COLOR": 4,  # per unit of the bishop-pawns score
     "HANGING": 60,  # per hanging enemy piece (a concrete material threat)
     "WEAK_ENEMIES": 15,  # per weak enemy piece
+    "PINS": 25,  # per pinned enemy piece
 }
 
 SIDES = ("WHITE", "BLACK")

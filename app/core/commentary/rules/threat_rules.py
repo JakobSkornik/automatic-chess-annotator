@@ -31,3 +31,27 @@ def rule_threats(ctx: _Ctx) -> list[Claim]:
             )
         )
     return out
+
+
+def rule_pin(ctx: _Ctx) -> list[Claim]:
+    """Fires when a side wins a pin against an enemy piece — a concrete bind that
+    holds even when the evaluation is already decided."""
+    out: list[Claim] = []
+    for side in SIDES:
+        name = f"{side}_PINS"
+        pair = ctx.flag_pair(name)
+        if not (pair and pair[1] > pair[0]):
+            continue
+        victim = _side_label("BLACK" if side == "WHITE" else "WHITE")
+        out.append(
+            Claim(
+                rule_id="piece_pinned",
+                beneficiary=_benef(side),
+                text=f"{_side_label(side)} pins a {victim.lower()} piece.",
+                text_state=f"{_side_label(side)} has a piece pinned.",
+                features_involved=[name],
+                delta_cp=ctx.claim_cp(name),
+                flag_note=ctx.flag_change(name),
+            )
+        )
+    return out

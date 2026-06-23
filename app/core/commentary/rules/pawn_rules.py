@@ -12,24 +12,28 @@ from .material import _imbalance, describe_material
 
 
 def rule_material(ctx: _Ctx) -> list[Claim]:
-    """Material standing in concrete, whole-unit terms — the most important
-    feature, so it leads the claim list. Fires when the line changes the
-    material balance (a capture nets material), describing the actual
-    difference / resulting imbalance."""
+    """Material in concrete, whole-unit terms — the most important feature, so it
+    leads the claim list. When the line *changes* the balance it reads "has won
+    …"; otherwise it still states a decisive *standing* edge ("is a rook up") so
+    a best move that merely keeps a winning material advantage articulates it
+    rather than going silent. (Repeats across moves are muted by the dedup pass.)
+    """
     if ctx.leaf_board is None:
         return []
     changed = ctx.start_board is None or _imbalance(ctx.start_board) != _imbalance(
         ctx.leaf_board
     )
-    if not changed:
-        return []
-    described = describe_material(ctx.leaf_board, changed=True)
+    described = describe_material(ctx.leaf_board, changed=changed)
     if described is None:
         return []
     text, benef, delta_cp = described
+    # A change is always worth stating; an unchanged edge only when it is at
+    # least the exchange, to avoid repeating "up a pawn" on every quiet move.
+    if not changed and delta_cp < THRESHOLDS["material_standing"]:
+        return []
     return [
         Claim(
-            rule_id="material_won",
+            rule_id="material_won" if changed else "material_standing",
             beneficiary=benef,
             text=text,
             text_state=text,

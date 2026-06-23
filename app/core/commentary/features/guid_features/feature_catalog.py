@@ -292,6 +292,14 @@ _SPECS: tuple[FeatureSpec, ...] = (
         "Weak enemy pieces that are undefended, or non-pawns we attack more than "
         "once — pieces in real danger of being won.",
     ),
+    FeatureSpec(
+        "PINS",
+        "Pins",
+        "Threats",
+        "count",
+        "stockfish",
+        "Enemy minor/major pieces pinned to their king by our sliders.",
+    ),
     # --- endgame ---
     FeatureSpec(
         "KING_ACTIVITY",
