@@ -11,6 +11,7 @@ from app.core.commentary.features.envisioned import (
     diff_vectors,
     envisioned_for_best_move,
     envisioned_for_played_move,
+    is_quiescent,
 )
 from app.core.commentary.features.guid_features import compute_feature_vector_fen
 from app.models.chess_events import AnalyzedMoveData, MoveEvent
@@ -31,7 +32,7 @@ from .constants import (
     MAX_ALTERNATIVE_MERITS,
     MERIT_SUPPRESS_CP,
 )
-from .realization import _annotate_realization, _line_feature_series
+from .realization import _line_feature_series
 from .verdicts import verdict_for_eval, verdict_for_transition
 
 
@@ -58,6 +59,71 @@ class _FactsCtx:
     start_vec: dict
 
 
+def _first_quiet_fen(line: EnvisionedLine) -> str:
+    """The first quiescent position at/after the played move — the horizon at
+    which the move is *assessed*. For a quiet move that is the position right
+    after it; for a capture that will be recaptured it is the node where the
+    forcing sequence settles (so transient features are not reported as real)."""
+    for fen in line.fens:
+        if fen and is_quiescent(chess.Board(fen)):
+            return fen
+    return line.leaf_fen
+
+
+def _two_horizon_claims(
+    ctx: _FactsCtx, line: EnvisionedLine, eval_cp: int | None
+) -> tuple[list[Claim], dict]:
+    """Run the rules at two horizons and merge them:
+
+    - *immediate* — start vs. the first quiet node after the move: what the move
+      itself does (stated as fact);
+    - *forecast* — start vs. the envisioned leaf: what only develops deeper in
+      the line (hedged, tagged ``envisioned``).
+
+    Immediate claims win per rule and per dominant feature; forecast claims are
+    added only for features the move did not already move. Returns the merged
+    claims and the leaf vector (for the material-loss fallback)."""
+    immediate_fen = _first_quiet_fen(line)
+    immediate_vec = compute_feature_vector_fen(immediate_fen)
+    leaf_vec = compute_feature_vector_fen(line.leaf_fen)
+    common = {
+        "phase": ctx.phase_raw,
+        "mover": ctx.mover.upper(),
+        "eval_cp": eval_cp,
+        "start_board": ctx.board_before,
+    }
+    immediate = run_rules(
+        diff_vectors(ctx.start_vec, immediate_vec),
+        leaf_board=chess.Board(immediate_fen),
+        **common,
+    )
+    forecast = run_rules(
+        diff_vectors(ctx.start_vec, leaf_vec),
+        leaf_board=chess.Board(line.leaf_fen),
+        **common,
+    )
+    for claim in immediate:
+        claim.realization = "immediate"
+    for claim in forecast:
+        claim.realization = "envisioned"
+
+    seen_rules = {(c.rule_id, c.beneficiary) for c in immediate}
+    seen_feats = {
+        (c.features_involved[0], c.beneficiary)
+        for c in immediate
+        if c.features_involved
+    }
+
+    def _is_new(c: Claim) -> bool:
+        if (c.rule_id, c.beneficiary) in seen_rules:
+            return False
+        primary = c.features_involved[0] if c.features_involved else None
+        return (primary, c.beneficiary) not in seen_feats
+
+    merged = immediate + [c for c in forecast if _is_new(c)]
+    return merged, leaf_vec
+
+
 def _played_line_claims(
     ctx: _FactsCtx,
 ) -> tuple[EnvisionedLine, FeatureDiff, dict, list[Claim]]:
@@ -72,17 +138,9 @@ def _played_line_claims(
         played_eval_cp=move_event.eval_after_cp,
         depth=ctx.depth,
     )
-    leaf_vec = compute_feature_vector_fen(played_line.leaf_fen)
-    diff = diff_vectors(ctx.start_vec, leaf_vec)
-    claims = run_rules(
-        diff,
-        phase=ctx.phase_raw,
-        mover=ctx.mover.upper(),
-        eval_cp=move_event.eval_after_cp,
-        start_board=ctx.board_before,
-        leaf_board=chess.Board(played_line.leaf_fen),
-    )
-    return played_line, diff, leaf_vec, order_claims_for_mover(claims, ctx.mover)
+    claims, leaf_vec = _two_horizon_claims(ctx, played_line, move_event.eval_after_cp)
+    line_diff = diff_vectors(ctx.start_vec, leaf_vec)
+    return played_line, line_diff, leaf_vec, order_claims_for_mover(claims, ctx.mover)
 
 
 def _net_material_cp(vec: dict) -> int:
@@ -161,17 +219,9 @@ def _build_better_alternative(
     best_line = envisioned_for_best_move(
         move_event.fen_before, best_pv_uci, best_eval_cp=best_cp, depth=ctx.depth
     )
-    best_diff = diff_vectors(
-        ctx.start_vec, compute_feature_vector_fen(best_line.leaf_fen)
-    )
-    best_claims = run_rules(
-        best_diff,
-        phase=ctx.phase_raw,
-        mover=ctx.mover.upper(),
-        eval_cp=best_cp,
-        start_board=ctx.board_before,
-        leaf_board=chess.Board(best_line.leaf_fen),
-    )
+    best_claims, _ = _two_horizon_claims(ctx, best_line, best_cp)
+    if _is_decided(best_cp, best_mate):
+        best_claims = _material_only(best_claims)
     return BestAlternative(
         san=move_event.best_move_san or move_event.best_move_uci,
         uci=move_event.best_move_uci,
@@ -216,17 +266,9 @@ def _build_inferior_alternative(
     alt_line = envisioned_for_best_move(
         move_event.fen_before, second_pv_uci, best_eval_cp=second_cp, depth=ctx.depth
     )
-    alt_diff = diff_vectors(
-        ctx.start_vec, compute_feature_vector_fen(alt_line.leaf_fen)
-    )
-    alt_claims = run_rules(
-        alt_diff,
-        phase=ctx.phase_raw,
-        mover=ctx.mover.upper(),
-        eval_cp=second_cp,
-        start_board=ctx.board_before,
-        leaf_board=chess.Board(alt_line.leaf_fen),
-    )
+    alt_claims, _ = _two_horizon_claims(ctx, alt_line, second_cp)
+    if _is_decided(second_cp, second_mate):
+        alt_claims = _material_only(alt_claims)
     return BestAlternative(
         san=second_san,
         uci=second_uci,
@@ -260,6 +302,18 @@ def _concession_mode(move_quality: str) -> str:
     return "consequence" if move_quality in _DUBIOUS else "tradeoff"
 
 
+def _is_decided(eval_cp: int | None, eval_mate: int | None) -> bool:
+    return eval_mate is not None or (
+        eval_cp is not None and abs(eval_cp) > DECISIVE_CLAIM_CP
+    )
+
+
+def _material_only(claims: list[Claim]) -> list[Claim]:
+    """In a decided position positional claims are noise (a passed pawn in
+    mate-in-4); only the material standing still explains the result."""
+    return [c for c in claims if "MATERIAL_BALANCE" in c.features_involved]
+
+
 def _filter_claims(
     claims: list[Claim],
     *,
@@ -273,11 +327,10 @@ def _filter_claims(
 ) -> list[Claim]:
     """Drop misleading claims: noise in decided positions, and the mover's
     incidental "merits" when the move leaves them clearly worse off."""
-    # Decisive evals: positional claims are noise (a passed pawn in mate-in-4).
-    if eval_mate is not None or (
-        eval_cp is not None and abs(eval_cp) > DECISIVE_CLAIM_CP
-    ):
-        claims = []
+    # Decisive evals: positional claims are noise, but the material standing
+    # ("White is a rook up") is exactly what explains the result — keep it.
+    if _is_decided(eval_cp, eval_mate):
+        claims = _material_only(claims)
     mover_pov_eval = (
         None if eval_cp is None else (eval_cp if mover == "White" else -eval_cp)
     )
@@ -295,22 +348,20 @@ def _filter_claims(
     return claims
 
 
-def _attach_series_and_realization(
+def _attach_series(
     played_line: EnvisionedLine,
-    claims: list[Claim],
     better: BestAlternative | None,
     fen_before: str,
 ) -> tuple[EnvisionedLine, BestAlternative | None]:
-    """Attach the per-ply feature series and tag each claim immediate/envisioned."""
+    """Attach the per-ply feature series to the charted lines. Claim realization
+    (immediate vs envisioned) is already set from the firing horizon."""
     played_line = _with_feature_series(played_line, fen_before)
-    _annotate_realization(claims, played_line.feature_series)
     if better is not None and better.display_line is not None:
         better = better.model_copy(
             update={
                 "display_line": _with_feature_series(better.display_line, fen_before)
             }
         )
-        _annotate_realization(better.claims, better.display_line.feature_series)
     return played_line, better
 
 
@@ -355,9 +406,7 @@ def build_comment_facts(
     better = _build_better_alternative(ctx, claims) or _build_inferior_alternative(
         ctx, claims
     )
-    played_line, better = _attach_series_and_realization(
-        played_line, claims, better, move_event.fen_before
-    )
+    played_line, better = _attach_series(played_line, better, move_event.fen_before)
 
     return CommentFacts(
         ply=move_event.ply,
