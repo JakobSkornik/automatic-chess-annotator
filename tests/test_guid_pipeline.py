@@ -926,3 +926,150 @@ def test_template_inferior_comparable_vs_weaker():
     assert "missed" not in weaker.lower()
     comparable = render(240)  # 10cp worse -> comparable
     assert "comparable alternative was Qe2" in comparable
+
+
+def test_mobility_matches_stockfish_area_definition():
+    import chess
+
+    from app.core.commentary.features.guid_features.mobility import (
+        _mobility_area,
+        mobility_count,
+    )
+
+    # Symmetric in the initial position.
+    b = chess.Board()
+    assert mobility_count(b, chess.WHITE) == mobility_count(b, chess.BLACK)
+
+    # Squares attacked by an enemy pawn are NOT in the mobility area.
+    b2 = chess.Board("rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 2")
+    area = _mobility_area(b2, chess.WHITE)
+    # ...e5 pawn attacks d4 and f4 -> excluded for White.
+    assert chess.D4 not in area
+    assert chess.F4 not in area
+
+    # A pinned knight contributes zero mobility (Stockfish). Bishop b4 pins the
+    # knight d2 to the king e1 along the a5–e1 diagonal (c3 empty between them).
+    pin = chess.Board("4k3/8/8/8/1b6/8/3N4/4K3 w - - 0 1")
+    from app.core.commentary.features.guid_features.mobility import _piece_mobility
+
+    assert pin.is_pinned(chess.WHITE, chess.D2)
+    area_w = _mobility_area(pin, chess.WHITE)
+    assert _piece_mobility(pin, chess.D2, chess.WHITE, area_w) == 0
+
+
+def test_piece_activity_feature_is_square_count():
+    import chess
+
+    from app.core.commentary.features.guid_features import compute_feature_vector
+    from app.core.commentary.features.guid_features.mobility import mobility_count
+
+    b = chess.Board(
+        "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+    )
+    vec = compute_feature_vector(b)
+    # Value is the raw mobility count (natural unit), White-POV signed.
+    assert vec["WHITE_PIECE_ACTIVITY"].value_cp == mobility_count(b, chess.WHITE)
+    assert vec["WHITE_PIECE_ACTIVITY"].flag == mobility_count(b, chess.WHITE)
+
+
+def test_sf_pawn_predicates():
+    import chess
+
+    from app.core.commentary.features.guid_features.features.pawns import (
+        backward,
+        doubled,
+        isolated,
+        phalanx,
+    )
+
+    # Start position: no doubled / isolated / backward pawns.
+    start = chess.Board()
+    assert doubled.count(start, chess.WHITE) == 0
+    assert isolated.count(start, chess.WHITE) == 0
+    assert backward.count(start, chess.WHITE) == 0
+
+    # White doubled on the c-file (c2,c3), no b/d pawns -> 1 doubled, and both
+    # c-pawns isolated.
+    dbl = chess.Board("4k3/8/8/8/8/2P5/2P5/4K3 w - - 0 1")
+    assert doubled.count(dbl, chess.WHITE) == 1
+    assert isolated.count(dbl, chess.WHITE) == 2
+
+    # A supported doubled pawn is NOT counted (Stockfish): c3 behind-supported by b2.
+    supported = chess.Board("4k3/8/8/8/8/2P5/1P1P4/4K3 w - - 0 1")
+    assert doubled.count(supported, chess.WHITE) == 0
+
+    # Phalanx: pawns side by side on d4/e4.
+    phal = chess.Board("4k3/8/8/8/3PP3/8/8/4K3 w - - 0 1")
+    assert phalanx.count(phal, chess.WHITE) == 2
+
+
+def test_pawn_features_use_natural_counts():
+    import chess
+
+    from app.core.commentary.features.guid_features import compute_feature_vector
+
+    # White: doubled+isolated c-pawns; the feature value is the raw count.
+    vec = compute_feature_vector(chess.Board("4k3/8/8/8/8/2P5/2P5/4K3 w - - 0 1"))
+    assert vec["WHITE_PAWN_DOUBLED"].value_cp == 1
+    assert vec["WHITE_PAWN_DOUBLED"].flag == 1
+    assert vec["WHITE_PAWN_ISOLATED"].value_cp == 2
+    # The aggregate stays a weighted centipawn score (non-zero, negative for White).
+    assert vec["EVALUATE_PAWNS"].value_cp < 0
+
+
+def test_sf_piece_predicates():
+    import chess
+
+    from app.core.commentary.features.guid_features.features.pieces import (
+        outpost,
+        rook_on_file,
+    )
+
+    # Knight on e5, pawn-supported from d4, no enemy pawns to challenge -> outpost.
+    op = chess.Board("4k3/8/8/4N3/3P4/8/8/4K3 w - - 0 1")
+    assert outpost.count(op, chess.WHITE) == 1
+
+    # An enemy pawn that can attack the square denies the outpost (Stockfish span).
+    denied = chess.Board("4k3/5p2/8/4N3/3P4/8/8/4K3 w - - 0 1")
+    assert outpost.count(denied, chess.WHITE) == 0
+
+    # Rook on a fully open a-file; rook on a semi-open d-file (enemy pawn only).
+    rooks = chess.Board("3rk3/3p4/8/8/8/8/8/R3K3 w - - 0 1")
+    assert rook_on_file.open_file_count(rooks, chess.WHITE) == 1
+    assert rook_on_file.semi_open_file_count(rooks, chess.BLACK) == 0  # own pawn d7
+
+
+def test_sf_threats_hanging_and_weak():
+    import chess
+
+    from app.core.commentary.features.guid_features.features.threats import (
+        hanging,
+        weak_enemies,
+    )
+
+    # White queen attacks an undefended black knight on d5 -> weak and hanging.
+    b = chess.Board("4k3/8/8/3n4/8/8/8/3QK3 w - - 0 1")
+    assert weak_enemies.count(b, chess.WHITE) == 1
+    assert hanging.count(b, chess.WHITE) == 1
+    # No threats the other way.
+    assert hanging.count(b, chess.BLACK) == 0
+
+    # A defended knight (by a pawn) is not weak.
+    defended = chess.Board("4k3/8/4p3/3n4/8/8/8/3QK3 w - - 0 1")
+    assert weak_enemies.count(defended, chess.WHITE) == 0
+
+
+def test_sf_king_danger():
+    import chess
+
+    from app.core.commentary.features.guid_features import compute_feature_vector
+    from app.core.commentary.features.guid_features.features.king import king_danger
+
+    # Quiet start: no king danger either side.
+    assert king_danger.king_danger(chess.Board(), chess.WHITE) == 0
+
+    # Black queen + bishop swarming the white king -> White king danger > 0,
+    # and the feature is negative for White (the side under attack).
+    b = chess.Board("rnb1k1nr/pppp1ppp/8/8/1b6/5q2/PPPPP1PP/RNBQKBNR w KQkq - 0 1")
+    assert king_danger.king_danger(b, chess.WHITE) > 0
+    assert compute_feature_vector(b)["WHITE_KING_DANGER"].value_cp < 0

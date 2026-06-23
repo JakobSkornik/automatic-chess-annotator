@@ -40,44 +40,34 @@ def rule_material(ctx: _Ctx) -> list[Claim]:
 
 
 def rule_pawn_structure(ctx: _Ctx) -> list[Claim]:
-    """The dissertation's pawn-structure rule (§5.4.1), both sides."""
+    """The dissertation's pawn-structure rule (§5.4.1), both sides. Gated on the
+    weighted EVALUATE_PAWNS aggregate (the individual pawn features are now raw
+    counts in different units and cannot be summed directly)."""
     out: list[Claim] = []
+    feat_names = ("PAWN_DOUBLED", "PAWN_ISOLATED", "PAWN_BACKWARD", "PAWN_PASSED")
     for side in SIDES:
-        feats = [
-            f"{side}_PAWN_DOUBLED",
-            f"{side}_PAWN_ISOLATED",
-            f"{side}_PAWN_BACKWARD",
-            f"{side}_PAWN_PASSED",
-            f"{side}_PAWN_DUO",
-        ]
-        total = sum(_toward(side, ctx.delta(f)) for f in feats)
         net = _toward(side, ctx.delta("EVALUATE_PAWNS"))
-        if (
-            total >= THRESHOLDS["pawn_structure_total"]
-            and net >= THRESHOLDS["pawn_structure_evaluate"]
-        ):
+        involved = [f"{side}_{f}" for f in feat_names] + ["EVALUATE_PAWNS"]
+        if net >= THRESHOLDS["pawn_structure_evaluate"]:
             out.append(
                 Claim(
                     rule_id="pawn_structure_improved",
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)} has improved the pawn structure.",
                     text_state=f"{_side_label(side)}'s pawn structure is now improved.",
-                    features_involved=[*feats, "EVALUATE_PAWNS"],
-                    delta_cp=total,
+                    features_involved=involved,
+                    delta_cp=net,
                 )
             )
-        elif (
-            -total >= THRESHOLDS["pawn_structure_total"]
-            and -net >= THRESHOLDS["pawn_structure_evaluate"]
-        ):
+        elif -net >= THRESHOLDS["pawn_structure_evaluate"]:
             out.append(
                 Claim(
                     rule_id="pawn_structure_weakened",
                     beneficiary=_benef_opp(side),
                     text=f"{_side_label(side)}'s pawn structure has been weakened.",
                     text_state=f"{_side_label(side)}'s pawn structure is now weaker.",
-                    features_involved=[*feats, "EVALUATE_PAWNS"],
-                    delta_cp=-total,
+                    features_involved=involved,
+                    delta_cp=-net,
                 )
             )
     return out
@@ -98,7 +88,7 @@ def rule_doubled_pawns(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)} is left with doubled{where}.",
                     text_state=f"{_side_label(side)} now has doubled{where}.",
                     features_involved=[name],
-                    delta_cp=abs(ctx.delta(name)),
+                    delta_cp=ctx.claim_cp(name),
                     flag_note=ctx.flag_change(name),
                 )
             )
@@ -110,7 +100,7 @@ def rule_doubled_pawns(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)} gets rid of the doubled pawns.",
                     text_state=f"{_side_label(side)}'s doubled pawns are gone.",
                     features_involved=[name],
-                    delta_cp=abs(ctx.delta(name)),
+                    delta_cp=ctx.claim_cp(name),
                     flag_note=ctx.flag_change(name),
                 )
             )

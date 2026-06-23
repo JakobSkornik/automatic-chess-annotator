@@ -8,6 +8,8 @@ import chess
 
 from app.models.comment_facts import Claim, FeatureDelta, FeatureDiff
 
+from .constants import COUNT_CLAIM_CP
+
 
 def _toward(side: str, white_pov_delta: int) -> int:
     """Positive = good for ``side``."""
@@ -67,6 +69,14 @@ class _Ctx:
     def delta(self, name: str) -> int:
         d = self.by_name.get(name)
         return d.delta_cp if d else 0
+
+    def claim_cp(self, name: str) -> int:
+        """Magnitude of a feature's change as a cp-comparable claim importance.
+
+        Centipawn features pass through; natural-count features (mobility, pawn
+        counts) are scaled by their per-unit weight so claims rank consistently."""
+        base = name.removeprefix("WHITE_").removeprefix("BLACK_")
+        return abs(self.delta(name)) * COUNT_CLAIM_CP.get(base, 1)
 
     def flag_change(self, name: str) -> str | None:
         d = self.by_name.get(name)

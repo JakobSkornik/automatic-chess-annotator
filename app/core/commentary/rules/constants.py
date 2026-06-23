@@ -3,14 +3,13 @@
 Hand-tuned per Guid §5.4.2."""
 
 THRESHOLDS: dict[str, int] = {
-    "pawn_structure_total": 14,  # Z in the dissertation's pawn rule
-    "pawn_structure_evaluate": 8,  # Y — net EVALUATE_PAWNS shift
+    "pawn_structure_evaluate": 8,  # net EVALUATE_PAWNS (cp) shift for the structure rule
     "doubled_pawns": 12,
-    "strong_knight": 15,
-    "rook_activity": 15,
-    "king_safety": 18,
+    "strong_knight": 1,  # count: a knight reaching/leaving an outpost
+    "rook_activity": 1,  # count: a rook reaching an open/semi-open file
+    "king_safety": 60,  # king-danger swing (Stockfish scale) marking a real shift
     "king_tropism_corroborate": 8,
-    "piece_activity": 14,
+    "piece_activity": 7,  # mobility-square count (not cp): a 7-square swing
     "center_control": 16,
     "space": 10,
     "bishop_color_complex": 12,
@@ -20,6 +19,25 @@ THRESHOLDS: dict[str, int] = {
     "connected_rooks": 10,
     "passer_advance": 15,
     "min_claim_cp": 8,  # ignore fired rules weaker than this
+}
+
+# Natural-count features (mobility squares, pawn counts) store their value in
+# their own unit. This maps one unit of change to a cp-comparable claim
+# importance, so a count-feature claim ranks and clears `min_claim_cp` alongside
+# the centipawn-scored features. Used for claim weighting only — never the eval.
+COUNT_CLAIM_CP: dict[str, int] = {
+    "PIECE_ACTIVITY": 3,  # per mobility square
+    "PAWN_DOUBLED": 12,  # per doubled pawn
+    "PAWN_ISOLATED": 10,
+    "PAWN_BACKWARD": 8,
+    "WEAK_PAWNS": 9,
+    "PAWN_DUO": 4,
+    "KNIGHTS_OUTPOSTS": 18,  # per knight outpost
+    "ROOK_OPEN_FILE": 20,  # per rook on an open file
+    "ROOK_HALF_OPEN_FILE": 10,  # per rook on a semi-open file
+    "BISHOP_PLUS_PAWNS_ON_COLOR": 4,  # per unit of the bishop-pawns score
+    "HANGING": 60,  # per hanging enemy piece (a concrete material threat)
+    "WEAK_ENEMIES": 15,  # per weak enemy piece
 }
 
 SIDES = ("WHITE", "BLACK")

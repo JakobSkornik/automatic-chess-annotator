@@ -60,9 +60,13 @@ class GameMetadata(BaseModel):
     black: str
     result: str
     eventId: str | None = None
+    site: str | None = None
+    round: str | None = None
+    date: str | None = None
     whiteElo: int | None = None
     blackElo: int | None = None
     opening: str | None = None
+    opening_eco: str | None = None
     # Pre-analysis options the commentary was generated with
     commentary_level: str | None = None  # beginner | intermediate | expert
     comment_side: str | None = None  # white | black | both

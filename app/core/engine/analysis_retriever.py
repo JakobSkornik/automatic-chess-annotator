@@ -233,6 +233,8 @@ def _build_metadata(
         result=headers.result,
         date=game.headers.get("Date"),
         eventId=headers.event,
+        site=headers.site,
+        round=headers.round,
         whiteElo=headers.whiteElo,
         blackElo=headers.blackElo,
         opening=opening_name,
