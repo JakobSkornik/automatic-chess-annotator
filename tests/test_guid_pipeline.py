@@ -1073,3 +1073,39 @@ def test_sf_king_danger():
     b = chess.Board("rnb1k1nr/pppp1ppp/8/8/1b6/5q2/PPPPP1PP/RNBQKBNR w KQkq - 0 1")
     assert king_danger.king_danger(b, chess.WHITE) > 0
     assert compute_feature_vector(b)["WHITE_KING_DANGER"].value_cp < 0
+
+
+def test_material_standing_restated_when_unchanged():
+    import chess
+
+    from app.core.commentary.features.envisioned import diff_vectors
+    from app.core.commentary.features.guid_features import compute_feature_vector
+    from app.core.commentary.rules.engine import run_rules
+
+    # White a rook up; the position is quiet (no change) -> the standing edge is
+    # still stated, so a best move that holds it is not left silent.
+    b = chess.Board("4k3/8/8/8/8/8/8/R3K3 w - - 0 1")
+    v = compute_feature_vector(b)
+    claims = run_rules(
+        diff_vectors(v, v), phase="mid", mover="WHITE", start_board=b, leaf_board=b
+    )
+    assert any("rook" in c.text for c in claims)
+
+    # Only a pawn up: not restated (would be noise every quiet move).
+    b2 = chess.Board("4k3/8/8/8/8/8/P7/4K3 w - - 0 1")
+    v2 = compute_feature_vector(b2)
+    claims2 = run_rules(
+        diff_vectors(v2, v2), phase="mid", mover="WHITE", start_board=b2, leaf_board=b2
+    )
+    assert not any(c.rule_id == "material_standing" for c in claims2)
+
+
+def test_pins_feature():
+    import chess
+
+    from app.core.commentary.features.guid_features.features.threats import pins
+
+    # White rook e1 pins the black knight e7 to the king on e8.
+    b = chess.Board("4k3/4n3/8/8/8/8/8/4RK2 w - - 0 1")
+    assert pins.count(b, chess.WHITE) == 1
+    assert pins.count(b, chess.BLACK) == 0

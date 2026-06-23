@@ -13,6 +13,7 @@ from .features.pieces import bishop_pawns as bishop_pawns_feature
 from .features.pieces import outpost as outpost_feature
 from .features.pieces import rook_on_file as rook_on_file_feature
 from .features.threats import hanging as hanging_feature
+from .features.threats import pins as pins_feature
 from .features.threats import weak_enemies as weak_enemies_feature
 from .geometry import (
     _center_ring_bonus,
@@ -268,8 +269,10 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
         # --- threats (Stockfish; counts of enemy pieces under pressure) ---
         weak = weak_enemies_feature.count(board, color)
         hanging = hanging_feature.count(board, color)
+        pins = pins_feature.count(board, color)
         put(f"{prefix}_WEAK_ENEMIES", sign * weak, flag=weak)
         put(f"{prefix}_HANGING", sign * hanging, flag=hanging)
+        put(f"{prefix}_PINS", sign * pins, flag=pins)
 
         # --- endgame pack (computed always; rules apply them in phase 'end') ---
         king_act = _center_ring_bonus(own_king) if own_king is not None else 0
