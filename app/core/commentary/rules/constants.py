@@ -60,8 +60,3 @@ EVAL_CONCESSION_CP = 60  # weight for the "engine preferred X" fallback claim
 # For a played best move, the runner-up reads as clearly "weaker" at or above
 # this mover-POV gap; below it, as "a comparable alternative" (Guid).
 INFERIOR_ALT_WEAKER_CP = 60
-
-# A claim is "immediate" when at least this fraction of its total (start->leaf)
-# feature swing has already happened by the position right after the move.
-REALIZE_FRACTION = 0.5
-REALIZE_EPS_CP = 10  # below this magnitude there is no swing worth deferring

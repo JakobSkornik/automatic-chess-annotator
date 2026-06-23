@@ -471,20 +471,6 @@ def test_line_feature_series_shape():
     assert all(isinstance(v, int) for v in series["WHITE_PIECE_ACTIVITY"])
 
 
-def test_claim_realization_immediate_vs_envisioned():
-    from app.core.commentary.rules.engine import _claim_realization
-
-    c = Claim(rule_id="x", text="t", features_involved=["F"])
-    # change lands on the move (point 0 -> point 1): immediate
-    assert _claim_realization(c, {"F": [0, 100, 100]}) == "immediate"
-    # change only develops after the move (flat at ply 1, swings at the leaf)
-    assert _claim_realization(c, {"F": [0, 0, 100]}) == "envisioned"
-    # no meaningful swing at all: immediate (nothing to defer)
-    assert _claim_realization(c, {"F": [50, 51, 52]}) == "immediate"
-    # missing series: defaults to immediate
-    assert _claim_realization(c, {}) == "immediate"
-
-
 def test_template_hedges_envisioned_concession():
     facts = _facts().model_copy(
         update={
@@ -1109,3 +1095,51 @@ def test_pins_feature():
     b = chess.Board("4k3/4n3/8/8/8/8/8/4RK2 w - - 0 1")
     assert pins.count(b, chess.WHITE) == 1
     assert pins.count(b, chess.BLACK) == 0
+
+
+def test_first_quiet_fen_skips_transient_capture_node():
+    from app.core.commentary.rules.facts_builder import _first_quiet_fen
+
+    noisy = "8/8/8/3q4/4P3/8/8/4K2k w - - 0 1"  # queen en prise -> not quiet
+    quiet_a = "4k3/8/8/8/8/8/8/4K3 w - - 0 1"
+    quiet_b = "4k3/8/8/8/8/8/8/3K4 b - - 0 1"
+    # The transient (non-quiet) post-move node is skipped to the next quiet one.
+    line = EnvisionedLine(
+        start_fen=START,
+        line_san=["x", "y"],
+        line_uci=["a1a2", "a2a3"],
+        fens=[noisy, quiet_a],
+        leaf_fen=quiet_a,
+    )
+    assert _first_quiet_fen(line) == quiet_a
+    # A quiet move: the post-move node itself is the assessment horizon.
+    line2 = EnvisionedLine(
+        start_fen=START,
+        line_san=["x", "y"],
+        line_uci=["a1a2", "a2a3"],
+        fens=[quiet_a, quiet_b],
+        leaf_fen=quiet_b,
+    )
+    assert _first_quiet_fen(line2) == quiet_a
+
+
+def test_decided_position_keeps_material_drops_positional():
+    from app.core.commentary.rules.facts_builder import _is_decided, _material_only
+
+    assert _is_decided(800, None)
+    assert _is_decided(None, 3)
+    assert not _is_decided(50, None)
+    claims = [
+        Claim(
+            rule_id="material_standing",
+            text="White is a rook up.",
+            features_involved=["MATERIAL_BALANCE"],
+        ),
+        Claim(
+            rule_id="strong_knight",
+            text="strong knight",
+            features_involved=["WHITE_KNIGHTS_OUTPOSTS"],
+        ),
+    ]
+    kept = _material_only(claims)
+    assert [c.rule_id for c in kept] == ["material_standing"]

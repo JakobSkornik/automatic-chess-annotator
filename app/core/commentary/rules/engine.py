@@ -20,13 +20,12 @@ from __future__ import annotations
 from .catalog import order_claims_for_mover, run_rules
 from .constants import MAX_CONCESSIONS, THRESHOLDS
 from .facts_builder import build_comment_facts
-from .realization import _claim_realization, _line_feature_series
+from .realization import _line_feature_series
 from .verdicts import verdict_for_eval, verdict_for_transition
 
 __all__ = [
     "MAX_CONCESSIONS",
     "THRESHOLDS",
-    "_claim_realization",
     "_line_feature_series",
     "build_comment_facts",
     "order_claims_for_mover",
