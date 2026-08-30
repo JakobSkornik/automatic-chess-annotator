@@ -22,7 +22,12 @@ import chess
 from app.core.commentary.features.guid_features import (
     FeatureVector,
 )
-from app.models.comment_facts import EnvisionedLine, FeatureDelta, FeatureDiff
+from app.models.comment_facts import (
+    EnvisionedLine,
+    FeatureAdvantage,
+    FeatureDelta,
+    FeatureDiff,
+)
 
 
 def base_display_plies() -> int:
@@ -39,6 +44,18 @@ def max_display_plies() -> int:
         return int(os.environ.get("ENVISIONED_MAX_PLIES", "12"))
     except ValueError:
         return 12
+
+
+def probe_trim_enabled() -> bool:
+    """Opt-out knob for the probe-based horizon-effect trim (Improvement 1),
+    following the same env-var convention as ``ENVISIONED_BASE_PLIES`` /
+    ``ENVISIONED_MAX_PLIES``. Defaults to enabled."""
+    return os.environ.get("ENVISIONED_PROBE_TRIM_ENABLED", "1").strip().lower() not in (
+        "0",
+        "false",
+        "off",
+        "no",
+    )
 
 
 _SEE_VALUES = {
@@ -249,6 +266,60 @@ def diff_vectors(
     positive.sort(key=lambda d: -abs(d.delta_cp))
     negative.sort(key=lambda d: -abs(d.delta_cp))
     return FeatureDiff(positive=positive, negative=negative)
+
+
+def diff_of_diffs(
+    played: FeatureDiff,
+    alt: FeatureDiff,
+    *,
+    min_abs_cp: int = 1,
+    max_features: int | None = None,
+) -> list[FeatureAdvantage]:
+    """Feature-diff-of-diffs: for each named feature present in either the
+    played move's diff or the alternative's diff, how many more (White-POV)
+    centipawns does the ALTERNATIVE'S own start->leaf diff move that feature
+    by, compared to the PLAYED move's start->leaf diff on the same feature?
+
+    Every feature name here is already White-POV signed (``WHITE_*``/``BLACK_*``
+    are separate, oppositely-signed features per ``vector.py``), so the two
+    diffs' ``delta_cp`` values are directly comparable by name without any
+    extra POV bookkeeping — unlike claim text, which is deduplicated by rule
+    id/beneficiary, this is a genuine number: "the alternative gains N more
+    cp of rook activity than the played move does", grounded in the actual
+    feature vectors rather than in claim-text absence.
+
+    ``min_abs_cp`` mirrors ``diff_vectors``'s own materiality convention
+    (the smallest cp swing worth reporting at all); callers doing user-facing
+    surfacing should pass a higher threshold (e.g. Guid's ``min_claim_cp``)
+    so only claim-worthy swings show up. Results are sorted by |advantage|
+    descending and optionally capped to ``max_features``."""
+
+    def _by_name(diff: FeatureDiff) -> dict[str, int]:
+        return {d.name: d.delta_cp for d in (diff.positive + diff.negative)}
+
+    played_map = _by_name(played)
+    alt_map = _by_name(alt)
+    names = set(played_map) | set(alt_map)
+
+    advantages: list[FeatureAdvantage] = []
+    for name in names:
+        played_cp = played_map.get(name, 0)
+        alt_cp = alt_map.get(name, 0)
+        advantage_cp = alt_cp - played_cp
+        if abs(advantage_cp) < min_abs_cp:
+            continue
+        advantages.append(
+            FeatureAdvantage(
+                name=name,
+                alt_delta_cp=alt_cp,
+                played_delta_cp=played_cp,
+                advantage_cp=advantage_cp,
+            )
+        )
+    advantages.sort(key=lambda a: -abs(a.advantage_cp))
+    if max_features is not None:
+        advantages = advantages[:max_features]
+    return advantages
 
 
 def envisioned_for_played_move(

@@ -129,6 +129,12 @@ def _resolve_move_comment(
     Prose is reserved for key moments (an LLM pass ran for them); other
     out-of-book moves carry no prose — their structured facts panel stands
     alone. A non-selected commentary side stays fully silent.
+
+    A move that back-to-back suppression demoted (``brief_commentary``) has no
+    ``key_moment_type`` of its own anymore — the LLM pass was deliberately
+    skipped for it — but it still owes the reader the short stub reference the
+    suppression promised, so it gets its own branch below rather than falling
+    through to silence.
     """
     mc = _MoveComment()
     if (row.phase_raw or "") == "early":
@@ -140,6 +146,8 @@ def _resolve_move_comment(
         # found something to say, is still honored above.
         if not mc.comment and not _nothing_instructive_to_say(move_event):
             mc.comment = _fallback_comment(move_event, key_moment)
+    elif move_event and move_event.brief_commentary and side_ok:
+        mc.comment = _fallback_comment(move_event, key_moment)
     _append_transition_sentence(mc, move_event, side_ok, seen_transitions)
     return mc
 

@@ -1,0 +1,308 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "In 1884 the magazine \"Vsemirnaia Illiustrazia\", in which the chess\ncolumn was held by Chigorin himself, organized a correspondence chess\ntournament. There were 12 participants, each playing two game with everyone\nelse. The tournament was easily won by Chigorin with 20 wins and 2 draws, 4\npoints ahead of the runner up. The games were then published, and the\nfollowing game started a lot of lively discussions in the press in many\ncountries.",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Bc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "b4",
+    "comment": "The Evans Gambit",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Bxb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "c3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Bc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "d6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "exd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "cxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Bb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Nc3",
+    "comment": "This simple developing move\nwas Chigorin's favourite one and proved to be the right one.",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Na5",
+    "comment": "Now, however, this Knight\njump near the fence is not so good and makes a lot of troubles to its\nconductor.  Right was 9... Bg4 10. Bb5 Kf8 (!) 11. Be3 Nge7 and Black would\nhave kept his extra pawn and a solid position.",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Bg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Ne7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Nd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "f6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Bxf6",
+    "comment": "A risky decision. Against Steinitz our hero played the stronger move 12.Bf4.",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "gxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Nxf6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Kf8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Ng5",
+    "comment": "The cavalry is sent audaciously to the\nattack. (Different times, different spirit, different phylosophy of the game!)",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Ng8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Ngxh7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Kg7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Bxg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Rxh7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Nxh7",
+    "comment": "Urusov is now facing a difficult choice.",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Qh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Qf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Kxg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Nf6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Kg7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Nh5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Kg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Nf4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Kh7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Nd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Be6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Nxb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "axb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Bg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Rac1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Qe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Qh3+",
+    "comment": "Black, aware that it is\nimpossible to prevent the Rook in c1 from entering the battle via c3 with\ndeadly effects, resigns.",
+    "nags": []
+  }
+]

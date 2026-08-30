@@ -1,0 +1,410 @@
+[
+  {
+    "ply": 1,
+    "san": "Nf3",
+    "comment": "In 1892, at \"Cafe' de la Regence\" a tournament was organized among the\nstrongest players who were present in Paris at that time. The prize was 500\nfrancs. Janowsky and Sittenfeld were those who play against each other in the\nfinal match. The result, in favour of our hero, was +7 -5 =5. The game which\nis now presented here won the beauty prize of 30 francs.",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "d5",
+    "comment": "Janowsky would not have disliked (in case of 3.c4) the Chigorin Defense even\nif such a defense was already at that time partially condemned by the theory.",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "e3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Be2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "c3",
+    "comment": "A bit too shy. Wasn't it better to castle and then\nattack the center with c2-c4?",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Qb3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "Rb8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Nbd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Bd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Nf1",
+    "comment": "Unclear...",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Ne4",
+    "comment": "...and Black profits from it at once.",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Ng3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Bd3",
+    "comment": "The first mistake. It was better to play immediatly 10. Ng1 to force the\nBishop exchange and to open the kingside to the air, since it is beginning to\n\"smell sweat\".",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "f5",
+    "comment": "Very good!",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "a3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Bd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "b5",
+    "comment": "So, even a\nble breaking attempt with c3-c4 is prevented. But that's not all. This move\nand the following ones, as we shall see, are part of a deep strategical plan\nto further reduce the space available for the opponent. A real attempt to\nstrangle him!",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "a5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "b4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Qf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Bc1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Qh6",
+    "comment": "Exclamation mark!",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Nf1",
+    "comment": "Forced. 16...Nxg3 was threatened.",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Qh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Ng1",
+    "comment": "No! Too passive! Also,\nlet's say it: it is humiliating too! It seems that White is taken by terror.\nThe threat f2-f3 is unreal and allows Black....",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "e5",
+    "comment": "Wonderful!",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "f3",
+    "comment": "(?) Sittenfeld could not resist to such temptation.",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Qh4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "g3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Nxg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Nxg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "e4",
+    "comment": "Down! In the mouth of the enemy!",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "f4",
+    "comment": "To defend against Bd6xg3+.",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "exd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Qxd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "g5",
+    "comment": "Breathless! (A Bout de souffle!)",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Qf1",
+    "comment": "(?)",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "gxf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "exf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Rfe8+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Kd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "axb4",
+    "comment": "Now the King is out of is lair and Black goes to the queenside.",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "axb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Qe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Kc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Bxb4",
+    "comment": "It's time!",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "cxb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Qxb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Qd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Ra8",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Rxa8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Rxa8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "N1e2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "Ra2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 63,
+    "san": "Kd1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 64,
+    "san": "Nxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 65,
+    "san": "Qe3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 66,
+    "san": "Rxe2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 67,
+    "san": "Nxe2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 68,
+    "san": "Bxe2+",
+    "comment": "",
+    "nags": []
+  }
+]

@@ -44,6 +44,15 @@ def order_claims_for_mover(claims: list[Claim], mover: str) -> list[Claim]:
     mover_key = mover.lower()
     merits = [c for c in claims if c.beneficiary in (mover_key, None)]
     concessions = [c for c in claims if c.beneficiary not in (mover_key, None)]
+    if len(concessions) > MAX_CONCESSIONS:
+        logger.debug(
+            "order_claims_for_mover: MAX_CONCESSIONS cap dropped %d concession(s) "
+            "(mover=%s, cap=%d): %s",
+            len(concessions) - MAX_CONCESSIONS,
+            mover,
+            MAX_CONCESSIONS,
+            [c.rule_id for c in concessions[MAX_CONCESSIONS:]],
+        )
     concessions = [
         c.model_copy(update={"is_concession": True})
         for c in concessions[:MAX_CONCESSIONS]
@@ -101,11 +110,28 @@ def run_rules(
             logger.warning("rule %s failed: %s", getattr(rule, "__name__", rule), e)
     # Every claim must clear the magnitude floor — a flag flip alone (e.g. a
     # routine bishop trade) is no longer enough to earn a sentence.
+    below_floor = [c for c in claims if c.delta_cp < THRESHOLDS["min_claim_cp"]]
+    if below_floor:
+        logger.debug(
+            "run_rules: min_claim_cp gate dropped %d claim(s) (mover=%s, threshold=%d): %s",
+            len(below_floor),
+            mover,
+            THRESHOLDS["min_claim_cp"],
+            [(c.rule_id, c.delta_cp) for c in below_floor],
+        )
     claims = [c for c in claims if c.delta_cp >= THRESHOLDS["min_claim_cp"]]
     claims.sort(key=lambda c: -c.delta_cp)
     material_ids = {"material_won", "material_standing", "tactical_material_loss"}
     material = [c for c in claims if c.rule_id in material_ids]
     rest = [c for c in claims if c.rule_id not in material_ids]
+    if len(rest) > MAX_CLAIMS_PER_MOVE:
+        logger.debug(
+            "run_rules: MAX_CLAIMS_PER_MOVE cap dropped %d claim(s) (mover=%s, cap=%d): %s",
+            len(rest) - MAX_CLAIMS_PER_MOVE,
+            mover,
+            MAX_CLAIMS_PER_MOVE,
+            [c.rule_id for c in rest[MAX_CLAIMS_PER_MOVE:]],
+        )
     return material + rest[:MAX_CLAIMS_PER_MOVE]
 
 

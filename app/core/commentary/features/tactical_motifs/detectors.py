@@ -5,8 +5,14 @@ from __future__ import annotations
 
 import chess
 
+from .sacrifice_core import POSITIONAL_PAWN_SAC_MIN_CP, settled_material_deficit
+
 MATE_SCORE = 1_000_000
 
+# Pawn-count-scale piece values used by the non-sacrifice heuristics below
+# (fork/skewer/deflection/etc. compare against MINOR_PIECE_VALUE). Distinct
+# from sacrifice_core.PIECE_VALUES_CP, which scores net material in
+# centipawns for the sacrifice detectors.
 PIECE_VALUES = {
     chess.PAWN: 1,
     chess.KNIGHT: 3,
@@ -19,15 +25,6 @@ PIECE_VALUES = {
 
 MINOR_PIECE_VALUE = 3  # value cutoff: a minor piece or better (knight/bishop+)
 OPENING_FULLMOVE_MAX = 4  # zwischenzug heuristic only applies this early
-
-
-def _material_sum(board: chess.Board, color: chess.Color) -> int:
-    total = 0
-    for sq in chess.SQUARES:
-        p = board.piece_at(sq)
-        if p and p.color == color:
-            total += PIECE_VALUES.get(p.piece_type, 0)
-    return total
 
 
 def _fork_after_move(
@@ -167,10 +164,15 @@ def _decoy_sacrifice(
     move: chess.Move,
     mover_color: chess.Color,
 ) -> bool:
-    """Material lost but creates a concrete threat to king or queen next."""
-    mat_before = _material_sum(board_before, mover_color)
-    mat_after = _material_sum(board_after, mover_color)
-    if mat_after >= mat_before - 1:
+    """Material lost but creates a concrete threat to king or queen next.
+
+    Uses the shared settled-material-deficit core (sacrifice_core.py) rather
+    than a one-ply before/after diff on the mover's own move — that
+    comparison can never fire, since a single legal move can never reduce the
+    mover's own material total.
+    """
+    deficit = settled_material_deficit(board_before, board_after, mover_color)
+    if deficit < POSITIONAL_PAWN_SAC_MIN_CP:
         return False
     if board_after.is_check() or board_after.is_checkmate():
         return True

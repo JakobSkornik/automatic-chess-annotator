@@ -1,0 +1,33 @@
+86 f4 classification=None annotation=None is_key_moment=False final_comment=False
+   comment: None
+
+87 Bxf4 classification=best_move annotation=! is_key_moment=True final_comment=True
+   comment: 'The most accurate move, holding the balance while White keeps a two-pawn material edge — an advantage that still carries real practical weight in this endgame. (+0.16, Stockfish:16) The main continuation is [pv:Bxf4 Rxd4 Bg3 Bg7 Re3], though later imprecision can still cost White the edge. Bc1 leads to equality as a roughly comparable alternative: [pv:Bc1 Rxd4 Ke2 Bb4 Rc2].'
+
+88 Rxd4 classification=piece_activation annotation=None is_key_moment=True final_comment=True
+   comment: "Black's 44...Rxd4 is the strongest continuation in this endgame, though it still leads to a slight advantage for White (+0.27, Stockfish:16) after [pv:Rxd4 Bg3 Bg7 Re3 Rb4]. The comparable alternative 44...c5 is roughly as good, also leading to a slight advantage for White along [pv:c5 Kg3 Rxd4 Rc2 Rd3]. White soon throws away that small edge with 45.Kg3, handing Black a clear advantage."
+
+89 Kg3 classification=critical_decision annotation=None is_key_moment=True final_comment=True
+   comment: "White's 45.Kg3 throws away the advantage and hands Black a clear advantage (+0.27 → -1.32, Stockfish:16), as [pv:Kg3 Bb4 Rc4 Be1+ Kg2] shows. Bb4 is the refutation, punishing this king walk, and along the line Black's king may become safe while White's king loses its active role—exactly the wrong trade in an endgame where king safety often decides the result. White missed the chance to play Bg3, which leads to equality [pv:Bg3 Bg7 Re3 Rb4 Kg2]."
+
+90 Bb4 classification=great_move annotation=! is_key_moment=True final_comment=True
+   comment: "45...Bb4 is the strongest continuation, maintaining Black's advantage (-1.37, Stockfish:16) along [pv:Bb4 Rc4 Be1+ Kg2 Rxc4]. The bishop move immediately leaves White with a hanging piece, giving Black a weak target to exploit in the endgame. By contrast, 45...c5 leads to a slight advantage for White along [pv:c5 a5 a6 Rc1 Bg7], which is why the active bishop was the right choice over passive pawn play."
+
+91 Rc4 classification=great_move annotation=! is_key_moment=False final_comment=False
+   comment: "Continues the same theme as around ply 90 (see that move's commentary)."
+
+92 Be1+ classification=best_move annotation=! is_key_moment=True final_comment=True
+   comment: "Be1+ is the most accurate move, maintaining Black's advantage (-1.34, Stockfish:16) in [pv:Be1+ Kg2 Rxc4 bxc4+ Kxc4], and it immediately establishes a passed pawn on c6 — a critical endgame asset that can drive toward promotion. Rxc4 is clearly weaker, leading only to a slight advantage for Black [pv:Rxc4 bxc4+ Kxc4 Be3 a6], which is why the king check is the stronger choice."
+
+93 Kg2 classification=good_defense annotation=None is_key_moment=True final_comment=True
+   comment: "Kg2 makes White's king safer, which matters when king safety decides endgames, yet the move still leads to a clear advantage for Black (-1.25, Stockfish:16) after [pv:Kg2 Rxc4 bxc4+ Kxc4 Be3], where the line may leave Black with a hanging piece. Kh3 is a roughly comparable option that likewise leads to a clear advantage for Black along [pv:Kh3 Rxc4 bxc4+ Kxc4 Bb8]."
+
+94 Rxc4 classification=best_move annotation=! is_key_moment=True final_comment=True
+   comment: "Rxc4 is the most accurate move, maintaining Black's advantage (-1.12, Stockfish:16) along [pv:Rxc4 bxc4+ Kxc4 Be3 a6]. It immediately weakens White's pawn structure with doubled, isolated, and backward pawns—structural damage that often makes endgames harder to hold. Bxh4 was clearly weaker, leading only to a slight advantage for Black in [pv:Bxh4 Be3 Rxc4 bxc4+ Kxc4], which creates a passed pawn on h5 but may take longer to win a pawn deeper in the line, without the same lasting structural pressure."
+
+95 bxc4+ classification=None annotation=None is_key_moment=False final_comment=False
+   comment: None
+
+96 Kxc4 classification=None annotation=None is_key_moment=False final_comment=False
+   comment: "Continues the same theme as around ply 94 (see that move's commentary)."
+

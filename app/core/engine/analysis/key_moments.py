@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.commentary.features.tactical_motifs.sacrifice_core import (
+    persistent_deficit,
+)
 from app.models.chess_events import GameAnalysisContext, MoveEvent
 
 
@@ -58,14 +61,19 @@ def _played_is_best(move_event: MoveEvent) -> bool:
 
 def _is_sacrifice(facts: Any) -> bool:
     """Material is still down for the mover at the END of the line. A transient
-    dip that is regained within the sequence is not a sacrifice."""
+    dip that is regained within the sequence is not a sacrifice.
+
+    Uses the shared ``persistent_deficit`` core (sacrifice_core.py) also used
+    by the general-purpose ``TacticalMotif.SACRIFICE`` detector — this is the
+    brilliancy-specific caller, layering ``_played_is_best`` and
+    ``_eval_clearly_winning`` on top in ``_promote_key_moment`` below.
+    """
     dl = facts.display_line
     series = (dl.feature_series.get("MATERIAL_BALANCE") if dl else None) or []
     if len(series) < 2:
         return False
     sign = 1 if facts.mover == "White" else -1
-    leaf_deficit = sign * (series[-1] - series[0])
-    return leaf_deficit <= -BRILLIANT_SAC_LEAF_CP
+    return persistent_deficit(series, sign) <= -BRILLIANT_SAC_LEAF_CP
 
 
 def _eval_clearly_winning(facts: Any) -> bool:

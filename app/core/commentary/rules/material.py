@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import zlib
 from dataclasses import dataclass
 
 import chess
@@ -36,8 +37,37 @@ def _imbalance(board: chess.Board) -> dict[int, int]:
     }
 
 
-def _enumerate_extra(extra: dict[int, int]) -> str:
-    """e.g. {ROOK:1, BISHOP:1} -> 'a rook and a bishop'; {KNIGHT:2} -> 'two knights'."""
+def _minor_total(extra: dict[int, int]) -> int | None:
+    """Total minor-piece count if ``extra`` consists ONLY of bishops/knights
+    (2+ of them); else None. Used to offer the generic "N pieces" phrasing
+    (Guid: vary between generic and specific naming for the same imbalance)."""
+    if not extra:
+        return None
+    if any(pt not in (chess.BISHOP, chess.KNIGHT) for pt in extra):
+        return None
+    total = sum(extra.values())
+    return total if total >= 2 else None
+
+
+def _phrase_seed(board: chess.Board) -> int:
+    """Deterministic-per-position seed (not global RNG) so repeated runs on the
+    same game reproduce the same generic/specific phrasing choice."""
+    return zlib.crc32(board.fen().encode())
+
+
+def _enumerate_extra(
+    extra: dict[int, int], *, generic: bool = False, seed: int = 0
+) -> str:
+    """e.g. {ROOK:1, BISHOP:1} -> 'a rook and a bishop'; {KNIGHT:2} -> 'two knights'.
+
+    When ``extra`` is made up entirely of minor pieces (2+), and ``generic`` is
+    set, this may instead render the generic "two pieces" / "three pieces"
+    form (Guid: vary generic vs. specific naming) — chosen deterministically
+    from ``seed``, not every time, so specific piece names still show up too.
+    """
+    minor_total = _minor_total(extra)
+    if generic and minor_total is not None and seed % 2 == 0:
+        return f"{_NUMWORD.get(minor_total, str(minor_total))} pieces"
     parts: list[str] = []
     for pt in _MAT_ORDER:
         c = extra.get(pt, 0)
@@ -70,6 +100,7 @@ class _MatStanding:
     subj_pawns: int
     opp_pawns: int
     changed: bool
+    seed: int
 
 
 def _material_standing(leaf_board: chess.Board, changed: bool) -> _MatStanding | None:
@@ -96,6 +127,7 @@ def _material_standing(leaf_board: chess.Board, changed: bool) -> _MatStanding |
         subj_pawns=subj.get(chess.PAWN, 0),
         opp_pawns=opp.get(chess.PAWN, 0),
         changed=changed,
+        seed=_phrase_seed(leaf_board),
     )
 
 
@@ -146,15 +178,16 @@ def _phrase_single_minor(s: _MatStanding) -> tuple[str, str, int] | None:
     minor = _single_minor(s.nonpawn_subj)
     if not minor or s.nonpawn_opp:
         return None
+    # Vary generic ("a piece") vs. specific ("a bishop"/"a knight") naming for
+    # the same imbalance (Guid), chosen deterministically per position.
+    noun = "piece" if s.seed % 2 == 0 else minor
     if s.opp_pawns:
         return (
-            f"{s.label} has won a {minor} for {_pawns_phrase(s.opp_pawns)}.",
+            f"{s.label} has won a {noun} for {_pawns_phrase(s.opp_pawns)}.",
             s.benef,
             s.delta_cp,
         )
-    text = (
-        f"{s.label} has won a {minor}." if s.changed else f"{s.label} is up a {minor}."
-    )
+    text = f"{s.label} has won a {noun}." if s.changed else f"{s.label} is up a {noun}."
     return text, s.benef, s.delta_cp
 
 
@@ -177,9 +210,13 @@ def _phrase_single_rook(s: _MatStanding) -> tuple[str, str, int] | None:
 
 
 def _phrase_general(s: _MatStanding) -> tuple[str, str, int]:
-    """Catch-all: '<subj> for/against <opp>' (against a lone queen)."""
-    subj_desc = _enumerate_extra(s.subj)
-    opp_desc = _enumerate_extra(s.opp)
+    """Catch-all: '<subj> for/against <opp>' (against a lone queen). When the
+    subject side's extra material is all minors (e.g. bishop + knight), the
+    generic "two pieces" phrasing is used some of the time instead of always
+    naming the pieces (Guid: vary generic vs. specific naming), chosen
+    deterministically per position (``s.seed``)."""
+    subj_desc = _enumerate_extra(s.subj, generic=True, seed=s.seed)
+    opp_desc = _enumerate_extra(s.opp, generic=True, seed=s.seed + 1)
     if opp_desc:
         connector = "against" if set(s.nonpawn_opp) == {chess.QUEEN} else "for"
         return f"{s.label} has {subj_desc} {connector} {opp_desc}.", s.benef, s.delta_cp

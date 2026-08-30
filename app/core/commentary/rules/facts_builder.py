@@ -3,15 +3,21 @@ realization tagging, and the inviolable per-move fact record."""
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import chess
 
 from app.core.commentary.features.envisioned import (
+    diff_of_diffs,
     diff_vectors,
     envisioned_for_best_move,
     envisioned_for_played_move,
     is_quiescent,
+    max_display_plies,
+    probe_trim_enabled,
+    trim_envisioned_line_by_probe,
 )
 from app.core.commentary.features.guid_features import compute_feature_vector_fen
 from app.models.chess_events import AnalyzedMoveData, MoveEvent
@@ -20,6 +26,8 @@ from app.models.comment_facts import (
     Claim,
     CommentFacts,
     EnvisionedLine,
+    FeatureAdvantage,
+    FeatureDelta,
     FeatureDiff,
 )
 
@@ -30,10 +38,19 @@ from .constants import (
     EVAL_CONCESSION_CP,
     MATERIAL_LOSS_CP,
     MAX_ALTERNATIVE_MERITS,
+    MAX_FEATURE_ADVANTAGES,
     MERIT_SUPPRESS_CP,
+    THRESHOLDS,
 )
 from .realization import _line_feature_series
 from .verdicts import verdict_for_eval, verdict_for_transition
+
+logger = logging.getLogger(__name__)
+
+# Cheap depth-limited engine eval of a FEN -> White-POV cp (or None when the
+# probe is unavailable/failed). Same signature as
+# ``envisioned.trim_envisioned_line_by_probe`` expects.
+Prober = Callable[[str], "int | None"]
 
 
 def _decode_eval(cp: int | None) -> tuple:
@@ -57,6 +74,25 @@ class _FactsCtx:
     phase_raw: str
     depth: int
     start_vec: dict
+    # Optional cheap engine prober for the post-build horizon-effect trim
+    # (Improvement 1). None disables the trim (engine-free callers/tests).
+    prober: Prober | None = None
+
+
+def _trim_line(line: EnvisionedLine, prober: Prober | None) -> EnvisionedLine:
+    """Apply the probe-based tail trim right after an envisioned line is
+    built, BEFORE it backs any feature vector/diff/claim computation — a
+    statically-quiescent leaf can still be tactically loaded (discovered
+    attack, skewer), and once claims are computed from it there is no way to
+    walk that back. ``ENVISIONED_PROBE_TRIM_ENABLED=0`` opts out; a missing
+    prober (engine-free path, most unit tests) is a no-op either way."""
+    if prober is None or not probe_trim_enabled():
+        return line
+    try:
+        return trim_envisioned_line_by_probe(line, prober)
+    except Exception:
+        logger.debug("probe trim failed for leaf %s", line.leaf_fen, exc_info=True)
+        return line
 
 
 def _first_quiet_fen(line: EnvisionedLine) -> str:
@@ -68,6 +104,87 @@ def _first_quiet_fen(line: EnvisionedLine) -> str:
         if fen and is_quiescent(chess.Board(fen)):
             return fen
     return line.leaf_fen
+
+
+def _feature_extremum_ply(series_for_feature: list[int], direction: int, window: int) -> int:
+    """Index into ``series_for_feature`` (0 = start position, matching
+    ``realization._line_feature_series``'s point-0-is-start convention) of
+    the most extreme value in ``direction`` (+1/-1, the sign of the delta
+    already fired for this feature) within the first ``window`` plies.
+
+    Guards against the fixed first-quiescent-ply checkpoint landing PAST the
+    moment a transient feature (a piece hanging mid-sequence, a rook's open
+    file before it gets blocked again) was actually at its most pronounced,
+    just because the position stayed non-quiescent a few plies longer for
+    unrelated reasons."""
+    if not series_for_feature:
+        return 0
+    limit = min(window, len(series_for_feature) - 1)
+    best_idx = 0
+    best_val = direction * series_for_feature[0]
+    for i in range(1, limit + 1):
+        val = direction * series_for_feature[i]
+        if val > best_val:
+            best_val = val
+            best_idx = i
+    return best_idx
+
+
+def _sharpen_immediate_diff(
+    diff: FeatureDiff, line: EnvisionedLine, immediate_fen: str
+) -> FeatureDiff:
+    """Per-feature horizon fix (Improvement 2): for every feature already in
+    the immediate diff, check its full per-ply series (engine-free,
+    ``realization._line_feature_series``) for a materially stronger value —
+    same direction as the fired delta — earlier in the line than the fixed
+    first-quiescent-ply checkpoint, within the line's normal display window.
+    When one exists, use THAT ply's value for the claim instead, so the
+    claim reflects the moment the feature was actually most true rather than
+    an arbitrary quiescence checkpoint that may have overshot it.
+
+    Design choice: we REPLACE the immediate value (rather than only adding a
+    flag) because the fired ``delta_cp`` is a concrete number printed in the
+    claim text; a flag-only approach would leave that number stale. We only
+    ever move further in the ALREADY-fired direction (never introduce a new
+    feature, never flip a delta's sign), so a delta can never jump between
+    the positive/negative lists here, and the immediate-vs-forecast dedup in
+    ``_two_horizon_claims`` (``_is_new``) is keyed on feature name/beneficiary
+    — never on the numeric value — so this cannot regress that priority
+    ordering; it only changes which FEN backs the number."""
+    names = [d.name for d in (diff.positive + diff.negative)]
+    if not names:
+        return diff
+    series = _line_feature_series(line.start_fen, line.fens, names=names)
+    points = [line.start_fen, *line.fens]
+    try:
+        immediate_idx = points.index(immediate_fen)
+    except ValueError:
+        immediate_idx = len(points) - 1
+    window = min(max_display_plies(), len(line.fens))
+    threshold = THRESHOLDS.get("min_claim_cp", 8)
+
+    def _sharpen(deltas: list[FeatureDelta]) -> list[FeatureDelta]:
+        out: list[FeatureDelta] = []
+        for d in deltas:
+            s = series.get(d.name)
+            if not s:
+                out.append(d)
+                continue
+            direction = 1 if d.delta_cp > 0 else -1
+            ext_idx = _feature_extremum_ply(s, direction, window)
+            ext_val = s[ext_idx]
+            if ext_idx != immediate_idx and direction * (ext_val - d.after_cp) >= threshold:
+                out.append(
+                    d.model_copy(
+                        update={"after_cp": ext_val, "delta_cp": ext_val - d.before_cp}
+                    )
+                )
+            else:
+                out.append(d)
+        out.sort(key=lambda x: -abs(x.delta_cp))
+        return out
+
+    return FeatureDiff(positive=_sharpen(diff.positive), negative=_sharpen(diff.negative))
 
 
 def _two_horizon_claims(
@@ -92,8 +209,11 @@ def _two_horizon_claims(
         "eval_cp": eval_cp,
         "start_board": ctx.board_before,
     }
+    immediate_diff = _sharpen_immediate_diff(
+        diff_vectors(ctx.start_vec, immediate_vec), line, immediate_fen
+    )
     immediate = run_rules(
-        diff_vectors(ctx.start_vec, immediate_vec),
+        immediate_diff,
         leaf_board=chess.Board(immediate_fen),
         **common,
     )
@@ -138,6 +258,7 @@ def _played_line_claims(
         played_eval_cp=move_event.eval_after_cp,
         depth=ctx.depth,
     )
+    played_line = _trim_line(played_line, ctx.prober)
     claims, leaf_vec = _two_horizon_claims(ctx, played_line, move_event.eval_after_cp)
     line_diff = diff_vectors(ctx.start_vec, leaf_vec)
     return played_line, line_diff, leaf_vec, order_claims_for_mover(claims, ctx.mover)
@@ -193,8 +314,25 @@ def _alternative_merits(
     ][:MAX_ALTERNATIVE_MERITS]
 
 
+def _feature_advantages(
+    played_diff: FeatureDiff | None, alt_diff: FeatureDiff
+) -> list[FeatureAdvantage]:
+    """Feature-diff-of-diffs (Improvement 3): the alternative's own
+    start->leaf swing vs. the played move's, per feature, in cp. Additive to
+    the existing claim-text-dedup ``claims`` list -- see
+    ``envisioned.diff_of_diffs`` for the full rationale."""
+    if played_diff is None:
+        return []
+    return diff_of_diffs(
+        played_diff,
+        alt_diff,
+        min_abs_cp=THRESHOLDS.get("min_claim_cp", 8),
+        max_features=MAX_FEATURE_ADVANTAGES,
+    )
+
+
 def _build_better_alternative(
-    ctx: _FactsCtx, main_claims: list[Claim]
+    ctx: _FactsCtx, main_claims: list[Claim], played_diff: FeatureDiff | None = None
 ) -> BestAlternative | None:
     """The engine's preferred move + its merits, whenever a different move was
     played — so the better line can always be visualized, regardless of how
@@ -219,9 +357,11 @@ def _build_better_alternative(
     best_line = envisioned_for_best_move(
         move_event.fen_before, best_pv_uci, best_eval_cp=best_cp, depth=ctx.depth
     )
-    best_claims, _ = _two_horizon_claims(ctx, best_line, best_cp)
+    best_line = _trim_line(best_line, ctx.prober)
+    best_claims, best_leaf_vec = _two_horizon_claims(ctx, best_line, best_cp)
     if _is_decided(best_cp, best_mate):
         best_claims = _material_only(best_claims)
+    alt_diff = diff_vectors(ctx.start_vec, best_leaf_vec)
     return BestAlternative(
         san=move_event.best_move_san or move_event.best_move_uci,
         uci=move_event.best_move_uci,
@@ -229,11 +369,12 @@ def _build_better_alternative(
         verdict=verdict_for_eval(best_cp, best_mate),
         display_line=best_line,
         claims=_alternative_merits(best_claims, main_claims, ctx.mover),
+        feature_advantages=_feature_advantages(played_diff, alt_diff),
     )
 
 
 def _build_inferior_alternative(
-    ctx: _FactsCtx, main_claims: list[Claim]
+    ctx: _FactsCtx, main_claims: list[Claim], played_diff: FeatureDiff | None = None
 ) -> BestAlternative | None:
     """When the engine's best move was actually played, surface the runner-up
     (2nd-best PV) as a contrast for the "!" — so the reader sees what the move was
@@ -266,9 +407,11 @@ def _build_inferior_alternative(
     alt_line = envisioned_for_best_move(
         move_event.fen_before, second_pv_uci, best_eval_cp=second_cp, depth=ctx.depth
     )
-    alt_claims, _ = _two_horizon_claims(ctx, alt_line, second_cp)
+    alt_line = _trim_line(alt_line, ctx.prober)
+    alt_claims, alt_leaf_vec = _two_horizon_claims(ctx, alt_line, second_cp)
     if _is_decided(second_cp, second_mate):
         alt_claims = _material_only(alt_claims)
+    alt_diff = diff_vectors(ctx.start_vec, alt_leaf_vec)
     return BestAlternative(
         san=second_san,
         uci=second_uci,
@@ -277,6 +420,7 @@ def _build_inferior_alternative(
         display_line=alt_line,
         claims=_alternative_merits(alt_claims, main_claims, ctx.mover),
         is_inferior=True,
+        feature_advantages=_feature_advantages(played_diff, alt_diff),
     )
 
 
@@ -330,21 +474,50 @@ def _filter_claims(
     # Decisive evals: positional claims are noise, but the material standing
     # ("White is a rook up") is exactly what explains the result — keep it.
     if _is_decided(eval_cp, eval_mate):
+        before = claims
         claims = _material_only(claims)
+        if len(claims) < len(before):
+            logger.debug(
+                "_filter_claims: decisive-position gate (eval_cp=%s, eval_mate=%s, "
+                "threshold=%d) dropped %d non-material claim(s): %s",
+                eval_cp,
+                eval_mate,
+                DECISIVE_CLAIM_CP,
+                len(before) - len(claims),
+                [c.rule_id for c in before if c not in claims],
+            )
     mover_pov_eval = (
         None if eval_cp is None else (eval_cp if mover == "White" else -eval_cp)
     )
     if mover_pov_eval is not None and mover_pov_eval <= -MERIT_SUPPRESS_CP:
         mover_key = mover.lower()
+        before = claims
         claims = [
             c
             for c in claims
             if c.is_concession or c.beneficiary not in (mover_key, None)
         ]
+        if len(claims) < len(before):
+            logger.debug(
+                "_filter_claims: merit-suppress gate (mover_pov_eval=%s, "
+                "threshold=-%d) dropped %d mover-merit claim(s): %s",
+                mover_pov_eval,
+                MERIT_SUPPRESS_CP,
+                len(before) - len(claims),
+                [c.rule_id for c in before if c not in claims],
+            )
     if not claims and move_quality in _DUBIOUS:
         fallback = _fallback_claim(ctx, leaf_vec, refutation_san)
         if fallback is not None:
             claims = [fallback]
+        else:
+            logger.debug(
+                "_filter_claims: zero claims survived for a %s move (ply=%s) and "
+                "no fallback claim was groundable — comment will rely on the "
+                "template head/verdict alone",
+                move_quality,
+                ctx.move_event.ply,
+            )
     return claims
 
 
@@ -370,8 +543,14 @@ def build_comment_facts(
     move_event: MoveEvent,
     *,
     depth: int = 16,
+    prober: Prober | None = None,
 ) -> CommentFacts | None:
-    """Assemble the move's inviolable facts from data the engine pass already paid for."""
+    """Assemble the move's inviolable facts from data the engine pass already paid for.
+
+    ``prober`` is an optional cheap engine callable (FEN -> White-POV cp)
+    used to sanity-check envisioned lines' leaves against a horizon-effect
+    contradiction before any claim/feature-diff is computed from them
+    (Improvement 1); omit it for engine-free/offline callers and tests."""
     phase_raw = row.phase_raw or "mid"
     if phase_raw == "early":
         return None
@@ -388,6 +567,7 @@ def build_comment_facts(
         phase_raw=phase_raw,
         depth=depth,
         start_vec=compute_feature_vector_fen(move_event.fen_before),
+        prober=prober,
     )
 
     played_line, diff, leaf_vec, claims = _played_line_claims(ctx)
@@ -403,9 +583,9 @@ def build_comment_facts(
         leaf_vec=leaf_vec,
         refutation_san=refutation_san,
     )
-    better = _build_better_alternative(ctx, claims) or _build_inferior_alternative(
-        ctx, claims
-    )
+    better = _build_better_alternative(
+        ctx, claims, diff
+    ) or _build_inferior_alternative(ctx, claims, diff)
     played_line, better = _attach_series(played_line, better, move_event.fen_before)
 
     return CommentFacts(

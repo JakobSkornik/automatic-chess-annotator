@@ -15,7 +15,6 @@ from .detectors import (
     _double_attack_non_fork,
     _fork_after_move,
     _interference_block,
-    _material_sum,
     _overloaded_defender,
     _quiet_move_threatens_major,
     _removal_of_guard,
@@ -23,12 +22,14 @@ from .detectors import (
     _x_ray_attack,
     _zwischenzug_check,
 )
+from .sacrifice_core import (
+    POSITIONAL_PAWN_SAC_MAX_CP,
+    POSITIONAL_PAWN_SAC_MIN_CP,
+    is_sacrifice as _is_sacrifice_core,
+    settled_material_deficit,
+)
 
 __all__ = ["detect_tactical_motifs"]
-
-
-SACRIFICE_GAIN_CP = 50  # material the side nets to flag a tactic
-THREAT_DROP_CP = 40  # eval drop that flags a created threat
 
 # Piece types a "pin" motif may be claimed about, matching the PINS feature in
 # guid_features: a pinned pawn is rarely worth annotating and reads wrong when
@@ -98,21 +99,30 @@ def detect_tactical_motifs(
         if TacticalMotif.MATING_NET not in motifs:
             motifs.append(TacticalMotif.MATING_NET)
 
-    mat_before = _material_sum(board_before, moved_color)
-    mat_after = _material_sum(board_after, moved_color)
-    if (
-        mat_after < mat_before - 1
-        and eval_before_cp is not None
-        and eval_after_cp is not None
-    ):
-        is_white = moved_color == chess.WHITE
-        gain = (
-            (eval_after_cp - eval_before_cp)
-            if is_white
-            else (eval_before_cp - eval_after_cp)
-        )
-        if gain >= SACRIFICE_GAIN_CP:
+    # SACRIFICE / POSITIONAL_PAWN_SAC share the settled-material-deficit core
+    # (sacrifice_core.py): a persistent deficit at the settled/quiescent leaf
+    # reached after the opponent's reply, with real compensation (the eval
+    # floor), rather than the old same-half-move mat_before/mat_after diff
+    # that could never fire (a single legal move can't reduce the mover's own
+    # material). POSITIONAL_PAWN_SAC is the same mechanism narrowed to a
+    # single pawn of persistent deficit and no bigger tactical follow-up
+    # (i.e. SACRIFICE itself didn't already fire).
+    if eval_after_cp is not None:
+        settle_deficit = settled_material_deficit(board_before, board_after, moved_color)
+        if _is_sacrifice_core(board_before, board_after, moved_color, eval_after_cp):
             motifs.append(TacticalMotif.SACRIFICE)
+        elif (
+            piece_after.piece_type == chess.PAWN
+            and POSITIONAL_PAWN_SAC_MIN_CP <= settle_deficit < POSITIONAL_PAWN_SAC_MAX_CP
+            and _is_sacrifice_core(
+                board_before,
+                board_after,
+                moved_color,
+                eval_after_cp,
+                min_deficit_cp=POSITIONAL_PAWN_SAC_MIN_CP,
+            )
+        ):
+            motifs.append(TacticalMotif.POSITIONAL_PAWN_SAC)
 
     enemy = not moved_color
     if _new_pin(board_before, board_after, enemy):
@@ -155,22 +165,6 @@ def detect_tactical_motifs(
         enemy, move.from_square
     ):
         motifs.append(TacticalMotif.DESPERADO)
-
-    if (
-        board_before.is_capture(move)
-        and piece_after.piece_type == chess.PAWN
-        and mat_after < mat_before
-        and eval_before_cp is not None
-        and eval_after_cp is not None
-    ):
-        is_w = moved_color == chess.WHITE
-        drop = (
-            (eval_after_cp - eval_before_cp)
-            if is_w
-            else (eval_before_cp - eval_after_cp)
-        )
-        if drop <= THREAT_DROP_CP:
-            motifs.append(TacticalMotif.POSITIONAL_PAWN_SAC)
 
     if board_before.is_capture(move):
         victim = board_before.piece_at(move.to_square)

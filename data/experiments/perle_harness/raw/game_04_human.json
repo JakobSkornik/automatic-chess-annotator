@@ -1,0 +1,266 @@
+[
+  {
+    "ply": 1,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "e3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "b6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Qf3",
+    "comment": "This move co\nntraddicts the strategical principles indicated by the theory. Since Turn knew\nthat Mikenas had a deep theoretical preparation, he decided this line of play\nin order to surprise the opponent.",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Bd3",
+    "comment": "A bit inaccurate. The\nfollowing continuation would have lead to interesting complications: 6. Bd2\nBb7 7. Qg3 O-O 8. d5",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "Bb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Qg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Bd6",
+    "comment": "White hoped in the reply 7. .. 0-0\n8.Ne2 with initiative on the kingside after 9.e4.",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "f4",
+    "comment": "In fact, the capture\n8. Qxg7 after 8... Rg8 9. Qh6 Rxg2 would have given a very promising position\nto Black.",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "g5",
+    "comment": "An energetic reply, revealing Mikenas character in that\nperiod: enthusiasm, courage and imagination. Which is the general strategy of\nthe young people: attack, and don't care about possible losses.",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "gxf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "exf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Rg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Qf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Nxd4",
+    "comment": "The right continuation even if comes from intuition\nrather than calculation. The consequences of 11... Rxg2 12. Qxg2 Nxd4 13. Qg7\nNxf3+ 14. Kf2 were unclear. Not even convincing 11... Nh5 12. Bxh7",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Nxd4",
+    "comment": "When problems are complex the right reply is not always found. Perhaps better\nwas 12. Qxd4 although even in this case Black can keep some more possibilites\nin view of the endgame. For example: 12... Bc5 13. Qe5 Rxg2 14. Ne4 Bxe4 15.\nBxe4 Ng4 16. Qh8+ Ke7 17. Qxd8+ Rxd8 18. Ne5 Bb4+ 19. Kf1 Rf2+ 20. Kg1 Re2 and\nthe position and the pawns are an adequate compensation for the sacrificed\nmaterial.",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Rxg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Qf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Bc5",
+    "comment": "A serious mistake would have been 13... Ng4\nfor 14. Be4 Qh4+ 15.Kd1 Nf2+ 16. Kc2 and the attack vanishes.",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Nf3",
+    "comment": "Again an inaccurate move which will cost material. 14. Nce2 was relatively\nbetter but after 14... Ng4 Black's attack would be irresistible.",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Rf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Qxf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Bxf2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Kxf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Ng4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Kg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Bxf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Kxf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Qh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Be4",
+    "comment": "There was nothing better.",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "f5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Ke2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Qf2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Kd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "fxe4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Nxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Qf3+",
+    "comment": "White resigns.",
+    "nags": []
+  }
+]

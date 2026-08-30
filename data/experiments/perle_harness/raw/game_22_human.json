@@ -1,0 +1,292 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "f4",
+    "comment": "Of course the most popular opening of the\nmid-19th century. Conventional wisdom at the time assumed that White had an\nobligation to fight for the initiative at any price. That is why material\nsacrifice at an early stage of the game was simply a show of good taste, and\nto decline the opponent's kind material offer was not considered an honourable\noption.",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "exf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "g5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "h4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "g4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Ne5",
+    "comment": "One of the key-positions of underdeveloped\nchess theory.",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Bc4",
+    "comment": "",
+    "nags": [
+      2
+    ]
+  },
+  {
+    "ply": 12,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "exd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Bd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Nh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Bb5+",
+    "comment": "",
+    "nags": [
+      6
+    ]
+  },
+  {
+    "ply": 18,
+    "san": "c6",
+    "comment": "Anderssen in action! It's time to\nchange colours and play white!",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 19,
+    "san": "dxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "bxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Nxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Nxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Bxc6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Kf8",
+    "comment": "",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 25,
+    "san": "Bxa8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Ng3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Rh2",
+    "comment": "Obviously the unknown club player who was playing white it wasn't\nclear whether Black had sufficient compensation for the sacrificed rook. And\nwhat do you think now about the options, e.g.",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Bf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Bd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Kg7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Re8+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Kf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Qb6",
+    "comment": "Any modern player would be jealous about Andersen's\nconfidence in playing with a rook down. Meanwhile Be5 is a decisive threat.",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Na4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Qa6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Be5",
+    "comment": "",
+    "nags": [
+      3
+    ]
+  },
+  {
+    "ply": 39,
+    "san": "a4",
+    "comment": "# A primitive defence, preparing Nb5, but allowing Black's final\nbeautiful combination.",
+    "nags": [
+      2
+    ]
+  },
+  {
+    "ply": 40,
+    "san": "Qf1+",
+    "comment": "",
+    "nags": [
+      3
+    ]
+  },
+  {
+    "ply": 41,
+    "san": "Qxf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Bxd4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Be3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Rxe3",
+    "comment": "and mate in one is inevitable. Check it yourself. Despite\nthe obvious inequality in the players' strength this game gives a clear idea\nof the chess fashions of Anderssen's time.",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Kg1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Re1#",
+    "comment": "",
+    "nags": []
+  }
+]

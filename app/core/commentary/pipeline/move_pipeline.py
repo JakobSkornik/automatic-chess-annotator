@@ -50,6 +50,12 @@ class KeyMomentGateStage:
     async def run(self, ctx: MoveCommentaryContext) -> None:
         if not ctx.move_event.key_moment_type:
             ctx.skip = True
+            logger.debug(
+                "KeyMomentGateStage: ply %s (%s) is not a key moment — no "
+                "comment will be generated for this move",
+                ctx.move_event.ply,
+                ctx.move_event.san,
+            )
 
 
 class FactsComposeStage:
@@ -116,6 +122,14 @@ class FallbackStage:
         ctx.final_text = "Commentary temporarily unavailable."
         ctx.fallback_used = "unavailable"
         ctx.llm_debug["fallback_used"] = "unavailable"
+        logger.debug(
+            "FallbackStage: ply %s (%s, key_moment=%s) reached the fallback "
+            "stage with empty composer output — comment replaced with the "
+            "'unavailable' placeholder",
+            ctx.move_event.ply,
+            ctx.move_event.san,
+            ctx.move_event.key_moment_type,
+        )
 
 
 class FinalizeStage:

@@ -82,6 +82,7 @@ __all__ = [
     "_promote_key_moment",
     "_pv_line_for_ai_payload",
     "assemble_game_json",
+    "reverse_order_engine_analysis_enabled",
     "run_engine_analysis_to_json",
 ]
 
@@ -331,19 +332,52 @@ def _seed_book_exit_eval(
         analyzed_rows[-1] = analyzed_rows[-1].model_copy(update={"score_cp": seed})
 
 
+def reverse_order_engine_analysis_enabled() -> bool:
+    """Whether the engine pass sends positions to Stockfish last-move-first.
+
+    Analyzing a game backward lets the (never explicitly cleared) transposition
+    hash table already hold entries from the actual continuation once analysis
+    reaches an earlier position, since that continuation is exactly the line
+    just searched. Set ``REVERSE_ORDER_ENGINE_ANALYSIS=0`` to fall back to the
+    old forward (first-move-first) order for comparison/debugging."""
+    return os.environ.get("REVERSE_ORDER_ENGINE_ANALYSIS", "1").strip().lower() not in (
+        "0",
+        "false",
+        "off",
+    )
+
+
+def _engine_analysis_order(total_moves: int) -> range:
+    """Ply indices in the order positions are sent to the engine."""
+    if reverse_order_engine_analysis_enabled():
+        return range(total_moves - 1, -1, -1)
+    return range(total_moves)
+
+
 async def _run_engine_pass(
     game: Game,
     retriever: AnalysisRetriever,
     moves_list: list[Move],
     progress_callback: Callable[[float, str], Awaitable[None]],
 ) -> list[AnalyzedMoveData]:
-    """Analyze every mainline ply (book or engine) into AnalyzedMoveData rows."""
+    """Analyze every mainline ply (book or engine) into AnalyzedMoveData rows.
+
+    The engine is fed positions in ``_engine_analysis_order`` (last-move-first
+    by default, on the single persistent engine instance, hash never cleared
+    between positions — see ``reverse_order_engine_analysis_enabled``). The
+    chronological bookkeeping below (book-exit eval seeding, prev/now score
+    deltas) always runs in a second, forward-order pass over the results so
+    the ORDER positions were sent to the engine never changes which move an
+    evaluation/PV ends up attached to.
+    """
     total_moves = len(moves_list)
-    analyzed_rows: list[AnalyzedMoveData] = []
-    previous_move_obj: Move | None = None
     phase_classifier = PhaseClassifier(retriever._eco_book)
-    for idx, move_obj in enumerate(moves_list):
-        progress = (idx / max(total_moves, 1)) * ENGINE_PASS_PROGRESS_PCT
+    raw_by_idx: list[dict[str, Any] | None] = [None] * total_moves
+    order = _engine_analysis_order(total_moves)
+
+    for step, idx in enumerate(order):
+        move_obj = moves_list[idx]
+        progress = (step / max(total_moves, 1)) * ENGINE_PASS_PROGRESS_PCT
         board_before = _board_before_mainline_move(game, idx)
         fen_before = board_before.fen()
         try:
@@ -359,17 +393,41 @@ async def _run_engine_pass(
             analyzed_move, pvs = retriever.analyze_book_move(move_obj)
         else:
             await progress_callback(progress, f"Engine: move {idx + 1}/{total_moves}")
-            _seed_book_exit_eval(
-                retriever, previous_move_obj, analyzed_rows, fen_before
-            )
             analyzed_move, pvs = retriever.analyze_move(
                 move_obj, stage=DEFAULT_ANALYSIS_DEPTH
             )
 
-        _attach_guid_vector(analyzed_move, board_after)
+        raw_by_idx[idx] = {
+            "move_obj": move_obj,
+            "san_main": san_main,
+            "fen_before": fen_before,
+            "board_after": board_after,
+            "analyzed_move": analyzed_move,
+            "pvs": pvs,
+        }
+
+    analyzed_rows: list[AnalyzedMoveData] = []
+    previous_move_obj: Move | None = None
+    for idx in range(total_moves):
+        raw = raw_by_idx[idx]
+        assert raw is not None  # every idx was visited exactly once above
+        move_obj = raw["move_obj"]
+        if move_obj.phase != "early":
+            _seed_book_exit_eval(
+                retriever, previous_move_obj, analyzed_rows, raw["fen_before"]
+            )
+        analyzed_move = raw["analyzed_move"]
+        _attach_guid_vector(analyzed_move, raw["board_after"])
         _attach_score_meta(analyzed_move, previous_move_obj)
         analyzed_rows.append(
-            _build_analyzed_row(idx, move_obj, san_main, fen_before, analyzed_move, pvs)
+            _build_analyzed_row(
+                idx,
+                move_obj,
+                raw["san_main"],
+                raw["fen_before"],
+                analyzed_move,
+                raw["pvs"],
+            )
         )
         previous_move_obj = analyzed_move
     return analyzed_rows
@@ -406,7 +464,6 @@ def _attach_comment_facts(
 ) -> None:
     """Fire the rule engine per move, dedup persistent claims, promote key moments."""
     from app.core.commentary.rules import build_comment_facts
-    from app.core.commentary.features.envisioned import trim_envisioned_line_by_probe
 
     prober = _leaf_probe_prober(engine_connector) if engine_connector else None
     claim_window = int(os.environ.get("CLAIM_DEDUP_WINDOW_PLIES", "6"))
@@ -417,19 +474,20 @@ def _attach_comment_facts(
             continue
         row = analyzed_rows[move_event.move_index]
         try:
-            facts = build_comment_facts(row, move_event, depth=DEFAULT_ANALYSIS_DEPTH)
+            # The prober is threaded into fact-building itself (not applied
+            # after the fact) so a probe-trimmed leaf is what claims and the
+            # feature diff are actually computed from -- a trim applied only
+            # to the already-built facts.display_line would leave claims and
+            # feature_diff computed against the untrimmed, possibly
+            # horizon-effect-contaminated leaf.
+            facts = build_comment_facts(
+                row, move_event, depth=DEFAULT_ANALYSIS_DEPTH, prober=prober
+            )
         except Exception as e:
             logger.warning("comment facts failed at ply %s: %s", move_event.ply, e)
             continue
         if facts is None:
             continue
-        if prober is not None and facts.display_line is not None and facts.claims:
-            try:
-                trimmed = trim_envisioned_line_by_probe(facts.display_line, prober)
-                if trimmed is not facts.display_line:
-                    facts = facts.model_copy(update={"display_line": trimmed})
-            except Exception as e:
-                logger.warning("leaf probe failed at ply %s: %s", move_event.ply, e)
         facts = _dedup_claims(
             facts, move_event.ply, last_claim_ply, claim_window, structural_window
         )

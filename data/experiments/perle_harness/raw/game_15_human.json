@@ -1,0 +1,318 @@
+[
+  {
+    "ply": 1,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "a3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Bxc3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "bxc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "b6",
+    "comment": "This move is a prelude\nto the developement of the Bishop in b7 or a6 and a plan for a contrast at the\ncenter with d7-d5 or a besiege to the c4 pawn using the maneuver Nb8-c6-a5.",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "f3",
+    "comment": "White, instead, is preparing a better control of the center with his pawns.",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Bg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "h6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Bh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Ba6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "e4",
+    "comment": "A Pawn sacrifice already done by Alekhine\nagainst Eliskases, which, very wisely, declined it (as did Capablanca in this\ngame).",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Bxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Bxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "dxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Qa4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Qd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Qxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Qc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Qd3",
+    "comment": "Of course Lilienthal declines the Queen\nexchange and prefers to use his Queen to help pushing the central pawns.",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Nbd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Ne2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Rd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "a5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Qc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "f4",
+    "comment": "Preventing g7-g5 and threatening e4-e5",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Rc8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "f5",
+    "comment": "With this move\nLilienthal tell us that he has already foreseen the temporary Queen sacrifice.\nImagination and ... long sight!",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 36,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "dxe5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Qxe4",
+    "comment": "\"I could not believe\nthat in such an important tournament I could have the opportunity to sacrifice\nthe Queen. If somebody has told me that I could have such an opportunity\nagainst Capablanca...\" (Lilienthal)",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "exf6",
+    "comment": "Very good move! To remember. A move suggested by the position of the Black\nKing, which is quite open, and the temporary paralysis of opponent's Rooks and\nKnight.",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 40,
+    "san": "Qxc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "fxg7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Rg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Nd4",
+    "comment": "The Queen is threatened and the\nBlack King has no safe squares. A deadly check in e1 is threatened.",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Qe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Rae1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Nc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Rxe4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Nxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Re1",
+    "comment": "and after this pinning White will have material advantage.",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Rxg7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Rxe4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Kd7",
+    "comment": "After 27.Re7+ Kd6 28.f6 and the next 29.Bg3+ White wins. Capablanca\ndid not wait for my reply, smiled, shaked my hand and congratulated for my win.\nI could not hide my happiness....\" (Lilienthal)",
+    "nags": []
+  }
+]

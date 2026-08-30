@@ -1,0 +1,596 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "exd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "exd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Nf3",
+    "comment": "This form of the exchange variation is now considered harmless.",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Bd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Bd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "h6",
+    "comment": "7...c6 would have been wiser. Black is overly concerned with the g5-square.",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Re1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Nb5",
+    "comment": "Bird: The opening is much as usual, this move and Mr. Mason's\nplay to preserve his bishop from being changed off taking it a little out of\nthe beaten track.",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Bb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "c3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Ba5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Na3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Bg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Nc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Qd7",
+    "comment": "12...Re8 would have provided easy equality.",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "b4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Bb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "h3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Bh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Ne3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Rfe8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "b5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Ne7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "g4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Bg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Ne5",
+    "comment": "White has advanced pawns and the structure is a\nbit weak. Therefore the initiative must be maintained. Notice that the advance\nof the h-pawn has weakened g6.",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Qc8",
+    "comment": "The queen would have been better\nplaced at d8, so that after ...Ne4 the kingside could be infiltrated on the\ndark squares.",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "a4",
+    "comment": "White could have played 19.Nxg6 Nxg6 20.Bxg6 fxg6 21.\nQd3 but Black has a strong reply in 21...Kh7 22.Bd2 Qd8 followed by ...Ne4.",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "c6",
+    "comment": "19...a6 20.a5 Ba7 was an interesting alternative.",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "bxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "bxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Ba3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Ng5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Bxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Rxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Bxg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "fxg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Qxg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Nxh3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Kh2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Nf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Qf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Ne6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "Ng2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Qc7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "a5",
+    "comment": "Not a brilliancy, as generally\nconsidered, but a terrible mistake. Bird: This move initiates a combination of\nremarkable interest, besides affording scope for some of the best play of both\nof these well-known players.",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Bxa5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Rxa5",
+    "comment": "The best follow up, from a practical standpoint. But is it any good?",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Rf8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "Ra6",
+    "comment": "Bird: A note to this game in the Illustrated London News observed \"This is\nquite a la Bird. For once in a way our countryman wakes up and comes out in\nhis old brilliant style.\"",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "Rxf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 63,
+    "san": "gxf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 64,
+    "san": "Nd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 65,
+    "san": "Nf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 66,
+    "san": "Qc8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 67,
+    "san": "Nfg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 68,
+    "san": "Re8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 69,
+    "san": "Nxc6",
+    "comment": "There really isn't anything better, but the move\ndoesn't really deserve the double exclamation mark it usually gets. Bird: \"If\nin reply Black takes the rook at e1 he loses his queen; if he captures the\nother rook he is mated. Capturing the knight was available, but looks\nextremely dangerous.\"",
+    "nags": []
+  },
+  {
+    "ply": 70,
+    "san": "Qc7+",
+    "comment": "Generally criticized, but maybe not so bad after all.",
+    "nags": []
+  },
+  {
+    "ply": 71,
+    "san": "Nce5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 72,
+    "san": "Qxc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 73,
+    "san": "Re3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 74,
+    "san": "Qd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 75,
+    "san": "Kg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 76,
+    "san": "Qxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 77,
+    "san": "f6",
+    "comment": "Bird: This pawn comes forward now with much force.",
+    "nags": []
+  },
+  {
+    "ply": 78,
+    "san": "gxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 79,
+    "san": "Rxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 80,
+    "san": "Ne6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 81,
+    "san": "Rg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 82,
+    "san": "Ng5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 83,
+    "san": "Ng4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 84,
+    "san": "Kg7",
+    "comment": "(42...Qe4+ 43.Kh2 d4 looks very strong for Black. 44.Nxh6+ Kg7 45.\nNg4 doesn't change things, and the d-pawn keeps marching. 45...d3 46. Rd6 Re6\n47.Rxe6 Qxe6 48.Nf4 Qd6 49.Nxd3 Ne4!)",
+    "nags": []
+  },
+  {
+    "ply": 85,
+    "san": "Nf4",
+    "comment": "Now White has some real\nthreats and practical chances. Bird: \"Every move is an attack and demands\nexcessive vigilance on the part of the second player.\"",
+    "nags": []
+  },
+  {
+    "ply": 86,
+    "san": "Qe4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 87,
+    "san": "Kh2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 88,
+    "san": "Nh7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 89,
+    "san": "Nh5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 90,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 91,
+    "san": "Rxh6",
+    "comment": "Bird: The beginning of the end.",
+    "nags": []
+  },
+  {
+    "ply": 92,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 93,
+    "san": "Nhf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 94,
+    "san": "Re7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 95,
+    "san": "Kg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 96,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 97,
+    "san": "Ne5",
+    "comment": "Bird: Decisive. \"Beautifully finished off.\"",
+    "nags": []
+  },
+  {
+    "ply": 98,
+    "san": "Qc8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 99,
+    "san": "Ng6+",
+    "comment": "Black resigned\n. Bird: A most tragical termination, the whole of the remaining army killed\nwith one shot.(50.Ng6+ Kg7 51.Nxe7+ Kxh6 would end with 52.Rg6#)",
+    "nags": []
+  }
+]

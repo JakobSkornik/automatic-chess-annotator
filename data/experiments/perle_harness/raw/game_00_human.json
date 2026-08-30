@@ -1,0 +1,630 @@
+[
+  {
+    "ply": 1,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Nbd2",
+    "comment": "Such a move, which rarely appears in\ngrandmasters games, was played by Opocensky against Steiner in Brno, 1928",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "cxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "exd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "g3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Bg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "cxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "d3",
+    "comment": "The attempt to protect this pawn with 8...Bc5 would be nothing\nbut a waste of time. The advantage of the move played in the text is that the\nimmediate capture of the pawn will close the \"d\" file preventing White from\nattacking the weak Pd5 with the Rooks",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "exd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Be7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Nb3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Nfd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Bg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Nxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "bxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Qb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Be3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Qa6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Rfc1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Rac8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Qd2",
+    "comment": "",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 32,
+    "san": "Rfe8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Nc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Qb5",
+    "comment": "The exchange 17... Bxc5 is not satisfactory because of the reply 18.Rxc5,\nwhich threaten 19.Ra5",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "a4",
+    "comment": "White, after a fine opening, makes his first\ninaccuracy as he weakens the queenside, especially the \"b4\" square. Better is\n18.Rc2",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Qb8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Ra3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Qe5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "h3",
+    "comment": "Mandatory. 20...Qh5 was threatened, with pressure on the white squares.",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Be6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Qf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "g4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Qg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Nxe6",
+    "comment": "If 23. f4 then 23... Bxg4 24. hxg4 Nxg4 with a strong attack",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "fxe6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Rb3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Bd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Rb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "h5",
+    "comment": "",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 51,
+    "san": "g5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Qf5",
+    "comment": "28.f3 was threatened. Now Black has the reply 28...Ng3",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "Qd1",
+    "comment": "After 28.Rxa7 e5 Black can put a \"task force\" on the diagonal b6-h2",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "g6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Qf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Re7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Qxf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "exf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "Rxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "Bxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 63,
+    "san": "h4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 64,
+    "san": "Bb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 65,
+    "san": "Rc2",
+    "comment": "Useless move.\nWhite should not be afraid of 33...Bd2 because after 34.Bxd2 Nxd2 can exploit\nthe tactical 35.Bxd5+",
+    "nags": []
+  },
+  {
+    "ply": 66,
+    "san": "Kf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 67,
+    "san": "f3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 68,
+    "san": "Nd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 69,
+    "san": "Bf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 70,
+    "san": "Ke6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 71,
+    "san": "Ba6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 72,
+    "san": "Rc7",
+    "comment": "36... Re8 \nwas not good because of 37. Bf4 (37. Rxc6? 37...Kd7 with two pieces under\nattack) 37... Kd7 38. Bxd6 Kxd6 39.Rxc6+",
+    "nags": []
+  },
+  {
+    "ply": 73,
+    "san": "Kf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 74,
+    "san": "Nc4",
+    "comment": "A Pawn sacri fice with\nmany purposes: makes disappear the opponent's Bishop pair, frees the d5 square\nfor his own King, allows the Black Rook to seize the \"b\" file, which is very\nuseful for attacking the weak White Pawns",
+    "nags": []
+  },
+  {
+    "ply": 75,
+    "san": "Bxc4",
+    "comment": "It would be better to decline the sacrifice with 38.Bf4 Bd6 39.Bc1.",
+    "nags": []
+  },
+  {
+    "ply": 76,
+    "san": "dxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 77,
+    "san": "Bf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 78,
+    "san": "Rb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 79,
+    "san": "Rxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 80,
+    "san": "Kd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 81,
+    "san": "b3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 82,
+    "san": "Bf8",
+    "comment": "A big mistake would be 41... Bd6 42. Bxd6\nRxb3 because of 43. Rb4 and White wins easily",
+    "nags": []
+  },
+  {
+    "ply": 83,
+    "san": "Rc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 84,
+    "san": "Rb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 85,
+    "san": "Be3",
+    "comment": "43.Be5 c5 44. f4 c4 45. bxc4+ Rxc4 46. Rb3 Bb4 followed by a7-a5 and Rc4-c2-a2.",
+    "nags": []
+  },
+  {
+    "ply": 86,
+    "san": "f4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 87,
+    "san": "Bxf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 88,
+    "san": "Rxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 89,
+    "san": "Kg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 90,
+    "san": "Bb4",
+    "comment": "Un vero centrocampista! A real midfielder!",
+    "nags": []
+  },
+  {
+    "ply": 91,
+    "san": "Rc4",
+    "comment": "Forced. 46. Rc2 Be1+ 46. Rc1 Rxf4 47. Kxf4 Bd2+ 46. Re3 Rxf4 47. Kxf4 Bd6+",
+    "nags": []
+  },
+  {
+    "ply": 92,
+    "san": "Be1+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 93,
+    "san": "Kg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 94,
+    "san": "Rxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 95,
+    "san": "bxc4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 96,
+    "san": "Kxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 97,
+    "san": "Bb8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 98,
+    "san": "Bxh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 99,
+    "san": "f4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 100,
+    "san": "a6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 101,
+    "san": "Be5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 102,
+    "san": "Kd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 103,
+    "san": "f5",
+    "comment": "A blunder, probably due to the zeitnot",
+    "nags": []
+  },
+  {
+    "ply": 104,
+    "san": "Kxe5",
+    "comment": "White resigns",
+    "nags": []
+  }
+]

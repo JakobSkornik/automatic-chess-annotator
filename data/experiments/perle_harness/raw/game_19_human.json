@@ -1,0 +1,216 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "c5",
+    "comment": "Already in the last century\nAnderssen was confident to experiment with the Sicilian Defence Bereits im\nvorigen Jahrhundert genoss die Sizilianische Verteidigung das volle Vertrauen\nvon Anderssen, der gern damit experimentierte.",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "cxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Nxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Nb5",
+    "comment": "One can hardly believe that this modern opening was already played\nin 1858! Es ist kaum zu glauben, dass diese moderne Eroeffnung schon 1858\ngespielt wurde!",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "d6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Bf4",
+    "comment": "Fischer's favourite move, but nowadays 6. c4,\nwhich is very often played by Karpov, is preferred by most players. Der von\nFischer favorisierte Zug, obwohl gegenwaertig die meisten Spieler 6.c4, das\noft von Karpov gespielt wird, den Vorzug geben.",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Be3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "f5",
+    "comment": "It took over 100 years to prove that after Ueber hundert Jahre hat es gedauert,\nbis bewiesen wurde, dass Schwarznach",
+    "nags": [
+      2
+    ]
+  },
+  {
+    "ply": 15,
+    "san": "N1c3",
+    "comment": "Morphy feels that chess logic is on his side and goes for immediate\nrefutation of Black's premature activity. Morphy fuehlt, dass er die\nSchachlogik auf seiner Seite hat und schreitet zur direkten Widerlegung der\nverfruehten schwarzen Aktivitaeten.",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 16,
+    "san": "f4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Nd5",
+    "comment": "",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 18,
+    "san": "fxe3",
+    "comment": "Already there is no way back. Einen Weg zurueck gibt es schon nicht mehr.",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Nbc7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Kf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Qf3+",
+    "comment": "",
+    "nags": [
+      2
+    ]
+  },
+  {
+    "ply": 22,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Bc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Nd4",
+    "comment": "",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 25,
+    "san": "Nxf6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "d5",
+    "comment": "It is unlikely that\nAnderssen has calculated all variations after Es ist unwahrscheinlich, dass\nAnderssen saemtliche Variantennach",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 27,
+    "san": "Bxd5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Kg6",
+    "comment": "# Now the previou s line doesn't\nwork: Moeglicherweise war Anderssen hier der Meinung, sein junger Gegner\nhaette in diesem taktischen Variantendschungel die Orientierung verloren. Doch\nMorphy behaelt wie gewohnt die Uebersicht.",
+    "nags": [
+      2
+    ]
+  },
+  {
+    "ply": 29,
+    "san": "Qh5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Kxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "fxe3",
+    "comment": "Now Anderssen's\nillusions are over - the open f file ends the life of the black king not only\nin the King's Gambit. Nun zerplatzten saemtliche Illusionen bei Anderssen. Die\noffene f-Linie beendet das Leben des schwarzen Koenigs - nicht nur im\nKoenigsgambit.",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 32,
+    "san": "Nxc2+",
+    "comment": "Loses instantly, but Verliert sofort, aber auch",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Ke2",
+    "comment": "and Black resigned. An impressive demolition of the strongest\nplayer of the Old World (Europe)! Alas, Morphy did not bother to explain the\nsuperiority of his method. Only the powerful mind of another chess giant,\nWilhelm Steinitz, could systematize the profound positional rules that created\na new outlook in chess progress. und Schwarz gab auf. Eine eindrucksvolle\nGewinnpartie Morphys gegen den staerksten Spieler der Alten Welt. Leider hat\nMorphy die Muehe gescheut, der Schachwelt auch noch zu erklaeren, worauf die\nUeberlegenheit seiner Methode beruhte. Erst der gewaltige Geist eines weiteren\nSchachgiganten, naemlich Wilhelm Steinitz, vermochte die tiefsinnigen\npositionellen Gesetze zu systematisieren, die der Entwicklung des Schachs ein\nneues Gesicht geben sollten.",
+    "nags": []
+  }
+]

@@ -1,0 +1,758 @@
+[
+  {
+    "ply": 1,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "g6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "g3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bg7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Bg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "cxd5",
+    "comment": "Makes easier the defense for Black. Better was 5.Nf3.",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Nf6",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "e5",
+    "comment": "Forced.",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Nd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "dxc5",
+    "comment": "There was no choice.",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Na6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "a3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Nxc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "b4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Ne6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Bb2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "a5",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "b5",
+    "comment": "Mikenas: \"Alekhine looked nervous. It was necessary to\nrealize the wrong opening strategy and try to keep equality with 14.Nc3.\"",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Qd7",
+    "comment": "(!) Now Black, gaining a tempo, can double his forces on the \"d\"\nfile and create \"hidden\" threats.",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Qe2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Rd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Nbd2",
+    "comment": "Mikenas again:\" A GM\nwith a world reputation should not fall in a trap. I think it is not necessary\nto point out that white is already in bad shape. It is the effect of the bad\nomen?\"",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Nef4",
+    "comment": "(!) \"I realized that, after this move, Alekhine had a jolt.\nProbably such a move was unexpected. Trying to calm down, arranged his glasses,\nand thought for 40 minutes before making his move.\" Mikenas, in his article,\nconfessed that he had not calculated in depth the consequences of his Knight\nsacrifice.",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Qc4",
+    "comment": "After this move Black has an opportunity to seriously\nweaken opponent's castling.",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Nxg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Kxg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Qh3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Kh1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Be6",
+    "comment": "(!) Threatens 20...Ne3.",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Qe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Bf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Qe2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Qg4",
+    "comment": "(!) Threatens 22...Nf4 23.gxf4 Rxd2",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Rfe1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Rac8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Ne4",
+    "comment": "Only nervousnes\ns can explain such a mistake by Alekhine. It was necessary to defend with 23.\nRac1. Witnesses tell that right in that moment a waiter brought some coffee to\nAlekhine. He thanked the waiter and still looking at the chessboard put a\npiece of sugar in the coffee cup. Only at the last moment he realized that it\nwas not a piece of sugar but ... a white pawn. While he realized his mistake,\nhe got upset, said something, pushed the cup away and .... coffee spilled out\nof the cup. Mikenas too noticed his opponent apparent nervousness, and perhaps\ndistracted by this fact he immediately took the Knight.",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Bxe4",
+    "comment": "After this\nmove Mikenas realized that strangely his opponent was smiling. With a\ntrembling hand Alekhine pointed to the c2 square and said:\" Young man, if you\nplayed Rc2 you had won at once.\" Mikenas confesses: \"Only after Alekhine's\nwords I realized that I had such an opportunity.\"",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Qxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Qxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Rxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Rc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Bd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Rc4",
+    "comment": "Annotations by\nMikenas, in this game, are many and generous: \"In my analysis before the 23rd\nmove, I had reached this position in my mind and indeed it looked promising.\nThis explains, maybe, why I overlooked 23...Rc2 with the possibility of a\nbeautiful win and the opportunity to take ... a beauty prize.\"",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Re2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "g5",
+    "comment": "(!) Trying to fix the castle pawns on the dark squares. A very important\nstrategical motive.",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "h3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "h5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Bb2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "g4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "hxg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "hxg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "Nd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 63,
+    "san": "Re4",
+    "comment": "In a difficult situation Alekhine succeded to find some chances of salvation.\nNow he threatens both 33.Rxg4 and 33.Nxe6.",
+    "nags": []
+  },
+  {
+    "ply": 64,
+    "san": "Nc3",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 65,
+    "san": "Bxc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 66,
+    "san": "Rxc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 67,
+    "san": "Rxg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 68,
+    "san": "Kf8",
+    "comment": "Inaccurate. The right move was 34...Rd5! Now the fight is on.",
+    "nags": []
+  },
+  {
+    "ply": 69,
+    "san": "Re4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 70,
+    "san": "Rd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 71,
+    "san": "Ne2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 72,
+    "san": "Rc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 73,
+    "san": "f4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 74,
+    "san": "Rdd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 75,
+    "san": "Re1",
+    "comment": "Even if White is a pawn up, he is not\nin good shape. The two black Rooks on the second rank are a deadly danger.\nNext aim for black: put his own Bishop in action.",
+    "nags": []
+  },
+  {
+    "ply": 76,
+    "san": "Ke8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 77,
+    "san": "a4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 78,
+    "san": "Bf8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 79,
+    "san": "Kg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 80,
+    "san": "Bb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 81,
+    "san": "Kh3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 82,
+    "san": "Ra2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 83,
+    "san": "Kg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 84,
+    "san": "Rdb2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 85,
+    "san": "Rc1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 86,
+    "san": "Rxe2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 87,
+    "san": "Rc8+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 88,
+    "san": "Ke7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 89,
+    "san": "Rec4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 90,
+    "san": "f5+",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 91,
+    "san": "exf6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 92,
+    "san": "Kxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 93,
+    "san": "R4c7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 94,
+    "san": "e5",
+    "comment": "(!) Was threatened 48.Rh8!",
+    "nags": []
+  },
+  {
+    "ply": 95,
+    "san": "Rxb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 96,
+    "san": "exf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 97,
+    "san": "gxf4",
+    "comment": "White's attack has lost\npart of his strengt. Now it is up to Mikenas to find the conclusion.",
+    "nags": []
+  },
+  {
+    "ply": 98,
+    "san": "Rg2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 99,
+    "san": "Kf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 100,
+    "san": "Rgf2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 101,
+    "san": "Ke3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 102,
+    "san": "Rae2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 103,
+    "san": "Kd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 104,
+    "san": "Re6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 105,
+    "san": "Rc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 106,
+    "san": "Rf3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 107,
+    "san": "Kd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 108,
+    "san": "Rxf4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 109,
+    "san": "Kd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 110,
+    "san": "Rf5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 111,
+    "san": "Kd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 112,
+    "san": "Rxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 113,
+    "san": "bxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 114,
+    "san": "Ke6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 115,
+    "san": "Rb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 116,
+    "san": "Rxb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 117,
+    "san": "axb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 118,
+    "san": "Kd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 119,
+    "san": "Kc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 120,
+    "san": "Kc7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 121,
+    "san": "Kb3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 122,
+    "san": "Kb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 123,
+    "san": "Kc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 124,
+    "san": "Bd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 125,
+    "san": "Kd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 126,
+    "san": "Bc7",
+    "comment": "Mikenas:\" I always had a kind relationship with\nAlekhine but, after this game, the Champion avoided talking to me for three\ndays. The great chessplayer don't like to lose...\".  This is a truth for every\nchessplayer, even the titleless ones; indeed even for the chessplayer who play\nonce a week at a cafe!",
+    "nags": []
+  }
+]

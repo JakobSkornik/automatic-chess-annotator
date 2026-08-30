@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from app.core.commentary.features.guid_features import (
     bad_bishop_squares,
     outpost_squares,
@@ -11,6 +13,8 @@ import chess
 
 from .constants import SIDES, THRESHOLDS
 from .context import _benef, _benef_opp, _Ctx, _side_label, _toward
+
+logger = logging.getLogger(__name__)
 
 
 def rule_connected_rooks(ctx: _Ctx) -> list[Claim]:
@@ -216,6 +220,20 @@ def rule_king_safety(ctx: _Ctx) -> list[Claim]:
                     delta_cp=d,
                 )
             )
+        elif -d >= THRESHOLDS["king_safety"] or d >= THRESHOLDS["king_safety"]:
+            # The king-danger swing alone cleared the threshold but the
+            # corroborating tropism swing did not — the stacked AND condition
+            # silently drops what would otherwise be a claim.
+            logger.debug(
+                "rule_king_safety: corroboration gate blocked a claim for %s "
+                "(king_danger_swing=%d, threshold=%d, opp_tropism_swing=%d, "
+                "corroborate_threshold=%d)",
+                side,
+                d if d >= THRESHOLDS["king_safety"] else -d,
+                THRESHOLDS["king_safety"],
+                opp_tropism,
+                THRESHOLDS["king_tropism_corroborate"],
+            )
     return out
 
 
@@ -244,6 +262,12 @@ def rule_piece_activity(ctx: _Ctx) -> list[Claim]:
     # When material changed, the mobility swing is mostly a side effect of the
     # capture, not a genuine activity gain — let rule_material speak instead.
     if abs(ctx.delta("MATERIAL_BALANCE")) >= 100:
+        logger.debug(
+            "rule_piece_activity: suppressed outright (material delta=%d cp >= 100) "
+            "mover=%s",
+            ctx.delta("MATERIAL_BALANCE"),
+            ctx.mover,
+        )
         return out
     for side in SIDES:
         name = f"{side}_PIECE_ACTIVITY"
@@ -340,6 +364,11 @@ def rule_intent(ctx: _Ctx) -> list[Claim]:
     if ctx.leaf_board is None:
         return []
     if ctx.eval_cp is not None and abs(ctx.eval_cp) > 500:
+        logger.debug(
+            "rule_intent: suppressed outright (|eval_cp|=%d > 500) mover=%s",
+            abs(ctx.eval_cp),
+            ctx.mover,
+        )
         return []
     from app.core.commentary.features.intent import build_intent_claim
 

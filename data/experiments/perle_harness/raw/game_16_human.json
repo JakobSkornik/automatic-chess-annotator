@@ -1,0 +1,374 @@
+[
+  {
+    "ply": 1,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "g3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Bg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "g6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Bg7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "d6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "h3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Bd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "e3",
+    "comment": "This looks like a mistake and Black will not miss the punishment.",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Qc8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Kh2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "h5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "h4",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "gxh4",
+    "comment": "Forced!",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "g5",
+    "comment": "(!) This move is\nnow possible thanks to White's mistake at the 8th move: The Bc1 has his way\nblocked by his own pawn.",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Rh1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "g4",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "hxg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Bxg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Kg1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Qf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "d5",
+    "comment": "(!) 15...0-0-0 was threatened with the following Rd8-g8. With this\npush White gains a tempo which will allow a check in a4.",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Ne5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Qa4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Nfd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Nxe5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Bxe5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Qg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Kf1",
+    "comment": "It's time to demolish all the defense",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Bxc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "bxc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Be2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Kxe2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Qxg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Be3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Qxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Rab1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "b5",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Qxb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Rb8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Qc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Qxc4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Kf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "f5",
+    "comment": "(!!) Elegant and unexpected. A chess genius shot.",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Rxb8+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Kf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "Bd4",
+    "comment": "There is nothing better.",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Ne5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Bxe5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Qe4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Kg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Qg4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "Kh2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "Rxh4#",
+    "comment": "",
+    "nags": []
+  }
+]

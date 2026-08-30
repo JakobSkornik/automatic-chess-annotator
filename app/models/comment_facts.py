@@ -29,6 +29,20 @@ class FeatureDiff(BaseModel):
     negative: list[FeatureDelta] = Field(default_factory=list)  # favorable for Black
 
 
+class FeatureAdvantage(BaseModel):
+    """Feature-diff-of-diffs: how much more (White-POV cp) a named feature
+    moves in the alternative move's own start->leaf diff than in the played
+    move's start->leaf diff on that same feature. Grounds a comparison like
+    "the alternative gains more rook activity than this move" in an actual
+    computed number, rather than in claim-text dedup (see
+    ``envisioned.diff_of_diffs``)."""
+
+    name: str
+    alt_delta_cp: int  # the alternative's own start->leaf delta on this feature
+    played_delta_cp: int  # the played move's own start->leaf delta on this feature
+    advantage_cp: int  # alt_delta_cp - played_delta_cp
+
+
 class EnvisionedLine(BaseModel):
     """A shortened, quiescence-trimmed PV with its envisioned (leaf) position."""
 
@@ -86,6 +100,12 @@ class BestAlternative(BaseModel):
     display_line: EnvisionedLine | None = None
     claims: list[Claim] = Field(default_factory=list)
     is_inferior: bool = False
+    # Feature-diff-of-diffs against the played move (Improvement 3): the
+    # features where this alternative's own start->leaf swing differs most
+    # from the played move's, in cp. Additive to ``claims`` -- the existing
+    # claim-text dedup path is unchanged; this is a further-grounded number
+    # for downstream composer work that wants to cite it directly.
+    feature_advantages: list[FeatureAdvantage] = Field(default_factory=list)
 
 
 class CommentFacts(BaseModel):

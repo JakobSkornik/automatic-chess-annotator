@@ -1,0 +1,368 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "cxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Nxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Be2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "a6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Qc7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Be3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "d6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Kh1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Be7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "f4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Na5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Qe1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "b5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Bf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Bb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "a3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Nc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Bc1",
+    "comment": "Lilienthal realizes that this Bishop's retreat to the home square will delay\nthe natural developement Ra1-d1. Even not considering that such a move avoids\nthe exchange Nc4xe3 (Black would remain with the advantage of the Bishop pair)\nand the capture of the b2 Pawn, it is right through the b2 square that he want\nto exploit the power of the darksquare Bishop. Eventually the Rook will be\nable to seize the right square.",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Qc5",
+    "comment": "Perhaps castling was a better move for Black.",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "e5",
+    "comment": "Very good! Brings good opportunities.",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Bxf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "exf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Bb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "fxe7",
+    "comment": "17. Nb3 is not convenient because of 17... Qc6 and Black has advantage.",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Qxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "b3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Na5",
+    "comment": "Of course not 18... Nb6 19. Be3 and 18... Nxa3 19. Bxa3 b4 20.\nRd1 Qxc3 21. Qxc3 bxc3 22. Rxd6 neither, because White is better.",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Bb2",
+    "comment": "Now White threatens Ra1-d1 followed by f4-f5.",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Kxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Rd1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Qb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "f5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Rae8",
+    "comment": "To 21... e5 may follow 22. f6+ gxf6 23. Qh4 d5 24.Nxd5+ Bxd5 25. Rxd5\nwith strong attack.",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "fxe6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "fxe6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Qh4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Kd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Rf7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Kc8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "d5",
+    "comment": "Pikler begins to be afraid. Not good 25... Bxe4 for 26. Qxe4 d5 27. Qf4",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Be5",
+    "comment": "Threatens Ne4-d6+",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "dxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Rdd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Rd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "Qe7",
+    "comment": "Lilienthal has sent\nall his forces to the attack, leaving his own field totally undefended. But he\ncould do that: now any reply for Black will not avoit mate in four.",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Qxe6",
+    "comment": "It is not the most accurate. After 29. Rxd8+ Rxd8 the is mate in two:\n30. Qxe6+ Rd7 31. Qxd7#",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Nxe5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Rxb7+",
+    "comment": "But ... even if at this point\nit is unimportant, 30. Rxd8+ Kxd8 31. Qxb6+ Ke8 32. Qe6+ Kd8 33. Qe7+ Kc8 34.\nQc7#. Maybe the zeitnot prevents him from seeing the forced mate.",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Qxe6",
+    "comment": "An immediate suicide. The reply 30... Rd7 31. Rxb6 Nxf7 32. Rxa6 could only\nprolong the agony.",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "Rfc7#",
+    "comment": "",
+    "nags": []
+  }
+]

@@ -12,10 +12,17 @@ def decisive_eval_cp() -> int:
     """Half-width of the "still a real game" interval, in centipawns (Guid).
 
     When both the played move and the engine's suggestion evaluate beyond this
-    (default ±2.00, per Guid's 2006 World-Champions paper), the position is
-    already decided: a player with a winning/lost game often plays a "good
-    enough" or practical move rather than the engine's best, so imprecise moves
-    there must not be flagged as mistakes. Tunable via ``DECISIVE_EVAL_CP``.
+    (default +-2.00, per Guid's 2006 World-Champions paper — the advisor's own
+    published methodology, confirmed unchanged per his direct feedback: this
+    exact +-2.00 gate is what correctly discards e.g. a played +4.80 vs. best
+    +2.84 as "not a mistake"), the position is already decided: a player with
+    a winning/lost game often plays a "good enough" or practical move rather
+    than the engine's best, so imprecise/"missed opportunity" moves there must
+    not be flagged as mistakes. Tunable via ``DECISIVE_EVAL_CP`` (the advisor
+    mentioned +-3.00..+-5.00 as an option worth exploring, but gave no case
+    that this narrower +-2.00 gate handles incorrectly, so it is left as-is
+    here; see ``DECISIVE_CLAIM_CP`` in rules/constants.py for the separate,
+    now-tightened positional-claim-suppression band).
     """
     try:
         return int(os.environ.get("DECISIVE_EVAL_CP", "200"))

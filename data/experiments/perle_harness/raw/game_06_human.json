@@ -1,0 +1,368 @@
+[
+  {
+    "ply": 1,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "b6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "g3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Qc8",
+    "comment": "Protects the Bishop in b7 and prepares the possible push c7-c5.",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Bg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "a3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "a6",
+    "comment": "Both the players keep a prudent attitude.",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "O-O",
+    "comment": "Again too \nmach prudent. Better would have been 8. d5 and after 8... Ne7 9. e4 exd5 10.\ncxd5 d6 11. O-O Ng6 12. Re1 White would have had some advantage in space and\ndevelopement.",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Ne7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Bg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "cxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Bxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "gxf6",
+    "comment": "If Black would\nhave not resisted from winning a Pawn with 11... dxc3 12. Bxc3 Qxc4 13. Ne5\nQc7 14. Bxb7 Qxb7 15. Nc4 he would have been in severe delay in developement\nand would have given very good chances to the opponent.",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Ng8",
+    "comment": "The best, maybe. The exchange 12...Bxe4 would have been favourable to White.",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Nxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "f5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Nd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Bg7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Qd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Rfe1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "f4",
+    "comment": "Uncertain. Probably 16.. .0-0\nwas better. With the Pawn sacrifice Black tries to exploit the opening of the\ng-file.",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "gxf4",
+    "comment": "Lilienthal aceppts the challenge and ... takes the Pawn.",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Nh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Bf8",
+    "comment": "And for the second time Black puts a light piece on its\nhome square. This time, by the way, the retreat is justified. By protecting\nthe d6 square it opens the file to the Rook.",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Qf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Rg8",
+    "comment": "The game is getting\ncomplicated. Of course now it is not convenient to play 20. Qxh5 because of di\n20...Bxe4.",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Kf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Qxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Red1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Qd5",
+    "comment": "Combines its action with the Bishop and,\nby protecting the h5 Knight it threats 22...Rxg2 followed by 23.Qxe4.",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Qxh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Qxh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Nf6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Kd8",
+    "comment": "And now? What to do next? If White takes the Queen after 24.\nNxh5 it would follow 24...Bxg2+ with all its unclear consequences. If 23...\nKe7 White declines the Queen and after 24. Nxg8+ Kd8 25. Bxb7 it is in very\ngood shape.",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Nxe6+",
+    "comment": "Here is the solution!",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Ke7",
+    "comment": "The Knight could not be taken: 24... fxe6 25. Rxd7+ Kc8 26.Bxb7+ Kb8 27. Nxh5",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Nxg8+",
+    "comment": "When a player prefers to take a Rook instead of a Queen, there are\ntwo possibilites: he is totally confused, or he has seen the way to the\nvictory.",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Kxe6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Bxb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Rd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Bd5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Kf5",
+    "comment": "The endgame rulting from 27...\nQxd5 28. Rxd5 Kxd5 29. Nf6+ followed by 30...Nxh7 would be hopeless for Black.",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "Bf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Qh3+",
+    "comment": "If 28... Qg6 then 29. Rd5+ Kxf4 30. Rc1 b5 (31. Rc4+ was\nthreatened) 31. Rcd1 f5 32. R1d4+ Kg5 33. h4#",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Bg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Qxh2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Rd5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Ke6",
+    "comment": "After 30... Kxf4 White mates after few moves. If 30... Kg4 mate in two. So\nwhat is the point in going further? Mate in one and it'sover!",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "f5#",
+    "comment": "",
+    "nags": []
+  }
+]

@@ -1,0 +1,512 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Bb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Bb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "d3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "d6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Bg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Ne7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Nh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "c6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Bc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Ne8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "f4",
+    "comment": "A novelty that, at that time, caused a lot of\ndiscussions about its validity. My God! It looks like a bad mistake, a blunder.\nThe darksquare Bishop looks trapped. Looks? It is! So what? Instead White had\nalready calculated a combination which needed to sacrifice a piece. And\nSchlechter was considered by somebody as a drawish chess player!",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Bxc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "bxc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Bb3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "f6",
+    "comment": "Here it is! Raise a hand who would have made a different move!",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "fxe5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "fxg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Rxf8+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Kxf8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Qf3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Kg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Rf1",
+    "comment": "In reality, up to now, an identical game\nwas played a year before in chess club in Berlin and it seems that Emanuel\nLasker reported about it on his chess magazine. We may wonder: did Schlechter\nread that article? We do not know.",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Nc7",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Qf7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "exd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "cxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Qf8+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Qxf8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Rxf8+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Ng8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Be6",
+    "comment": "Not the best.",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Rxa8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Nxa8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Nxg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Nc7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Nxe6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Nxe6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Bxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Nd8",
+    "comment": "This way, instead, the power of the\nlightsquare Bishop combined with the action of a reckless King give to White\ngood winning chances.",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "d4",
+    "comment": "The white tide begins...",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Ne7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Bb3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Nec6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "Kf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Na5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "e6",
+    "comment": "...and will show that sometimes two humble pawn are worth more than a piece.",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Nac6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Ne7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "d6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "Ndc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 63,
+    "san": "dxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 64,
+    "san": "Nxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 65,
+    "san": "Kf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 66,
+    "san": "Kg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 67,
+    "san": "Ke4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 68,
+    "san": "Kf8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 69,
+    "san": "Ke5",
+    "comment": "For whom the bell tolls...?",
+    "nags": []
+  },
+  {
+    "ply": 70,
+    "san": "Ke8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 71,
+    "san": "Bd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 72,
+    "san": "b6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 73,
+    "san": "Be4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 74,
+    "san": "h6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 75,
+    "san": "Kd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 76,
+    "san": "Kd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 77,
+    "san": "Bd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 78,
+    "san": "h5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 79,
+    "san": "h4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 80,
+    "san": "b5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 81,
+    "san": "Bxb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 82,
+    "san": "Nf5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 83,
+    "san": "Ke5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 84,
+    "san": "Nxh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 85,
+    "san": "Bd3",
+    "comment": "",
+    "nags": []
+  }
+]

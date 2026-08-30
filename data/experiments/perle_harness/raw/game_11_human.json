@@ -1,0 +1,368 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "In August 1891, at \"Cafe' de la Regence\" in Paris, a young man sat down\nfor the first time in front of a chessboard. His name was David Janowsky,\nabout 23 years old, polish origin. For all the chessplayers who used to attend\nthat famous place serious troubles began!",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "exd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "c3",
+    "comment": "The Scotch Gambit",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Bc5",
+    "comment": "Accepting the Gambit 4... dxc3, after 5. Bc4 Nf6\n6. Nxc3 Bb4 7. O-O O-O Black keeps his extra pawn in a comfortable position.",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Bc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nf6",
+    "comment": "entering a variation of the Giuoco Piano.",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "cxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "Bb4+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Bd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Bxd2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Nbxd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "exd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Nxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Re1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Nf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Ne7",
+    "comment": "A useless Knight maneuver.",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Qd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Neg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "h3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Nd5",
+    "comment": "Unclear. Again, a better choice would have been 14...Be6 or 14...c6.",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Rac1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "c6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Bxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Qxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Rc5",
+    "comment": "Now Goetz has to face the dilemma: accept or not\naccept the Pa2? A greedy attitude would allow a White kingside attack which is\nnot a joke.",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Qxa2",
+    "comment": "So Black decided for the capture. One cannot say it\nwas a mistake. A post-mortem analysis proved that a carefull defense would\nhave allowed to resist the attack, remaining with a extra pawn.",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Rh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "f6",
+    "comment": "The best reply.  On the other hand 18... h6 could not be played because of 19.\nRxh6 gxh6 20.Qxh6",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Nd6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "b6",
+    "comment": "Probably to prevent Rh5-a5. So the position is\nmuch more complex than it appears.",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Qc2",
+    "comment": "Very good! A very strong move,\nattacks the c6 Pawn and, by blocking the g6 Knight takes the necessary time to\nbring the second Rook on the seventh rank. Now the attack will continue in a\ncoherent and sharp way.",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Bd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Re7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Rad8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Nh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Be8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Nhf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Bf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "d5",
+    "comment": "Closing the diagonal a2-g8. Terrific!",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Nf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Nxf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Rxf7",
+    "comment": "If 25... Nxh5 26. N5h6+ and mate in two.",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Rxf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Nxh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Nh6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "dxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Qd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "c7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Rc8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Rf8+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Rxf8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "c8=Q",
+    "comment": "",
+    "nags": []
+  }
+]

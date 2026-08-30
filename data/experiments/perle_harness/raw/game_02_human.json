@@ -1,0 +1,428 @@
+[
+  {
+    "ply": 1,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "g3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "cxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Nxd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "Bg2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nc7",
+    "comment": "The exchange in c3 and then g7-g6 was preferable.",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "b3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Bb2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Be7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Rc1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Na4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Nd7",
+    "comment": "A reply which is not unpleasant at all for White: the right\nsquare for this Knight was c6. The c5 Pawn should be protected in a different\nway.",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "f6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Ne6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Nh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Nb6",
+    "comment": "Not 12... Nd4 for 13. Bxd4 cxd4 14.\nBd5+ Kh8 15. Qe4 with the threats 16.Bxb7 and, more important, 16. Ng6+ hxg6\n17.Qh4+ mate.",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Nf5",
+    "comment": "Not wasting time in the Knight exchange. Flohr wants\nto have a clear edge in the middlegame and is not afraid of doubling the\na-file pawn.",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Nxa4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "bxa4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Rb8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "f4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "exf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "gxf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Re8",
+    "comment": "Of course the\nPf4 is at present one of the \"untouchables\": 16... Nxf4 17. Qc4+ Ne6 18. Bd5\nQd7 19. Bxe6+ Qxe6 20. Nxe7+",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Rg1",
+    "comment": "Flohr: \"Up to now I was satisfied with\nmy play. But castling now would be stronger because, after moving the Rook to\nf3, there would be more opportunities for an attack. I played this move\nbecause I expected some defensive reply from my opponent. And he did not\ndisappoint me.\"",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Bf8",
+    "comment": "Clearly not expecting White's reply. 17...Kh8 was\nneeded and Flohr should have protected the f4 Pawn with e2-e3 (not necessary\nif he had castled at the 17th move).",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Bc6",
+    "comment": "Here is the reason for 17.Rg1!.\nJust a bit of imagination. Now the threat is 19.Nh6+ and 20.Nf7+.",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Nd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Nh6+",
+    "comment": "A mistake would be 19. Bxd4 for 19... Bxf5. 19. Nxd4 was also wrong\nbecause of the continuation 19... bxc6 20. Nxc6 Rxe2+ 21. Kxe2 Qe8+ and Black\nis better.",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Nf7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Kg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Nh6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Nf7+",
+    "comment": "Flohr: \"I was in\nsevere zeitnot - only two minutes to the time control - and repeating moves\nhad helped me saving time. My opponent proposed a draw. I thanked him but\ndeclined the proposal, because, in the mean time, I had found a good plan of\nattack (I had calculated variations up to the 29th move).\" My friends, here is\na \"tough\" chessplayer! Indeed he was, for sure! How many of us, with only two\nminutes left to play to the 40th move or give checkmate would have declined\nthe proposal?",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Kg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Qc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Rxe2+",
+    "comment": "If 23... Be6 then 24. Nxd8 Bxc4 25. Bxe8 gains material.",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Qxe2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Nxe2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Nxd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Nxg1",
+    "comment": "Perhaps 25... bxc6 was better but after 26.Kxe2 Ba6+ 27. Ke3 Rxd8\n28. d4 the White Rook is in action also.",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Bd5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Nf7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Kg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "Kf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Nh3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Kg3",
+    "comment": "so Knight's fate is decided already.",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "b5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "axb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Bb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "Bc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "a6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 63,
+    "san": "a4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 64,
+    "san": "axb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 65,
+    "san": "axb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 66,
+    "san": "Nxf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 67,
+    "san": "Kxf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 68,
+    "san": "h5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 69,
+    "san": "Rg1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 70,
+    "san": "Kh7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 71,
+    "san": "Bxf6",
+    "comment": "Black resign\ns. Flohr does not tell us how many seconds are left, but probably, at this\npoint he did not need so many of them.",
+    "nags": []
+  }
+]

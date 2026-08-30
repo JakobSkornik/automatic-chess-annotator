@@ -1,0 +1,296 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Bc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "b4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Bxb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "c3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Ba5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "exd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "d3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Qb3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Qf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Qg6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Re1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Nge7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Ba3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "b5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Qxb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Rb8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Qa4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Bb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Nbd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Bb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Qf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Bxd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Qh5",
+    "comment": "White has a huge advantage and it is time for\ndesicive action. In accordance with his own romantic style and public demand\nAnderssen played",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Nf6+",
+    "comment": "?!! The two\nexclamation marks are for one of the most beautiful combinations in chess\nhistory, which was started with this move. But objectively the search for\nbeauty created unnecessary complications.",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "gxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "exf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Rg8",
+    "comment": "At first sight an open g-file\ngives Black excellent counter-attacking chances, but Anderssen's calculations\nwere beyond the fears of an ordinary human being.",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 37,
+    "san": "Rad1",
+    "comment": "I'll spare you from hundreds of analyses by following\ngenerations of chess players. After endless debate they have agreed that 19.\nRad1 was better than the alternative 19.Be4. Now the best reply was 19...Rg4!,\nwhich would pose some difficult problems for White, but in the emerging wild\ncomplications White would, in my opinion, retain the upper hand.",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 38,
+    "san": "Qxf3",
+    "comment": "Now White's king is suddenly just one step from decapitation. But how can we\nreproach Dufresne from not recognising the magic of a genius?",
+    "nags": [
+      2
+    ]
+  },
+  {
+    "ply": 39,
+    "san": "Rxe7+",
+    "comment": "",
+    "nags": [
+      1
+    ]
+  },
+  {
+    "ply": 40,
+    "san": "Nxe7",
+    "comment": "Another proof that chess\nmasterpieces require the generous cooperation of the loser! Nowadays a\nprofessional player and, of course, a computer, would have without hesitation\nresorted to:",
+    "nags": [
+      5
+    ]
+  },
+  {
+    "ply": 41,
+    "san": "Qxd7+",
+    "comment": "",
+    "nags": [
+      3
+    ]
+  },
+  {
+    "ply": 42,
+    "san": "Kxd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Bf5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Ke8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Bd7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Kf8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Bxe7#",
+    "comment": "Not surprisi\nng that chess players of the time, impressed by this kind of greatness, did\nnot want to listen to dull positional advice. But the old combinational school,\nled by its first knight Anderssen, was doomed in the battle against the\nmodernized warfare techniques of Paul Morphy, whose tactics had a much better\npositional foundataion.",
+    "nags": []
+  }
+]

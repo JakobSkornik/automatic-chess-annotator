@@ -1,0 +1,284 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "Hasting. August,5 - September,2 1895. A prestigious tournament,\norganized in order to compare the playing strength of the top chess champions\nat that time. Chigorin, Lasker, Tarrasch, Steinitz, Schlechter and other 17\nplayers were participating. All of them were very strong players. Among them\nJanowsky and a new talented american player Harry Nelson Pillsbury, who won\nthe tournament with 16.5 points out of 21. Janowsky, for various reasons not\nat his best playing strength, was however successfull in defending his\nreputation he had gained in Paris.",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Bb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "a6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Ba4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "d6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Ne7",
+    "comment": "Steinitz, always faithful to his favoured defense, this time has\nimproved it with the move a7-a6.",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Bb3",
+    "comment": "An interesting Bishop move.",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "Na5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "d4",
+    "comment": "What is that? Some strange impulse or a new idea? Janowsky seems ready\nto give his lightsquare Bishop for the sake of attack. Is that too much?\nPillsbury, categorically, commented: \"Such a move should cost the game to\nWhite.\"",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "exd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Nxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Nf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Nxf5",
+    "comment": "(?) Pillsbury again: \"Probably this\nexchange is a real mistake. A deadly mistake, I would say. After 9...Bxf5 10.\nexf5 White would have lost a piece without compensation.\" Is it possible that\nboth Janowsky and Steinitz overlooked the simple continuation suggested by\nPillsbury? Uhmm ... hard to believe.  And in fact, the moves 9... Bxf5 10.\nexf5 c4 11. Nc3 (!)  cxb3 12. axb3  followed  by Rf1-e1 and Nc3-d5 (or Nc3-e4)\nshould make worry the Black's conductor. Let's say that his position, with the\nKing in the middle of the chessboard, half-undressed, seems at least unclear.\nOpen windows and doors create air currents which are dangerous for healt. If,\nfor instance, 12...Nxf5 then 13.Qd5 would win the piece back with advantage.\nIf then White would play at once 11.Re1, Black, before taking the Bishop,\nshould scratch his head and think about it one, two, ten times before doing it.\nMaybe Pillsbury, with the presumption tha can be told from his words, did \"pee\ncounter wind\", to use an italian expression.",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "exf5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Nxb3",
+    "comment": "Of course now it is too late to play 10...c4 because of 11.Qe2+.",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Re1+",
+    "comment": "Maybe Steinitz has been too quick in willing to eliminate\nthe dangerous lightsquare Bishop. Maybe, probably, surely indeed, Janowsky\nwill show us that his opponent \"fell out the frying pan into the fire\"!",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Be7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "f6",
+    "comment": "(!) Have you seen?",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "gxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "axb3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "d5",
+    "comment": "Perhaps, as a last attempt to stop the imminent\ncatastrophe, Steinitz could have tried 13...Be6 14.Qh5 Qd7.",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Qh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Qd6",
+    "comment": "It is a bit difficult to think that Black could have escaped by sacrificing a\nRook for a minor piece: 14...0-0 15.Bh6. And what if Steinitz wanted to save\nthis too playing 15...Re8?  Then after 16.Nc3 he could have left the table and\ngo sell nuts and beans at the Astor movie theather in his hometown.",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Be6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Nb5",
+    "comment": "(!!) How does it begin the Fifth Simphony of Beethoven? Da-da-da..\n.dawn! The \"theme of destiny\"!",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Qc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Rxe6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Qxb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Bh6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Kd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Qxf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Re8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Rae1",
+    "comment": "Is it clear that White is aiming the \"e7\" and \"f6\" squares? No?\nOk, let's go on.",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Qd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Bg7",
+    "comment": "Now it should be clear!",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Rc8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Bxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Bxf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Qxf6+",
+    "comment": "The shortest way. Now one could announce mate in seven (Fritz says).",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Kc7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Qe5+",
+    "comment": "Steinitz resigns.",
+    "nags": []
+  }
+]

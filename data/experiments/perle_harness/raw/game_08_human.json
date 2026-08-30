@@ -1,0 +1,326 @@
+[
+  {
+    "ply": 1,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Bg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Be7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nfd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "h4",
+    "comment": "The Chatard-Alekhine attack: a sharp weapon against the French Defense.",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Qg4",
+    "comment": "Theory advices 7.Bxe7.\nLilienthal, with the move in the text, preferres a poisoned continuation.\nAfterward Paul Keres stopped any discussion on the subject with his\ndeclaration: \"After 7.Qg4 White is better.\" Full stop. Now Black must do his\nsteps very carefully.",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "f5",
+    "comment": "Lilienthal: \"Afterward, during the Second\nInternational Tournament in Moscow, Vera Menchik, in the same position, played\nagainst me 7... Nc6 but after 8. Bxe7 Kxe7 9. Qg5+ Kf8 10. Qxd8+ Nxd8 11. f4 I\nhad advantage.\"  Preferable to Spielmann's move is however 7... Kf8 with the\npossible continuation 8. Nf3 Nc6 9. Qf4 cxd4 10. Nb5 a6 11. Nbxd4 Nc5",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Qh5+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "g6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Qh6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Bf8",
+    "comment": "There is nothing better!  After 9... Bxg5 10. hxg5 White\nthreatens Qh6-g7 and Nc3-b5.",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Bxd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Bxh6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Bg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Bxg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "hxg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "a6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "f4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "cxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Nce2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "d3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "cxd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Nc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Kd2",
+    "comment": "King is a piece also.",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Bd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Rc1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "b6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Ned4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Nxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Nxd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "a5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Be2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Ke3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Rac8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "g4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "fxg4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Rhg1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Rf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Bxg4",
+    "comment": "?!  With this move Lilienthal loses his advantage. \nStronger and perhaps decisive was 25. Rxg4 and if 25... Rcf8 then 26. Rh4 with\nthe idea of calling the Knight to help with the maneuver Nd4-f3-h2-g4.",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Rcf8",
+    "comment": "Spielmann does not lose this opportunity.",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Rgf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "h5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Bh3",
+    "comment": "Not advisable 27. gxh6 for 27... g5",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Rc8",
+    "comment": "",
+    "nags": []
+  }
+]

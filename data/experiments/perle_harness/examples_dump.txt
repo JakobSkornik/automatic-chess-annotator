@@ -1,0 +1,203 @@
+=== TOP 6 highest text-similarity pairs ===
+game 8 ply 11 h4  ratio=0.4384 jaccard=0.4167
+  HUMAN : The Chatard-Alekhine attack: a sharp weapon against the French Defense.
+  SYSTEM: The game transposes into the French Defense: Alekhine-Chatard Attack (C13).
+
+game 15 ply 11 f3  ratio=0.3368 jaccard=0.0
+  HUMAN : White, instead, is preparing a better control of the center with his pawns.
+  SYSTEM: This is the last book move of the Nimzo-Indian: Saemisch, 5...b6 6.f3 (E24); both sides are on their own from here.
+
+game 2 ply 10 Nc7  ratio=0.2775 jaccard=0.0
+  HUMAN : The exchange in c3 and then g7-g6 was preferable.
+  SYSTEM: The game transposes into the English Opening: Symmetrical Variation, Rubinstein Variation (A34). This is the last book move.
+
+game 13 ply 10 Ne7  ratio=0.2358 jaccard=0.0909
+  HUMAN : Steinitz, always faithful to his favoured defense, this time has
+improved it with the move a7-a6.
+  SYSTEM: This is the last book move of the Spanish: Modern Steinitz, 5.O-O Ne7 (C72); both sides are on their own from here.
+
+game 5 ply 11 Nf3  ratio=0.2258 jaccard=0.08
+  HUMAN : Less convi
+ncing are the alternatives 6. Bd2 6... Bxc5 7. e3 O-O 8. Nf3 d5 and 6.Bg5 Bxc5
+7. Nf3 Be7 8. e3 O-O 9. Rd1 Qa5 10. Be2 d5 and Black's play is acceptable.
+  SYSTEM: The game transposes into the Nimzo-Indian: Spielmann, 4...c5 5.dxc5 Nc6 6.Nf3 (E23).
+
+game 23 ply 47 Bxe7#  ratio=0.2231 jaccard=0.0
+  HUMAN : Not surprisi
+ng that chess players of the time, impressed by this kind of greatness, did
+not want to listen to dull positional advice. But the old combinational school,
+led by its first knight Anderssen, was doomed in the battle against the
+modernized warfare techniques of Paul Morphy, whose tactics
+  SYSTEM: 24.Bxe7# is the strongest move here, leads to forced mate for Black ([pv:Bxe7#]) (#0 for Black, Stockfish:16). At the cost of Black has a queen and a rook for two pawns.
+
+
+=== 6 typical (median-ish) similarity pairs ===
+game 18 ply 45 Ne4  ratio=0.0307 jaccard=0.0444
+  HUMAN : Only nervousnes
+s can explain such a mistake by Alekhine. It was necessary to defend with 23.
+Rac1. Witnesses tell that right in that moment a waiter brought some coffee to
+Alekhine. He thanked the waiter and still looking at the chessboard put a
+piece of sugar in the coffee cup. Only at the last mo
+  SYSTEM: Ne4 makes matters worse, and Black now has a decisive advantage (-0.90 → -3.86, Stockfish:16) [pv:Ne4 Rc2 Qd3 Rxb2 Rac1]. White leaves a piece hanging, and Rc2 is the refutation that punishes it; deeper in the line Black may gain two pieces for a knight. White missed the chance to make Black's piece
+
+game 3 ply 67 Nb4  ratio=0.0305 jaccard=0.0159
+  HUMAN : At this point Black could have resigned. He went on playing few
+more moves ... just for inertia.
+  SYSTEM: 34.Nb4 is the most accurate move, maintaining White's advantage (+2.11, Stockfish:16) and setting up a line that may win the exchange on [pv:Nb4 Bc2 Rd2 Ba4 Nc6+], in return for pawn-structure damage that could leave doubled, isolated, and backward pawns—trade-offs that are usually worth it when con
+
+game 15 ply 38 Qxe4  ratio=0.0297 jaccard=0.0
+  HUMAN : "I could not believe
+that in such an important tournament I could have the opportunity to sacrifice
+the Queen. If somebody has told me that I could have such an opportunity
+against Capablanca..." (Lilienthal)
+  SYSTEM: 19...Qxe4 concedes a winning advantage to White (+0.08 → +1.88, Stockfish:16), and exf6 is the refutation that punishes it along [pv:Qxe4 exf6 Nxf6 Qxe4+ Nxe4]; now White's pawn structure is improved, a steady edge once exchanges settle. Black missed the potential to target the rook on f1 and activa
+
+game 18 ply 31 Nbd2  ratio=0.0296 jaccard=0.0
+  HUMAN : Mikenas again:" A GM
+with a world reputation should not fall in a trap. I think it is not necessary
+to point out that white is already in bad shape. It is the effect of the bad
+omen?"
+  SYSTEM: White missed the chance to target the knight on d5 with 16.Nc3, which leads to equality along [pv:Nc3 Nxc3 Bxc3 Qd3 Qxd3], and missed the potential for more active rooks on the open files in that line. With 16.Nbd2 White keeps the pieces actively placed and the continuation may leave Black with a ha
+
+game 22 ply 34 Qb6  ratio=0.0287 jaccard=0.0
+  HUMAN : Any modern player would be jealous about Andersen's
+confidence in playing with a rook down. Meanwhile Be5 is a decisive threat.
+  SYSTEM: The strongest move, Qb6, maintains Black's advantage and is set to target the knight on b5 as the line unfolds—an advanced knight is often a tempting target for the queen (-1.49, Stockfish:16) [pv:Qb6 a4 Be5 Nb5 a6]. Be5 was a comparable option that leads to a clear advantage for Black by immediatel
+
+game 6 ply 22 gxf6  ratio=0.0283 jaccard=0.1167
+  HUMAN : If Black would
+have not resisted from winning a Pawn with 11... dxc3 12. Bxc3 Qxc4 13. Ne5
+Qc7 14. Bxb7 Qxb7 15. Nc4 he would have been in severe delay in developement
+and would have given very good chances to the opponent.
+  SYSTEM: 11...gxf6 is Black's most accurate move, keeping the king safe while White still holds a slight advantage (+0.40, Stockfish:16) [pv:gxf6 Ne4 Bxe4 Qxe4 Bg7]. Removing the kingside danger that had been in the air is the right practical priority here. As a comparable option, 11...dxc3 also leads to a s
+
+
+=== 6 LOWEST similarity pairs (both present) ===
+game 1 ply 47 Rxf7  ratio=0.0035 jaccard=0.0
+  HUMAN : Surprise!
+  SYSTEM: The most accurate move, Rxf7, maintains White's advantage (+1.35, Stockfish:16) by putting Black's king under pressure, leaving a hanging piece, and targeting the rook on f8 after [pv:Rxf7 Qxf7 Nxf7 Rxf7 Bg2], in return for the risk that Black's king may become safer deeper in that line. King pressu
+
+game 0 ply 104 Kxe5  ratio=0.0 jaccard=0.0
+  HUMAN : White resigns
+  SYSTEM: 52...Kxe5 is the most accurate move: although it lets Black's advantage shrink (-7.36 → -5.01, Stockfish:16) on [pv:Kxe5 fxg6 Ke6 g7 Kf7], it remains the strongest way to press the win—Black went on to convert. By contrast, 52...gxf5 leads to a clear advantage for Black [pv:gxf5 g6 Ke6 Bc3 c5] and w
+
+game 4 ply 37 Be4  ratio=0.0 jaccard=0.0
+  HUMAN : There was nothing better.
+  SYSTEM: Be4 makes matters worse, and Black now has a decisive advantage (-2.12 → -4.75, Stockfish:16). After [pv:Be4 f5 Bxf5 exf5 Ke2], Black keeps the upper hand;...f5 is the strongest continuation, maintaining that advantage through the forcing exchanges that follow. White missed the chance to play Ne4, w
+
+game 6 ply 47 Nxe6+  ratio=0.0 jaccard=0.0
+  HUMAN : Here is the solution!
+  SYSTEM: White maintains the advantage with Nxe6+, (+0.90, Stockfish:16), as [pv:Nxe6+ Ke7 Nxg8+ Kxe6 Bxb7] brings another piece into the kingside attack—check keeps pressure on Black's king while White holds a rook, knight, and pawn against a queen, an edge that supports the ongoing assault and may lead to 
+
+game 16 ply 21 gxh4  ratio=0.0 jaccard=0.0
+  HUMAN : Forced!
+  SYSTEM: The most accurate move, holding the balance (+0.11, Stockfish:16) on [pv:gxh4 g5 d5 Na5 Nxg5], as the line is set to leave White with a passed pawn on h3—a pawn that can become a serious long-term asset. g4 was a comparable option, though it leads to a slight advantage for Black on [pv:g4 Bxg4 Re1 B
+
+game 21 ply 33 Qa6  ratio=0.0 jaccard=0.0
+  HUMAN : Too late!
+  SYSTEM: White's most accurate move, Qa6 immediately targets the queen on d3 and may leave Black's pieces more passive deeper in the line (-0.36, Stockfish:16) through [pv:Qa6 Qxa6 Rxa6 c5 Bg4], though the continuation still yields a slight advantage for Black. Keeping the opponent's pieces tied down is wort
+
+
+=== ALL symbol disagreements ===
+game 23 ply 40 Nxe7  human=!? system=??
+  HUMAN : Another proof that chess
+masterpieces require the generous cooperation of the loser! Nowadays a
+professional player and, of course, a computer, would have without hesitation
+resorted to:
+  SYSTEM: Black's...Nxe7 wins a rook and a knight for a pawn, a substantial material gain on the board. That is not enough, as the move leads to forced mate for White, (#4 for White, Stockfish:16) [pv:Nxe7]. Instead,...Kd8 leads to a clear advantage for White 
+
+
+=== symbol exact matches (sample of 6) ===
+game 15 ply 39 exf6  symbol=!
+  HUMAN : Very good move! To remember. A move suggested by the position of the Black
+King, which is quite open, and the temporary paralysis of opponent's Rooks and
+Knight.
+  SYSTEM: White's most accurate move is exf6, maintaining the advantage (+1.92, Stockfish:16) as the continuation [pv:exf6 Nxf6 Qxe4+ Nxe4 Ng3] may leave the king safer—always valuable when central files open—a
+
+game 19 ply 15 N1c3  symbol=!
+  HUMAN : Morphy feels that chess logic is on his side and goes for immediate
+refutation of Black's premature activity. Morphy fuehlt, dass er die
+Schachlogik auf seiner Seite hat und schreitet zur direkten Wid
+  SYSTEM: N1c3 is the strongest continuation, maintaining White's advantage (+0.70, Stockfish:16) along [pv:N1c3 f4 Nd5 fxe3 Nbc7+]. It is set to target the knight on f6 and could establish a strong knight on d
+
+game 19 ply 24 Nd4  symbol=!
+  HUMAN : 
+  SYSTEM: 
+
+game 19 ply 26 d5  symbol=!
+  HUMAN : It is unlikely that
+Anderssen has calculated all variations after Es ist unwahrscheinlich, dass
+Anderssen saemtliche Variantennach
+  SYSTEM: 
+
+game 23 ply 36 Rg8  symbol=!
+  HUMAN : At first sight an open g-file
+gives Black excellent counter-attacking chances, but Anderssen's calculations
+were beyond the fears of an ordinary human being.
+  SYSTEM: 18...Rg8 is Black's most accurate move, improving piece activity and activating the rooks on the open files while White's pieces turn passive—rooks on open files keep real pressure on the defender. At
+
+game 23 ply 38 Qxf3  symbol=?
+  HUMAN : Now White's king is suddenly just one step from decapitation. But how can we
+reproach Dufresne from not recognising the magic of a genius?
+  SYSTEM: With 19...Qxf3 Black concedes a clear advantage to White, (+0.00 → +1.31, Stockfish:16), and the line [pv:Qxf3 Rxe7+ Kd8 Rxd7+ Kc8] shows why: White's king is now safe where it had looked vulnerable, 
+
+
+=== sample human-only (system silent), 8 examples ===
+game 9 ply 28 Bxf3  key_moment=False
+  HUMAN : White resigns. Mate in five is inevitable.
+
+game 3 ply 58 Bf6  key_moment=False
+  HUMAN : A better choice would be 29..
+. Rxc4 30. Bxc4 Rc8 31. Bb3 the position is still hopeless for Black, but now
+has more chances to resist.
+
+game 12 ply 30 Qh6  key_moment=False
+  HUMAN : Exclamation mark!
+
+game 20 ply 69 Nxc6  key_moment=False
+  HUMAN : There really isn't anything better, but the move
+doesn't really deserve the double exclamation mark it usually gets. Bird: "If
+in reply Black takes the rook at e1 he loses his queen; if he captures the
+other rook he is mated. Capturing the knight was
+
+game 1 ply 14 c6  key_moment=False
+  HUMAN : According to Flohr the following continuation is stronger: 7... c5 8. Rd1 Qa5 9.
+Bd3 h6 10. Bh4 cxd4 11.exd4dxc4
+
+game 1 ply 52 Qxe5  key_moment=False
+  HUMAN : Nearly forced.
+
+game 18 ply 9 cxd5  key_moment=False
+  HUMAN : Makes easier the defense for Black. Better was 5.Nf3.
+
+game 2 ply 32 Re8  key_moment=False
+  HUMAN : Of course the
+Pf4 is at present one of the "untouchables": 16... Nxf4 17. Qc4+ Ne6 18. Bd5
+Qd7 19. Bxe6+ Qxe6 20. Nxe7+
+
+
+=== sample system-only (human silent), 8 examples ===
+game 16 ply 61 Kh2  symbol=None
+  SYSTEM: Kh2 is a fatal king move that leads to forced mate for Black (#1 for Black, Stockfish:16) [pv:Kh2]. White achieves no positional benefit from retreating the king here; the continuation is simply a forced mating sequence for Black. Black went on to win the game, 0-1.
+
+game 2 ply 56 Nh3+  symbol=None
+  SYSTEM: The check 28...Nh3+ forces White's king to g3, but the move still leads to a clear advantage for White (+1.29, Stockfish:16); the continuation [pv:Nh3+ Kg3 Be7 Nd6+ Kf8] may see White establish the knight on d6 with check while Black's king retreats to f8. It was nonetheless Black's best try—Ne2 giv
+
+game 21 ply 45 Kg1  symbol=None
+  SYSTEM: Kg1 leaves Black with a decisive advantage (-4.83, Stockfish:16), and after [pv:Kg1 Bh3+ Kh1 Bg4 Qd3] the line may leave Black with a rook, a bishop and a pawn against a queen—a lasting material edge that queen activity rarely fully offsets. White's king retreat does not improve matters, and in retu
+
+game 10 ply 31 Bxg8  symbol=!
+  SYSTEM: Bxg8 is the most accurate move, holding the balance (+0.12, Stockfish:16) along [pv:Bxg8 Rxh7 Nxh7 Qxg8 Ng5], though deeper in that line Black's king may become safer. That beats 16.e5, which leads to a clear advantage for Black after [pv:e5 Nxc4 Qh5 Nxf6 exf6+], where White would immediately establ
+
+game 1 ply 36 Be6  symbol=!
+  SYSTEM: 18...Be6 is the strongest move here, holds the balance after [pv:Be6 Rd3 Nd7 Qc3 Rae8] (+0.24, Stockfish:16). Black has improved the activity of the pieces. This sets up the following deeper in the line: Black's rooks are active on the open files. A comparable alternative was Nd5, which leads to a s
+
+game 3 ply 65 Rxc8  symbol=!
+  SYSTEM: The most accurate move, maintaining White's advantage (+2.45, Stockfish:16) on [pv:Rxc8 Rxc8 Nb4 Bc2 Rd2], immediately leaves Black's pieces passive and blunts their counterplay—often the practical way to press a winning edge—at the cost of White's own pieces growing slightly less active in return. 
+
+game 18 ply 103 Kd3  symbol=None
+  SYSTEM: White's Kd3 leads to a clear advantage for Black (-1.28, Stockfish:16) after [pv:Kd3 Re1 Rc6+ Kf5 Rf7+], as Black's Re1 and the checks on c6 and f7 drive the white king forward without respite. Kd4 was a comparable option that also leads to a clear advantage for Black on [pv:Kd4 Re6 Rc6 Rxf4+ Kd3], 
+
+game 18 ply 61 Nd4  symbol=!
+  SYSTEM: The most accurate move, Nd4, is White's strongest try even though it may still leave Black with a slight advantage (-0.32, Stockfish:16) on [pv:Nd4 e6 Re4 Nb6 Rxg4]. Centralizing the knight may bring Black's king under pressure, could set up a pin, and is set to leave White's pawn structure improved
+

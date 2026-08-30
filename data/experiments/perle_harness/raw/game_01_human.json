@@ -1,0 +1,380 @@
+[
+  {
+    "ply": 1,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "d5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Bg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Nbd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "e3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Be7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "c6",
+    "comment": "According to Flohr the following continuation is stronger: 7... c5 8. Rd1 Qa5 9.\nBd3 h6 10. Bh4 cxd4 11.exd4dxc4",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "a3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "dxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Bxc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Nd5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Bxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Qxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "N5f6",
+    "comment": "not 11... e5 because of 12. Bxd5 cxd5 13. Nc3",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Bd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Nxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Bxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "h6",
+    "comment": "Vanek does not play 13...Nf6 in order to keep control over the e5 square",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Rfe1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Qf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Rad1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "exd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "exd4",
+    "comment": "Better than 17.Rxd4, after which\nWhite would have lost control of the squares e4 and c5, and Black would have\nhad a pawn majority on the queenside",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Nb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "Ne5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Be6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Re3",
+    "comment": "Flohr is b\netter developed but has to act energically before Black Rooks come in action\nand attack together his isolated Pawn.",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Rad8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Rf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Qh4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "g3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Qh5",
+    "comment": "It was more convenient to go backward to e7. Now the Black Queen has to dance\nin a restricted field.",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "h4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Bg4",
+    "comment": "22... f5 23. g4 Qxh4 (23... fxg4 24. Bh7+) 24. gxf5 etc.",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Re1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Nd5",
+    "comment": "Of course not 23... Bxf3 for 24. Bxf3 and the Queen's dance is over After 23..\n. Rxd4 White could play 24. Bh7+ Kh8 25. Nxf7+ A relatively bettercontinuation\nwould have been 23... Be6 24. Bh7+ Kh8 25. Bg6 fxg6 26. Nxg6+ Kg8 27. Rxf8+\nRxf8 28. Rxe6 and White is \"only\" a pawn up Not advisable 28. Nxf8 for 28...\nBf5 29. Qc5 Qf7 30. Re5 Bc8 and now it is the Knight who has to stop his ride\nin the opponent field.",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Rxf7",
+    "comment": "Surprise!",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Rxf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Bh7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Bg6",
+    "comment": "Better than 26. Ng6+ Qxg6 27. Bxg6 Rf6 and Black still has sufficient forces\nto organize a solid defense.",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Qxe5",
+    "comment": "Nearly forced.",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "dxe5",
+    "comment": "And now? Who can stop this Pawn?",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Rff8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Ne7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Bf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Rd4",
+    "comment": "A mistake \nbut Vanek was in zeitnot... Time is a sharp weapon, which both the players\nhave. If one of them loses the possibility to use it ... that's bad for him!\nHowever Black's position was already compromised.",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Qc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Rfd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "Qxe7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "Bf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 63,
+    "san": "Qxd8+",
+    "comment": "Enough!",
+    "nags": []
+  }
+]

@@ -1,0 +1,488 @@
+[
+  {
+    "ply": 1,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "c4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "e6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bb4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Qb3",
+    "comment": "At that time 4.Qd3 was thought to be some sort of\nconfutation for this kind of opening. Nowadays it is rarely played in\ntournament practice because the theory has shown that Black can come out with\na good position with no difficulty.",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "c5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "dxc5",
+    "comment": "The best. The developement 5.Nf3 is less promising.",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "Nc6",
+    "comment": "Not to be prefer\nred is 5... Na6 6. a3 (6. Bg5 Qa5 7. Bxf6 gxf6 8. e3 Nxc5 9. Qc2 Bxc3+ 10.\nbxc3 b6) (6. g3 Qa5 7. Bd2 Nxc5 8. Qc2 Nce4) 6... Bxc5 (6... Bxc3+ 7. Qxc3\nNxc5 8. f3 and White has advantage.) 7. Nf3 O-O 8. Bg5 Be7 9. e4 h6 10. Bh4 b6\n11. e5 Nh5 and Black's position is good in every variation.",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Nf3",
+    "comment": "Less convi\nncing are the alternatives 6. Bd2 6... Bxc5 7. e3 O-O 8. Nf3 d5 and 6.Bg5 Bxc5\n7. Nf3 Be7 8. e3 O-O 9. Rd1 Qa5 10. Be2 d5 and Black's play is acceptable.",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "Ne4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Bd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "Nxd2",
+    "comment": "Very good. It was tried 7... Nxc5 8. Qc2 f5 9. a3 Bxc3\n10. Bxc3 O-O 11. b4 Ne4 12.Bb2 but such a variation hardly allows Black to\nkeep equality.",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Nxd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "Bxc5",
+    "comment": "According to the modern theory 8...f5 is\npreferable. The move in the text is inaccurate.",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "e3",
+    "comment": "Mikenas: \"The\nYugoslavian Grandmaster Trifunovic indicated the continuation 9.Nde4 Be7 10.\n0-0-0 as preferable, with initiative to White. For me it is just matter of\ntaste\".",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "b6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Be2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Bb7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "f5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Na4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Be7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "Rfd1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Qc7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Rac1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Na5",
+    "comment": "All already seen in the practice.",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Qd3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Rad8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "c5",
+    "comment": "Such an opportunity can not be lost. It is necessary to remind that Black has\nthe Bishop pair and any small hesitation can allow him to take initiative.\nWith this move White wants to activate his play on the queenside.",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "bxc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "b4",
+    "comment": "A blunder! More precisely: a serious inaccuracy. 18.Nxc5 Bxc5 19.b4\nhad to be played, with clear advantage for White. Fortunately it is not an\nirreparaple mistake.",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "c4",
+    "comment": "Here it is! Can you see the difference?",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Qc3",
+    "comment": "Now White must play \"very\" accurately to avoid further pain. 19. bxa5\ncxd3 20. Rxc7 dxe2 and Black's position is ok.",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Bc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Nb2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Bxf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "gxf3",
+    "comment": "Mikenas does not want to play passively and ... takes some risks. His\nopponent had 3 minutes left to the time control (at that time it was 32 moves\nin two hours) and our hero, with the move in the text, tried to profit from\nthis fact. It is a dangerous tactics, but sometimes it pays. Mikenas says, to\nbe more precise: \"Yes, but more often our attempts to be too smart, to confuse\nthings, turn against ourselves\". Of course the right move (and the expected\none) was 21.Bxf3.",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Bf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Qc2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Rb8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Nd3",
+    "comment": "A bit of tactics to force\nBlack to use his time and think of a new plan. It was right to play 23. Nxc4\nRxb4 24. Nxa5 Qxa5 25. Rxd7 with possibilities for both players.",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "d5",
+    "comment": "Mikenas: \"Black is pursuing his excellent play and is not caring about zeitnot.\nIndeed I overlooked this move. Now, in caso of 24.bxa5 Qxa5 the White Knight\ncould not leave the square d3 because of 25.Rb2. I could not rely on a logical\nplay: I had to find another trick and pray the \"God of the North\" for a happy\nending.",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Nf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Rfe8",
+    "comment": "And Black falls into the trap! The right reply was 24...\nQc6 and White would have had nearly nothing left.",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "bxa5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "g5",
+    "comment": "There are no\nother possibiliteis. In case of 25...Rb2 the reply would have been 26.Qa4!\nattacking the Rook in e8 (that is why it was necessary to play 24. ..Qc6\ninstead of 24...Re8).",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Nh5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Be5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "f4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "gxf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "exf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Bxf4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 57,
+    "san": "Nf6+",
+    "comment": "It is true that White is a piece up but, please, look at the Pawn army which\navailable for Black. White must be very careful, or the little black men will\nbecome very dangerous.",
+    "nags": []
+  },
+  {
+    "ply": 58,
+    "san": "Kh8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 59,
+    "san": "Nxe8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 60,
+    "san": "Rxe8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 61,
+    "san": "Qc3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 62,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 63,
+    "san": "Rb1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 64,
+    "san": "Qg7+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 65,
+    "san": "Kf1",
+    "comment": "The only one After 33. Kh1 Qh6 34. h3 d4 White would be forced to give\nback a Rook.",
+    "nags": []
+  },
+  {
+    "ply": 66,
+    "san": "Bxh2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 67,
+    "san": "Ke1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 68,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 69,
+    "san": "Qxc4",
+    "comment": "No hurry! White has just to keep calm.",
+    "nags": []
+  },
+  {
+    "ply": 70,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 71,
+    "san": "Rxd4",
+    "comment": "Taking the Queen\nwould have been dangerous: 36.Qxd4 Be5! followed by 37...Bc3+ and 38... Rg8.",
+    "nags": []
+  },
+  {
+    "ply": 72,
+    "san": "Qg1+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 73,
+    "san": "Bf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 74,
+    "san": "e3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 75,
+    "san": "Rb2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 76,
+    "san": "exf2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 77,
+    "san": "Kd1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 78,
+    "san": "Be5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 79,
+    "san": "Qb5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 80,
+    "san": "Kg8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 81,
+    "san": "Re2",
+    "comment": "",
+    "nags": []
+  }
+]

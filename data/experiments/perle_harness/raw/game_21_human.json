@@ -1,0 +1,338 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "Bb5",
+    "comment": "The \"spanish\" variation of the Four Knights.",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Bc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Nxe5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "Re8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Nxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "dxc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Bc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "b5",
+    "comment": "?! Unclear.",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Be2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "Nxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Nxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "Rxe4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Bf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Re6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "c3",
+    "comment": "(?) It take few microseconds only to notice the enormous hole in d3. One of\nthe usual moves that are played automatically and are severely punished.",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Qd3",
+    "comment": "(!) The hole is immediately filled...",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "b4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Bb6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "a4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "bxa4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 29,
+    "san": "Qxa4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 30,
+    "san": "Bd7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 31,
+    "san": "Ra2",
+    "comment": "(?) Steinitz:\" A silly move\".",
+    "nags": []
+  },
+  {
+    "ply": 32,
+    "san": "Rae8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 33,
+    "san": "Qa6",
+    "comment": "Too late!",
+    "nags": []
+  },
+  {
+    "ply": 34,
+    "san": "Qxf3",
+    "comment": "(!!) How many of us dream to sacrifice the Queen in this way?",
+    "nags": []
+  },
+  {
+    "ply": 35,
+    "san": "gxf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 36,
+    "san": "Rg6+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 37,
+    "san": "Kh1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 38,
+    "san": "Bh3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 39,
+    "san": "Rd1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 40,
+    "san": "Bg2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 41,
+    "san": "Kg1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 42,
+    "san": "Bxf3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 43,
+    "san": "Kf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 44,
+    "san": "Bg2+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 45,
+    "san": "Kg1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 46,
+    "san": "Bh3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 47,
+    "san": "Kh1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 48,
+    "san": "Bxf2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 49,
+    "san": "Qf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 50,
+    "san": "Bxf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 51,
+    "san": "Rxf1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 52,
+    "san": "Re2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 53,
+    "san": "Ra1",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 54,
+    "san": "Rh6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 55,
+    "san": "d4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 56,
+    "san": "Be3",
+    "comment": "A beautiful game. Even more\nbeautifull would been if Morphy found the two ways for a sparkling mate.\nApparently he did not see it. But he won anyway!",
+    "nags": []
+  }
+]

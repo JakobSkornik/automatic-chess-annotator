@@ -239,4 +239,9 @@ async def compose_facts_comment(
         logger.info(
             "facts comment failed contract at ply %s — using template", facts.ply
         )
+    else:
+        logger.debug(
+            "compose_facts_comment: LLM produced no usable candidate at ply %s "
+            "(level=%s) — using template", facts.ply, lvl
+        )
     return _result(template, "template", False, lvl)

@@ -1,0 +1,170 @@
+[
+  {
+    "ply": 1,
+    "san": "e4",
+    "comment": "This game was published only in 1900, in the chess column of the\nnewspaper \"Niva\", with a curious introduction by Chigorin. He wrote:\n\"Sometimes may happen that a chess game is repeated from the first move to the\nlast one. It is possible when an unexperienced player in the opening play some\nnatural- and good-looking move. Indeed such moves drive him to a defeat. One\nof such games will be now shown to you. The following opening is very common\nin amateur practice, and my opponent, an enthusiastic amateur has played it\nfour times against me.\" Chigorin does not tell us if there was a fifth time\nwhere his opponent, convinced by the previous four kicks, found the right\ncontinuation. I think this player should be remembered as \"Knorr the\ntenacious\".",
+    "nags": []
+  },
+  {
+    "ply": 2,
+    "san": "e5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 3,
+    "san": "Nf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 4,
+    "san": "Nc6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 5,
+    "san": "Bc4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 6,
+    "san": "Bc5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 7,
+    "san": "d3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 8,
+    "san": "Nf6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 9,
+    "san": "O-O",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 10,
+    "san": "d6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 11,
+    "san": "Bg5",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 12,
+    "san": "h6",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 13,
+    "san": "Bh4",
+    "comment": "A mistake. Even losing a tempo by retreating the Bishop in e3 was more\nconvenient. (Chigorin)",
+    "nags": []
+  },
+  {
+    "ply": 14,
+    "san": "g5",
+    "comment": "Exclamation mark!",
+    "nags": []
+  },
+  {
+    "ply": 15,
+    "san": "Bg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 16,
+    "san": "h5",
+    "comment": "Double excl\namation mark!! Chigorin follows the same moves as the famous game\nDubois-Steinitz played in London in 1862, so proving his interest in chess\nliterature at that time.",
+    "nags": []
+  },
+  {
+    "ply": 17,
+    "san": "Nxg5",
+    "comment": "With this move instead, his opponent proves\nhimself naif and little prepared. In fact now the next moves seem to be forced\nfor White. Perhaps it was better to defend himself with",
+    "nags": []
+  },
+  {
+    "ply": 18,
+    "san": "h4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 19,
+    "san": "Nxf7",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 20,
+    "san": "hxg3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 21,
+    "san": "Nxd8",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 22,
+    "san": "Bg4",
+    "comment": "(!)",
+    "nags": []
+  },
+  {
+    "ply": 23,
+    "san": "Qd2",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 24,
+    "san": "Nd4",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 25,
+    "san": "Nc3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 26,
+    "san": "Nf3+",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 27,
+    "san": "gxf3",
+    "comment": "",
+    "nags": []
+  },
+  {
+    "ply": 28,
+    "san": "Bxf3",
+    "comment": "White resigns. Mate in five is inevitable.",
+    "nags": []
+  }
+]

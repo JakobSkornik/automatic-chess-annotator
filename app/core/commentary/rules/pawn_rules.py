@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from app.core.commentary.features.guid_features import (
     doubled_pawn_files,
     passed_pawn_squares,
@@ -9,6 +11,8 @@ from app.models.comment_facts import Claim
 from .constants import SIDES, THRESHOLDS
 from .context import _benef, _benef_opp, _Ctx, _side_label, _toward
 from .material import _imbalance, describe_material
+
+logger = logging.getLogger(__name__)
 
 
 def rule_material(ctx: _Ctx) -> list[Claim]:
@@ -86,6 +90,21 @@ def rule_pawn_structure(ctx: _Ctx) -> list[Claim]:
                     features_involved=involved,
                     delta_cp=-net,
                 )
+            )
+        elif abs(net) >= THRESHOLDS["pawn_structure_evaluate"]:
+            # The aggregate EVALUATE_PAWNS swing alone cleared the threshold but
+            # no concrete pawn-count defect was resolved/created to corroborate
+            # it — the stacked AND condition silently drops what would
+            # otherwise be a claim.
+            logger.debug(
+                "rule_pawn_structure: corroboration gate blocked a claim for %s "
+                "(evaluate_pawns_swing=%d, threshold=%d, defects_resolved=%d, "
+                "defects_created=%d)",
+                side,
+                net,
+                THRESHOLDS["pawn_structure_evaluate"],
+                defects_resolved,
+                defects_created,
             )
     return out
 
