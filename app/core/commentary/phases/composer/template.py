@@ -14,11 +14,12 @@ from .framing import (
 )
 from .tokens import _alt_pv_token, _gerundize, _move_label, eval_token, pv_token
 
-LONG_LINE_PLIES = 6  # lines this long describe the envisioned position (state form)
-
 
 def _claim_text(c: Claim, *, prefer_state: bool) -> str:
-    if prefer_state and c.text_state:
+    """Change-form vs state-form (Guid subproblem 5), per claim: a change the
+    move itself makes is stated in change form; one that only develops deeper
+    in the line reads as a property of the envisioned position."""
+    if c.realization != "immediate" and c.text_state:
         return c.text_state
     return c.text
 
@@ -28,14 +29,21 @@ def _render_head(facts: CommentFacts, variant: int, *, archetype: str | None) ->
     opener = _ARCHETYPE_OPENER.get(archetype or "")
     head = f"{move} {opener} {facts.verdict}" if opener else f"{move} {facts.verdict}"
     if pv:
-        head += f" after {pv}" if variant == 0 else f": {pv}"
+        # Rotation: "after {pv}" / ": {pv}" / " ({pv})" — three shapes so the
+        # Guid head does not repeat verbatim between adjacent comments.
+        if variant == 0:
+            head += f" after {pv}"
+        elif variant == 1:
+            head += f": {pv}"
+        else:
+            head += f" ({pv})"
     if ev:
         head += f" {ev}"
     return head + "."
 
 
 def _render_concessions(
-    concessions: list[Claim], concession_mode: str, variant: int, prefer_state: bool
+    concessions: list[Claim], concession_mode: str, variant: int
 ) -> list[str]:
     """Immediate concessions stated as fact; envisioned ones framed as a risk."""
     if not concessions:
@@ -45,16 +53,19 @@ def _render_concessions(
     out: list[str] = []
     if immediate:
         if concession_mode == "consequence":
-            prefix = "Now " if variant == 0 else "The drawback: "
+            prefixes = ("Now ", "The drawback: ", "The problem: ")
+            prefix = prefixes[variant % len(prefixes)]
             clauses = [c.text.rstrip(".") for c in immediate]
         else:
-            prefix = "In return, " if variant == 0 else "On the other hand, "
-            clauses = [
-                _claim_text(c, prefer_state=prefer_state).rstrip(".") for c in immediate
-            ]
+            prefixes = ("In return, ", "On the other hand, ", "At the cost of ")
+            prefix = prefixes[variant % len(prefixes)]
+            clauses = [_claim_text(c, prefer_state=False).rstrip(".") for c in immediate]
         out.append(prefix + " and ".join(clauses) + ".")
     if envisioned:
-        clauses = [c.text.rstrip(".") for c in envisioned]
+        # Envisioned concessions read as the state the line is heading toward.
+        clauses = [
+            _claim_text(c, prefer_state=True).rstrip(".") for c in envisioned
+        ]
         out.append("Down the line, " + " and ".join(clauses) + ".")
     return out
 
@@ -62,18 +73,25 @@ def _render_concessions(
 def _render_claims(facts: CommentFacts, variant: int) -> list[str]:
     if not facts.claims:
         return []
-    # Long quiescent lines describe the envisioned position -> state form.
-    prefer_state = bool(
-        facts.display_line and len(facts.display_line.line_san) >= LONG_LINE_PLIES
-    )
     merits = [c for c in facts.claims if not c.is_concession]
     concessions = [c for c in facts.claims if c.is_concession]
     out: list[str] = []
-    if merits:
-        out.append(" ".join(_claim_text(c, prefer_state=prefer_state) for c in merits))
-    out += _render_concessions(
-        concessions, facts.concession_mode, variant, prefer_state
-    )
+    # Immediate merits are facts; envisioned merits are only set up by the
+    # move, so they must be hedged like envisioned concessions (the LLM
+    # prompt requires the same — the template must match it).
+    immediate_merits = [c for c in merits if c.realization != "envisioned"]
+    envisioned_merits = [c for c in merits if c.realization == "envisioned"]
+    if immediate_merits:
+        out.append(
+            " ".join(_claim_text(c, prefer_state=True) for c in immediate_merits)
+        )
+    if envisioned_merits:
+        clauses = [
+            _claim_text(c, prefer_state=True).rstrip(".") for c in envisioned_merits
+        ]
+        out.append("This sets up the following deeper in the line: "
+                   + " and ".join(clauses) + ".")
+    out += _render_concessions(concessions, facts.concession_mode, variant)
     return out
 
 
@@ -135,7 +153,7 @@ def _render_alternative(facts: CommentFacts, variant: int) -> str | None:
 def render_facts_template(facts: CommentFacts, *, archetype: str | None = None) -> str:
     """Guid-format rendering with deterministic phrasing rotation (per ply), so
     the pattern does not repeat verbatim move after move."""
-    variant = facts.ply % 2
+    variant = facts.ply % 3
     parts = [_render_head(facts, variant, archetype=archetype)]
     if facts.refutation_san:
         parts.append(f"The move is punished by {facts.refutation_san}.")

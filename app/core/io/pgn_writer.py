@@ -22,10 +22,22 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"\[(\w+):([^\]]+)\]")
 
-# NAG numbers: $1 !, $2 ?, $3 !!, $4 ??, $5 !?, $6 ?!
+# Sentence-ending punctuation, but never the leading dots of a Black move
+# ("...Bd3"): those are notation, and without the guard the whitespace-tightening
+# passes below pull the move onto the previous word ("the queen on e6...Bd3").
+_END_PUNCT = r"(?!\.\.\.)([.,;:!?])"
+
+# Move-quality glyphs: blunder/mistake/inaccuracy get the ChessBase
+# convention NAGs so the PGN reads correctly in any viewer (the annotation
+# symbols already exist in `_ANNOTATION_BY_KEY_MOMENT`; here as raw NAGs).
 _CLASSIFICATION_NAGS = {
-    "brilliant": 3,
-    "great_move": 1,
+    "brilliant": 3,  # !!
+    "great_move": 1,  # !
+    "best_move": 1,  # !
+    "inaccuracy": 6,  # ?!
+    "missed_opportunity": 6,  # ?!
+    "mistake": 2,  # ?
+    "blunder": 4,  # ??
 }
 
 
@@ -33,9 +45,22 @@ def _flatten_tokens(text: str) -> tuple[str, list[list[str]]]:
     """Strip interactive tokens; return (plain_text, pv_lines_as_san_lists)."""
     pv_lines: list[list[str]] = []
 
-    # "... after [pv:x y z] (+0.12, ...)" -> drop the connective with the token;
-    # the line itself becomes a PGN variation instead.
-    text = re.sub(r"\s*\bafter\s+(?=\[pv:)", " ", text or "")
+    # Connectives that introduce an inline [pv:] token ("after", "along",
+    # "via", "with", "through", "into", and the phrases "the main line
+    # is/runs", "the expected/natural continuation is"). The line itself
+    # becomes a PGN variation, so the connective must go too — otherwise
+    # sentences like "holds the balance along." remain.
+    text = re.sub(
+        r"\s*\b(?:after|along|via|with|through|into)\s+(?=\[pv:)", " ", text or ""
+    )
+    text = re.sub(
+        r"\s*(?:The |the )?"
+        r"(?:main (?:line|continuation)|(?:expected|natural) continuation)"
+        r"(?:\s+(?:is|runs|continues with))?\s*(?=\[pv:)",
+        " ",
+        text or "",
+    )
+    text = re.sub(r"\s*as in:\s*(?=\[pv:)", " ", text or "")
 
     def repl(m: re.Match) -> str:
         ttype = m.group(1).lower()
@@ -51,8 +76,26 @@ def _flatten_tokens(text: str) -> tuple[str, list[list[str]]]:
         return content
 
     plain = _TOKEN_RE.sub(repl, text)
+    # Adjacent tokens leave no space of their own, so a Black move can land
+    # against the preceding word ("on e6...Bd3"); separate it before collapsing.
+    plain = re.sub(r"(?<=\w)(\.\.\.(?=[KQRBNO]|[a-h][1-8]))", r" \1", plain)
     plain = re.sub(r"\s+", " ", plain)
-    plain = re.sub(r"\s+([.,;:!?])", r"\1", plain)
+    # Dangling connectives left where a token was removed mid-sentence
+    # ("... equality with.", "... advantage along,", "The main line is.").
+    plain = re.sub(
+        r"\s+\b(?:after|along|via|with|through|into)\s*" + _END_PUNCT,
+        r"\1",
+        plain,
+    )
+    plain = re.sub(
+        r"\s+(?:The |the )?"
+        r"(?:main (?:line|continuation)|(?:expected|natural) continuation)"
+        r"(?:\s+(?:is|runs|continues with))?\s*" + _END_PUNCT,
+        r"\1",
+        plain,
+    )
+    plain = re.sub(r"\s+as in:\s*" + _END_PUNCT, r"\1", plain)
+    plain = re.sub(r"\s+" + _END_PUNCT, r"\1", plain)
     return plain.strip(), pv_lines
 
 

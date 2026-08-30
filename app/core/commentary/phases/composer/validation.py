@@ -26,7 +26,8 @@ _SCHEMA_MARKERS = (
 
 
 def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
-    """The fact contract: eval and PV tokens verbatim; alternative named.
+    """The fact contract: eval and PV tokens verbatim; alternative named; no
+    ungrounded tactical assertion.
 
     Also rejects raw JSON / schema leakage so a malformed provider response can
     never reach the UI (it falls back to the deterministic template instead)."""
@@ -45,7 +46,59 @@ def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
     alt = facts.better_alternative
     if alt is not None and alt.san and alt.san not in t:
         return False
-    return not (facts.refutation_san and facts.refutation_san not in t)
+    if facts.refutation_san and facts.refutation_san not in t:
+        return False
+    return not ungrounded_motif_terms(t, facts)
+
+
+# Named tactics are checkable board facts, not shades of phrasing: either the
+# expert module found one or nobody may assert it. Each entry is a concept and
+# the surface forms a renderer might reach for.
+_MOTIF_TERMS: dict[str, re.Pattern[str]] = {
+    "pin": re.compile(r"\bpin(?:s|ned|ning)?\b", re.I),
+    "fork": re.compile(r"\bfork(?:s|ed|ing)?\b", re.I),
+    "skewer": re.compile(r"\bskewer(?:s|ed|ing)?\b", re.I),
+    "discovered": re.compile(r"\bdiscovered\s+(?:attack|check)\b", re.I),
+    "double check": re.compile(r"\bdouble\s+check\b", re.I),
+    "back rank": re.compile(r"\bback[-\s]rank\b", re.I),
+    "zugzwang": re.compile(r"\bzugzwang\b", re.I),
+    "en passant": re.compile(r"\ben\s+passant\b", re.I),
+    "stalemate": re.compile(r"\bstalemate\b", re.I),
+    "deflection": re.compile(r"\bdeflect(?:s|ed|ion|ing)?\b", re.I),
+    "zwischenzug": re.compile(r"\bzwischenzug|intermezzo\b", re.I),
+    "windmill": re.compile(r"\bwindmill\b", re.I),
+    "trapped": re.compile(r"\btrapp(?:ed|ing)\b", re.I),
+    "battery": re.compile(r"\bbatter(?:y|ies)\b", re.I),
+    "overload": re.compile(r"\boverload(?:s|ed|ing)?\b", re.I),
+}
+
+
+def _grounding_corpus(facts: CommentFacts) -> str:
+    """Everything the renderer was actually told, as one searchable blob."""
+    parts: list[str] = [facts.verdict or ""]
+    for c in facts.claims:
+        parts += [c.rule_id, c.text, c.text_state or ""]
+    alt = facts.better_alternative
+    if alt is not None:
+        parts.append(alt.verdict or "")
+        for c in alt.claims:
+            parts += [c.rule_id, c.text, c.text_state or ""]
+    return " ".join(parts)
+
+
+def ungrounded_motif_terms(text: str, facts: CommentFacts) -> list[str]:
+    """Named tactics the text asserts that no fact given to it supports.
+
+    The structural checks above catch a renderer that drops a token, but not one
+    that invents a bind: the phantom-pin class of error, where fluent prose
+    asserts a tactic the expert module never found.
+    """
+    corpus = _grounding_corpus(facts)
+    return [
+        concept
+        for concept, pattern in _MOTIF_TERMS.items()
+        if pattern.search(text) and not pattern.search(corpus)
+    ]
 
 
 _OBJ_RE = re.compile(r"\{(?:[^{}]|\{[^{}]*\})*\}")

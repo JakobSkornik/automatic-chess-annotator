@@ -233,10 +233,10 @@ def test_pgn_writer_roundtrip():
 
 def test_template_phrasing_variants_rotate():
     f0 = _facts()
-    f1 = _facts().model_copy(update={"ply": 22})
-    t0 = render_facts_template(f0)  # ply 21 -> variant 1
-    t1 = render_facts_template(f1)  # ply 22 -> variant 0
-    assert ("after [pv:" in t1) and (": [pv:" in t0)
+    f1 = _facts().model_copy(update={"ply": 23})
+    t0 = render_facts_template(f0)  # ply 21 -> variant 0
+    t1 = render_facts_template(f1)  # ply 23 -> variant 2
+    assert ("after [pv:" in t0) and ("([pv:" in t1)
     assert t0 != t1
 
 
@@ -271,12 +271,15 @@ def test_state_form_claims_in_template():
                     text_state="White's pawn structure is now improved.",
                     features_involved=["EVALUATE_PAWNS"],
                     delta_cp=15,
+                    # Two-horizon system: only claims that develop deeper in
+                    # the line take state form; immediate ones stay change-form.
+                    realization="envisioned",
                 )
             ],
         }
     )
     text = render_facts_template(facts)
-    # long quiescent line -> envisioned-state phrasing
+    # envisioned claim -> envisioned-state phrasing (regardless of line length)
     assert "White's pawn structure is now improved." in text
 
 
@@ -335,16 +338,16 @@ def test_template_concession_framing():
             ],
         }
     )
-    text = render_facts_template(facts)  # ply 21 -> variant 1
+    text = render_facts_template(facts)  # ply 21 -> variant 0
     assert "White's pieces are actively placed." in text
-    assert "On the other hand, Black solves the problem of the bad bishop." in text
+    assert "In return, Black solves the problem of the bad bishop." in text
     # merits come before concessions
-    assert text.index("actively placed") < text.index("On the other hand")
+    assert text.index("actively placed") < text.index("In return,")
 
     # consequence mode (dubious move): concessions explain the swing
     facts2 = facts.model_copy(update={"concession_mode": "consequence", "ply": 22})
-    text2 = render_facts_template(facts2)  # ply 22 -> variant 0
-    assert "Now Black solves the problem of the bad bishop." in text2
+    text2 = render_facts_template(facts2)  # ply 22 -> variant 1
+    assert "The drawback: Black solves the problem of the bad bishop." in text2
 
 
 def test_transition_verdicts():
@@ -388,7 +391,7 @@ def test_refutation_in_template_and_contract():
 def test_concessions_join_single_sentence():
     f = _facts().model_copy(
         update={
-            "ply": 22,  # variant 0 -> "In return, "
+            "ply": 21,  # variant 0 -> "In return, "
             "claims": [
                 Claim(
                     rule_id="m",

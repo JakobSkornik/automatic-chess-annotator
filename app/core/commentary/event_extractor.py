@@ -7,6 +7,10 @@ import chess.pgn
 
 from app.core.commentary.features.move_category import classify_move_event
 from app.core.commentary.features.plan_extractor import build_plan_comparison
+from app.core.commentary.phase_classifier import (
+    endgame_piece_threshold,
+    minor_major_piece_count,
+)
 from app.core.commentary.features.pv_motif_scan import (
     merge_pv_motifs_into_strategic,
     merge_pv_motifs_into_tactical,
@@ -211,6 +215,7 @@ def _to_move_event(
     opening_name: str | None,
     opening_eco: str | None,
     key_moment: str | None,
+    phase_transition: str | None = None,
 ) -> MoveEvent:
     """Map the computed per-move signals onto a categorized MoveEvent."""
     event = MoveEvent(
@@ -237,6 +242,7 @@ def _to_move_event(
         opening_name=opening_name,
         opening_eco=opening_eco,
         key_moment_type=key_moment,
+        phase_transition=phase_transition,
     )
     return event.model_copy(update={"move_category": classify_move_event(event)})
 
@@ -316,7 +322,15 @@ class ChessEventExtractor:
         pawn_type, mat = _pawn_and_material(hidden_features)
         in_book_ply = (row.phase_raw or "") == "early"
         key_moment = self._detect_key_moment(
-            analyzed, prev_move_obj, pvs, row, loss, move_quality, in_book_ply
+            analyzed,
+            prev_move_obj,
+            pvs,
+            row,
+            loss,
+            move_quality,
+            in_book_ply,
+            board_before=board_before,
+            board_after=board_after,
         )
         opening_name, opening_eco = self._opening_for(game, mainline, row.index)
         phase = _map_phase(row.phase_raw or (analyzed.phase or "mid"))
@@ -365,6 +379,7 @@ class ChessEventExtractor:
             opening_name=opening_name,
             opening_eco=opening_eco,
             key_moment=key_moment,
+            phase_transition=self._transition_for(board_before, board_after),
         )
 
     def _collect_motifs(
@@ -414,6 +429,8 @@ class ChessEventExtractor:
         loss: int,
         move_quality: MoveQuality,
         in_book_ply: bool,
+        board_before: chess.Board | None = None,
+        board_after: chess.Board | None = None,
     ) -> str | None:
         # Book plies carry no engine data and are never key moments.
         key_moment = (
@@ -435,7 +452,37 @@ class ChessEventExtractor:
             key_moment = "blunder"
         elif not key_moment and move_quality == MoveQuality.MISTAKE:
             key_moment = "mistake"
+        # A phase transition is an annotation anchor on an otherwise quiet move,
+        # but it never displaces a quality tag; when the move is also tagged, the
+        # transition still travels on its own `phase_transition` field.
+        if not key_moment and self._transition_for(board_before, board_after):
+            key_moment = "endgame_transition"
         return key_moment
+
+    def _transition_for(
+        self, board_before: chess.Board | None, board_after: chess.Board | None
+    ) -> str | None:
+        """Which phase boundary this move crosses, if any.
+
+        ``queens_off`` when the last queen leaves the board, ``endgame`` when the
+        minor/major piece count drops through the endgame threshold.
+        """
+        if board_before is None or board_after is None:
+            return None
+
+        def queens(board: chess.Board) -> int:
+            return len(board.pieces(chess.QUEEN, chess.WHITE)) + len(
+                board.pieces(chess.QUEEN, chess.BLACK)
+            )
+
+        if queens(board_before) > 0 and queens(board_after) == 0:
+            return "queens_off"
+        threshold = endgame_piece_threshold()
+        if minor_major_piece_count(board_before) >= threshold > minor_major_piece_count(
+            board_after
+        ):
+            return "endgame"
+        return None
 
     def _opening_for(
         self, game: chess.pgn.Game, mainline: list[chess.Move], idx: int

@@ -121,8 +121,10 @@ def _resolve_move_comment(
     key_moment: str | None,
     *,
     side_ok: bool,
+    seen_transitions: dict[str, int] | None = None,
 ) -> _MoveComment:
-    """Resolve the comment cascade: opening -> LLM -> stub/facts/key-moment floor.
+    """Resolve the comment cascade: opening -> LLM -> stub/facts/key-moment floor,
+    plus a phase-transition sentence.
 
     Prose is reserved for key moments (an LLM pass ran for them); other
     out-of-book moves carry no prose — their structured facts panel stands
@@ -138,7 +140,64 @@ def _resolve_move_comment(
         # found something to say, is still honored above.
         if not mc.comment and not _nothing_instructive_to_say(move_event):
             mc.comment = _fallback_comment(move_event, key_moment)
+    _append_transition_sentence(mc, move_event, side_ok, seen_transitions)
     return mc
+
+
+# A queen trade usually drops the piece count through the endgame threshold on
+# the very next ply, and both boundaries say "we are in the endgame now". Only
+# the first is worth a sentence; a later boundary this close is a restatement.
+TRANSITION_QUIET_PLIES = 8
+
+
+def _append_transition_sentence(
+    mc: _MoveComment,
+    move_event: MoveEvent | None,
+    side_ok: bool,
+    seen_transitions: dict[str, int] | None,
+) -> None:
+    """Add the phase-boundary sentence, alongside any prose already resolved.
+
+    The move that takes the queens off is usually also a capture worth its own
+    comment, so gating the sentence on an empty comment lost it precisely on the
+    moves where the transition matters most.
+    """
+    if not side_ok or move_event is None:
+        return
+    kind = move_event.phase_transition
+    if not kind:
+        return
+    if seen_transitions is not None:
+        if kind in seen_transitions:
+            return
+        if any(
+            move_event.ply - ply <= TRANSITION_QUIET_PLIES
+            for ply in seen_transitions.values()
+        ):
+            return
+        seen_transitions[kind] = move_event.ply
+    sentence = _transition_sentence(move_event, kind)
+    mc.comment = f"{mc.comment.rstrip()} {sentence}" if mc.comment else sentence
+
+
+def _transition_sentence(move_event: MoveEvent, kind: str) -> str:
+    base = (
+        "The queens are off — the game enters its final phase, where technique "
+        "matters more than tactics."
+        if kind == "queens_off"
+        else "With so few pieces left, this is an endgame now: king activity and "
+        "pawns decide it."
+    )
+    eval_after = move_event.eval_after_cp
+    if eval_after is None:
+        return base
+    if abs(eval_after) > 150:
+        pov = "White" if eval_after >= 0 else "Black"
+        return f"{base} {pov} remains firmly better going into it."
+    swing = move_event.eval_swing_cp
+    if swing is not None and abs(swing) >= 80:
+        return f"{base} The balance shifted here ({swing / 100:+.2f} for White)."
+    return f"{base} The position stays balanced."
 
 
 def _trace_pv_line(
@@ -246,6 +305,10 @@ def _build_move_debug(
         "muted_claims": muted,
         "renderings": renderings,
         "contract_ok": contract_ok,
+        # Plausible moves that only deep search exposed as bad (Guid Search
+        # Module). Empty list = nothing found / scan disabled.
+        "refutations": list(move_event.refutations or []),
+        "phase_transition": move_event.phase_transition,
     }
 
 

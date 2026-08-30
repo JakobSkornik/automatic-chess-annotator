@@ -84,3 +84,21 @@ def king_danger(board: chess.Board, color: chess.Color) -> int:
     king_attacks = _attacks_on_king(board, enemy, king)
     weak = _weak_squares(board, color, ring)
     return count * weight + _KING_ATTACKS_CP * king_attacks + _WEAK_SQUARE_CP * weak
+
+
+def king_zone_attacks(board: chess.Board, color: chess.Color) -> int:
+    """Number of ``color``'s minor/major pieces attacking the ENEMY king's
+    zone (Stockfish king-zone notion). Always computable — unlike ``king_danger``
+    this registers pressure even before it becomes 'danger' (no attacker-weight
+    gate), which is what an attack-arc narrative needs."""
+    enemy = not color
+    king = board.king(enemy)
+    if king is None:
+        return 0
+    ring = _king_ring(king)
+    return sum(
+        1
+        for piece_type in _ATTACKER_WEIGHT
+        for square in board.pieces(piece_type, color)
+        if board.attacks(square) & ring
+    )

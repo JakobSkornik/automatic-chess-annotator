@@ -203,9 +203,22 @@ class _LlmRun:
     audit_coverage: list[float] = field(default_factory=list)
     audit_evals: list[int] = field(default_factory=list)
     audit_forbidden: int = 0
+    # Prose variety: the game outcome is stated once (earliest commented ply
+    # in reading order = last one generated in this reverse sweep); later
+    # generations must not repeat it. Also counts how many comments already
+    # exist so prompts can vary their closers.
+    win_note_budget: int = 1
 
     def future_context_text(self) -> str:
-        parts = [f"Game outcome: {self.result_str} ({self.winner_note})."]
+        parts = []
+        if self.win_note_budget > 0:
+            parts.append(f"Game outcome: {self.result_str} ({self.winner_note}).")
+            self.win_note_budget -= 1
+        else:
+            parts.append(
+                "Game outcome: already mentioned earlier — do NOT repeat who "
+                "won or that the result is known."
+            )
         for fc in self.future_comments[:3]:
             parts.append(
                 f"Later, at move {(fc['ply'] + 1) // 2} ({fc['san']}): {fc['text'][:160]}"

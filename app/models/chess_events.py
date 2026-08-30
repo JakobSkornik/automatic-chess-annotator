@@ -171,6 +171,14 @@ class MoveEvent(BaseModel):
     commentary_stub_ref_ply: int | None = None
     # Guid Expert Module output: the move's inviolable comment facts
     comment_facts: CommentFacts | None = None
+    # Refutation scan: plausible moves that only deep search exposes as bad
+    # ("looked good at low depth, refuted deeper"). Additive; empty = none.
+    refutations: list[dict[str, Any]] = Field(default_factory=list)
+    # Game-phase boundary crossed by this move ("queens_off" | "endgame"), kept
+    # apart from key_moment_type: a transition is orthogonal to move quality, so
+    # competing for the same slot would lose it whenever the move is also a
+    # mistake or a best move.
+    phase_transition: str | None = None
 
 
 class GameAnalysisContext(BaseModel):

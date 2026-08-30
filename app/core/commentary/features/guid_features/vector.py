@@ -208,6 +208,9 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
         # --- king safety (Stockfish king-danger core; bad for the attacked side) ---
         danger = king_danger_feature.king_danger(board, color)
         put(f"{prefix}_KING_DANGER", -sign * danger, flag=danger)
+        # Attack-arc counter: our pieces aiming at the enemy king's zone.
+        zone_attacks = king_danger_feature.king_zone_attacks(board, color)
+        put(f"{prefix}_KING_ZONE_ATTACKS", sign * zone_attacks, flag=zone_attacks)
 
         # back-rank weakness (our own measure): king on back rank with no luft
         back_rank = 0

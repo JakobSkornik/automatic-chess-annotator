@@ -40,6 +40,10 @@ GUID_COMPOSER_SYSTEM = (
     "the audience rules below say so — and only about features named in claims.\n"
     "- Express the evaluation ONLY through the verdict words and the eval token; "
     "never convert centipawns into 'pawns up' language.\n"
+    "- NEVER name a tactic (pin, fork, skewer, discovered attack, double check, "
+    "back-rank, zugzwang, deflection, battery, trapped piece, overload) unless a "
+    "claim or the verdict names it. These are checkable board facts, and a "
+    "rendering that asserts one which was not given to you is discarded.\n"
     "- MOVER PERSPECTIVE: explain why the move serves the side that played it. "
     "Claims listed as MERITS are what the move achieves — lead with them. Claims "
     "listed as CONCESSIONS favor the opponent: phrase them strictly as trade-offs "
@@ -111,6 +115,14 @@ ARCHETYPE_RULES: dict[str, str] = {
         "ARCHETYPE — inaccuracy / missed opportunity: open with what the move "
         "passed up. Lead with the better alternative framed as the opportunity "
         "missed (per the BETTER ALTERNATIVE rules), then the eval consequence.\n"
+    ),
+    "kingside_attack": (
+        "ARCHETYPE — kingside attack: a piece has just joined the attack on the "
+        "enemy king's zone. Frame the move as part of an attacking plan: say "
+        "which side is building pressure toward the enemy king (from the "
+        "verdict and claims), and what it may lead to — hedged, since the "
+        "attack is developing, not decisive. Do not invent specific mate "
+        "patterns; stay within the claims.\n"
     ),
 }
 

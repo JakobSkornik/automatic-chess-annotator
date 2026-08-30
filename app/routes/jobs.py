@@ -74,6 +74,8 @@ async def retry_job(job_id: str):
         job["pgn"],
         llm_provider=job.get("llm_provider"),
         llm_effort=job.get("llm_effort"),
+        commentary_level=job.get("commentary_level"),
+        comment_side=job.get("comment_side"),
     )
     st = queue_manager.get_job_status(new_id)
     if not st:

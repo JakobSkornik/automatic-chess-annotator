@@ -7,6 +7,8 @@ from app.core.commentary.features.guid_features import (
 )
 from app.models.comment_facts import Claim
 
+import chess
+
 from .constants import SIDES, THRESHOLDS
 from .context import _benef, _benef_opp, _Ctx, _side_label, _toward
 
@@ -327,3 +329,21 @@ def rule_king_activity(ctx: _Ctx) -> list[Claim]:
                 )
             )
     return out
+
+
+def rule_intent(ctx: _Ctx) -> list[Claim]:
+    """What a quiet move is *for*: newly attacked enemy piece, prepared pawn
+    break, or file opened for the rook. Needs boards (not just the diff), so
+    it reads them from the context; at most one intent claim per pass, for
+    the mover only. Suppressed in decided positions — plans are noise there
+    (Guid: positional claims dropped when the eval is decisive)."""
+    if ctx.leaf_board is None:
+        return []
+    if ctx.eval_cp is not None and abs(ctx.eval_cp) > 500:
+        return []
+    from app.core.commentary.features.intent import build_intent_claim
+
+    claim = build_intent_claim(
+        ctx.start_board or chess.Board(), ctx.leaf_board, _side_label(ctx.mover)
+    )
+    return [claim] if claim is not None else []

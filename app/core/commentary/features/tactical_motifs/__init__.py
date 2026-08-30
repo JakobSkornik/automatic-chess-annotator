@@ -30,6 +30,38 @@ __all__ = ["detect_tactical_motifs"]
 SACRIFICE_GAIN_CP = 50  # material the side nets to flag a tactic
 THREAT_DROP_CP = 40  # eval drop that flags a created threat
 
+# Piece types a "pin" motif may be claimed about, matching the PINS feature in
+# guid_features: a pinned pawn is rarely worth annotating and reads wrong when
+# the comment calls it a pinned piece.
+_PINNABLE = (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN)
+
+
+def _pinned_squares(board: chess.Board, color: chess.Color) -> set[int]:
+    out: set[int] = set()
+    for piece_type in _PINNABLE:
+        for sq in board.pieces(piece_type, color):
+            try:
+                if board.is_pinned(color, sq):
+                    out.add(sq)
+            except Exception:
+                continue
+    return out
+
+
+def _new_pin(
+    board_before: chess.Board, board_after: chess.Board, enemy: chess.Color
+) -> bool:
+    """Whether the move *created* a pin, rather than one that already stood.
+
+    Without the before/after comparison a long-standing pin is re-attributed to
+    every later move, inflating criticality and inviting the renderer to credit
+    the move with a bind it had nothing to do with.
+    """
+    after = _pinned_squares(board_after, enemy)
+    if not after:
+        return False
+    return bool(after - _pinned_squares(board_before, enemy))
+
 
 def detect_tactical_motifs(
     board_before: chess.Board,
@@ -83,15 +115,8 @@ def detect_tactical_motifs(
             motifs.append(TacticalMotif.SACRIFICE)
 
     enemy = not moved_color
-    for sq in chess.SQUARES:
-        pie = board_after.piece_at(sq)
-        if pie and pie.color == enemy and pie.piece_type != chess.KING:
-            try:
-                if board_after.is_pinned(enemy, sq):
-                    motifs.append(TacticalMotif.PIN)
-                    break
-            except Exception:
-                pass
+    if _new_pin(board_before, board_after, enemy):
+        motifs.append(TacticalMotif.PIN)
 
     if _skewer_heuristic(board_after, move.to_square, moved_color):
         motifs.append(TacticalMotif.SKEWER)

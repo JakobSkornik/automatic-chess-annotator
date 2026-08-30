@@ -44,15 +44,28 @@ def rule_material(ctx: _Ctx) -> list[Claim]:
 
 
 def rule_pawn_structure(ctx: _Ctx) -> list[Claim]:
-    """The dissertation's pawn-structure rule (§5.4.1), both sides. Gated on the
-    weighted EVALUATE_PAWNS aggregate (the individual pawn features are now raw
-    counts in different units and cannot be summed directly)."""
+    """The dissertation's pawn-structure rule (§5.4.1), both sides.
+
+    Two gates (better silence than a false claim, Guid §5.4.2):
+    1. The weighted EVALUATE_PAWNS aggregate must shift at least
+       ``pawn_structure_evaluate`` — but a pure aggregate drift with NO
+       concrete pawn-count change (doubled/isolated/backward/passed flags
+       identical) is passed-pawn-value drift, not "improved structure", so it
+       does NOT fire.
+    2. The aggregate shift must be corroborated by at least one concrete pawn
+       defect resolved (count decreased) or created (count increased)."""
     out: list[Claim] = []
-    feat_names = ("PAWN_DOUBLED", "PAWN_ISOLATED", "PAWN_BACKWARD", "PAWN_PASSED")
+    count_feats = ("PAWN_DOUBLED", "PAWN_ISOLATED", "PAWN_BACKWARD")
     for side in SIDES:
         net = _toward(side, ctx.delta("EVALUATE_PAWNS"))
-        involved = [f"{side}_{f}" for f in feat_names] + ["EVALUATE_PAWNS"]
-        if net >= THRESHOLDS["pawn_structure_evaluate"]:
+        involved = [f"{side}_{f}" for f in count_feats] + ["EVALUATE_PAWNS"]
+        # Concrete pawn-count changes for this side (toward = good for side).
+        count_changes = [
+            _toward(side, ctx.delta(f"{side}_{f}")) for f in count_feats
+        ]
+        defects_resolved = sum(1 for d in count_changes if d < 0)
+        defects_created = sum(1 for d in count_changes if d > 0)
+        if net >= THRESHOLDS["pawn_structure_evaluate"] and defects_resolved:
             out.append(
                 Claim(
                     rule_id="pawn_structure_improved",
@@ -63,7 +76,7 @@ def rule_pawn_structure(ctx: _Ctx) -> list[Claim]:
                     delta_cp=net,
                 )
             )
-        elif -net >= THRESHOLDS["pawn_structure_evaluate"]:
+        elif -net >= THRESHOLDS["pawn_structure_evaluate"] and defects_created:
             out.append(
                 Claim(
                     rule_id="pawn_structure_weakened",

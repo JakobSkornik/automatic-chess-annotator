@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "games": 2,
+    "plies_total": 124,
+    "commentable_plies": 98,
+    "commented_plies": 81,
+    "coverage_pct": 82.65,
+    "claims_total": 212,
+    "claims_per_commented_move": 2.62,
+    "claim_grounding_pct": 93.4,
+    "forbidden_phrase_hits": 0,
+    "render_errors": 195,
+    "muted_claims": 0,
+    "refutation_findings": 0,
+    "key_moment_promotions": 55,
+    "engine_calls_per_ply": 2.37,
+    "avg_engine_seconds_per_game": 14.32,
+    "avg_facts_ms_per_move": 15.169,
+    "games_with_errors": 2
+  },
+  "errors": [
+    "pv token[raw] illegal move 'Bxg7': illegal san: 'Bxg7' in rn1q1rk1/pb2ppbp/1p3np1/2pp4/2P5/1PN2NP1/PB1PPPBP/R2Q1RK1 w - - 0 9",
+    "pv token[] illegal move 'Bxg7': illegal san: 'Bxg7' in rn1q1rk1/pb2ppbp/1p3np1/2pp4/2P5/1PN2NP1/PB1PPPBP/R2Q1RK1 w - - 0 9",
+    "pv token[raw] illegal move 'Bxg7': illegal san: 'Bxg7' in rn1q1rk1/pb2ppbp/1p3np1/2pN4/2P5/1P3NP1/PB1PPPBP/R2Q1RK1 b - - 0 9",
+    "pv token[] illegal move 'Bxg7': illegal san: 'Bxg7' in rn1q1rk1/pb2ppbp/1p3np1/2pN4/2P5/1P3NP1/PB1PPPBP/R2Q1RK1 b - - 0 9",
+    "pv token[raw] illegal move 'Kxg7': illegal san: 'Kxg7' in rn1q1rk1/pb2ppbp/1p4p1/2pn4/2P5/1P3NP1/PB1PPPBP/R2Q1RK1 w - - 0 10",
+    "pv token[] illegal move 'Kxg7': illegal san: 'Kxg7' in rn1q1rk1/pb2ppbp/1p4p1/2pn4/2P5/1P3NP1/PB1PPPBP/R2Q1RK1 w - - 0 10",
+    "pv token[raw] illegal move 'cxd5': illegal san: 'cxd5' in rn1q1rk1/pb2ppBp/1p4p1/2pn4/2P5/1P3NP1/P2PPPBP/R2Q1RK1 b - - 0 10",
+    "pv token[] illegal move 'cxd5': illegal san: 'cxd5' in rn1q1rk1/pb2ppBp/1p4p1/2pn4/2P5/1P3NP1/P2PPPBP/R2Q1RK1 b - - 0 10",
+    "pv token[raw] illegal move 'Qxd5': illegal san: 'Qxd5' in rn1q1r2/pb2ppkp/1p4p1/2pn4/2P5/1P3NP1/P2PPPBP/R2Q1RK1 w - - 0 11",
+    "pv token[] illegal move 'Qxd5': illegal san: 'Qxd5' in rn1q1r2/pb2ppkp/1p4p1/2pn4/2P5/1P3NP1/P2PPPBP/R2Q1RK1 w - - 0 11",
+    "pv token[raw] illegal move 'd4': illegal san: 'd4' in rn1q1r2/pb2ppkp/1p4p1/2pP4/8/1P3NP1/P2PPPBP/R2Q1RK1 b - - 0 11",
+    "pv token[] illegal move 'd4': illegal san: 'd4' in rn1q1r2/pb2ppkp/1p4p1/2pP4/8/1P3NP1/P2PPPBP/R2Q1RK1 b - - 0 11",
+    "pv token[raw] illegal move 'cxd4': illegal san: 'cxd4' in rn3r2/pb2ppkp/1p4p1/2pq4/8/1P3NP1/P2PPPBP/R2Q1RK1 w - - 0 12",
+    "pv token[] illegal move 'cxd4': illegal san: 'cxd4' in rn3r2/pb2ppkp/1p4p1/2pq4/8/1P3NP1/P2PPPBP/R2Q1RK1 w - - 0 12",
+    "pv token[raw] illegal move 'Nxd4': illegal san: 'Nxd4' in rn3r2/pb2ppkp/1p4p1/2pq4/3P4/1P3NP1/P3PPBP/R2Q1RK1 b - - 0 12",
+    "pv token[] illegal move 'Nxd4': illegal san: 'Nxd4' in rn3r2/pb2ppkp/1p4p1/2pq4/3P4/1P3NP1/P3PPBP/R2Q1RK1 b - - 0 12",
+    "pv token[raw] illegal move 'Bxg2': illegal san: 'Bxg2' in rn3r2/pb2ppkp/1p4p1/3q4/3p4/1P3NP1/P3PPBP/R2Q1RK1 w - - 0 13",
+    "pv token[] illegal move 'Bxg2': illegal san: 'Bxg2' in rn3r2/pb2ppkp/1p4p1/3q4/3p4/1P3NP1/P3PPBP/R2Q1RK1 w - - 0 13",
+    "pv token[raw] illegal move 'Nxd4': illegal san: 'Nxd4' in rn3r2/pb2ppkp/1p4p1/3q4/3Q4/1P3NP1/P3PPBP/R4RK1 b - - 0 13",
+    "pv token[] illegal move 'Nxd4': illegal san: 'Nxd4' in rn3r2/pb2ppkp/1p4p1/3q4/3Q4/1P3NP1/P3PPBP/R4RK1 b - - 0 13"
+  ]
+}

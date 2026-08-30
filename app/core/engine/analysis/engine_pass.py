@@ -148,20 +148,7 @@ class AnalysisRetriever:
 
     def evaluate_position(self, fen: str, *, depth: int) -> int | None:
         """One-off White-POV cp eval of a position (used to seed the book-exit baseline)."""
-        try:
-            board = chess.Board(fen)
-            info = self.engine_connector.analyse(board, depth=depth, multiPv=1)
-            if isinstance(info, list) and info:
-                info = info[0]
-            if not isinstance(info, dict):
-                return None
-            sc = info.get("score")
-            if sc is None:
-                return None
-            return int(sc.white().score(mate_score=MATE_SCORE))
-        except Exception as e:
-            logger.warning("Seed eval failed for FEN %s: %s", fen, e)
-            return None
+        return self.engine_connector.evaluate_position(fen, depth=depth)
 
     def analyze_move(
         self, main_move_obj: Move, stage: float
@@ -226,19 +213,33 @@ class AnalysisRetriever:
     def _search_instability(
         self, board_after: chess.Board, after_primary: dict, stage: float
     ) -> tuple[dict[int, int], int]:
-        """Re-search at several depths; report eval-by-depth and PV1 change count."""
+        """Eval-by-depth and PV1 change count, from ONE streamed search to the
+        final depth (snapshots at the shallower depths) instead of a re-search
+        per depth. Falls back to the per-depth re-searches when the engine or
+        protocol does not cooperate, so the output contract is unchanged."""
+        stage_i = int(stage)
+        depths = sorted({d for d in INSTABILITY_DEPTHS if d != stage_i} | {stage_i})
+        if depths[-1] != stage_i:
+            depths.append(stage_i)
+        final, snaps = self.engine_connector.analyse_with_depth_snapshots(
+            board_after, stage_i, snapshot_depths=tuple(depths)
+        )
         eval_at_depth: dict[int, int] = {}
         pv1_ucis: list[str | None] = []
-        stage_i = int(stage)
-        for d in INSTABILITY_DEPTHS:
+        for d in depths:
             if d == stage_i:
-                inf = after_primary
+                cp, uci = _cp_and_pv1(final)
             else:
+                cp, uci = snaps.get(d, (None, None))
+            if cp is None and d != stage_i and uci is None:
+                # Snapshot missed (streaming unavailable): explicit shallow search.
                 try:
-                    inf = self.engine_connector.analyse(board_after, depth=d, multiPv=1)
+                    inf = self.engine_connector.analyse(
+                        board_after, depth=d, multiPv=1
+                    )
                 except Exception:
                     inf = None
-            cp, uci = _cp_and_pv1(inf)
+                cp, uci = _cp_and_pv1(inf)
             if cp is not None:
                 eval_at_depth[d] = cp
             pv1_ucis.append(uci)

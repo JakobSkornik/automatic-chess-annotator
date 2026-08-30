@@ -39,7 +39,7 @@ import logging
 import os
 from typing import Any
 
-from app.models.comment_facts import CommentFacts
+from app.models.comment_facts import CommentFacts, EnvisionedLine
 
 from .framing import ALT_MATERIAL_GAP_CP, alt_gap_cp, comment_archetype
 from .prompts import (
@@ -58,6 +58,21 @@ logger = logging.getLogger(__name__)
 
 LEVELS = ("expert", "intermediate", "beginner")
 DEFAULT_LEVEL = "intermediate"
+
+# Beginner comments stay focused: fewer, most fundamental claims (Guid:
+# what to comment on depends on the audience's strength).
+BEGINNER_MAX_MERITS = 2
+BEGINNER_MAX_CONCESSIONS = 1
+
+# Displayed-variation length per audience (Guid subproblem 3: how long a
+# variation to show depends on the reader's strength). Beginners see fewer
+# plies; experts keep the full envisioned line. The stored CommentFacts keep
+# the full line — this trims only the PV token rendered into the comment.
+LEVEL_BASE_PLIES: dict[str, int] = {
+    "beginner": 3,
+    "intermediate": 5,
+    "expert": 12,  # effectively "no extra trim" (max_display_plies default)
+}
 
 __all__ = [
     "ALT_MATERIAL_GAP_CP",
@@ -138,6 +153,53 @@ async def _call_composer(
         return ""
 
 
+def _audience_claims(facts: CommentFacts, level: str) -> list[Claim]:
+    """Trim the claim list to the audience's budget (strongest kept).
+
+    Beginner: the fewest and most fundamental claims; expert/intermediate:
+    everything fired. The stored CommentFacts stay complete — this only shapes
+    what the comment itself conveys."""
+    if level != "beginner" or len(facts.claims) <= BEGINNER_MAX_MERITS + BEGINNER_MAX_CONCESSIONS:
+        return facts.claims
+    merits = [c for c in facts.claims if not c.is_concession]
+    concessions = [c for c in facts.claims if c.is_concession]
+    return merits[:BEGINNER_MAX_MERITS] + concessions[:BEGINNER_MAX_CONCESSIONS]
+
+
+def _audience_line(line: EnvisionedLine | None, level: str) -> EnvisionedLine | None:
+    """Trim the displayed line to the audience's variation length (Guid
+    subproblem 3). Never extends a line; only shortens, and never below one
+    ply. The cut point is not re-verified for quiescence — the full line was
+    quiescence-trimmed at build time and only the tail gets dropped."""
+    if line is None:
+        return None
+    cap = LEVEL_BASE_PLIES.get(level)
+    if cap is None or len(line.line_san) <= cap:
+        return line
+    return line.model_copy(
+        update={
+            "line_uci": line.line_uci[:cap],
+            "line_san": line.line_san[:cap],
+            "fens": line.fens[:cap],
+            "leaf_fen": line.fens[cap - 1],
+            "trimmed_plies": line.trimmed_plies + (len(line.fens) - cap),
+        }
+    )
+
+
+def _audience_view(facts: CommentFacts, level: str) -> CommentFacts:
+    """The facts as the chosen audience sees them: claim budget + PV length."""
+    updates: dict[str, Any] = {"claims": _audience_claims(facts, level)}
+    if facts.display_line is not None:
+        updates["display_line"] = _audience_line(facts.display_line, level)
+    alt = facts.better_alternative
+    if alt is not None and alt.display_line is not None:
+        updates["better_alternative"] = alt.model_copy(
+            update={"display_line": _audience_line(alt.display_line, level)}
+        )
+    return facts.model_copy(update=updates)
+
+
 async def compose_facts_comment(
     service: Any,
     facts: CommentFacts,
@@ -155,16 +217,23 @@ async def compose_facts_comment(
     """
     lvl = level if level in LEVELS else DEFAULT_LEVEL
     archetype = comment_archetype(key_moment_type)
-    template = render_facts_template(facts, archetype=archetype)
+    audience_facts = _audience_view(facts, lvl)
+    template = render_facts_template(audience_facts, archetype=archetype)
 
     if not is_llm_rendering_enabled() or not _is_provider_configured(service):
         return _result(template, "template", True, lvl)
 
     system = _build_system_prompt(lvl, archetype)
-    user = build_facts_user_prompt(facts, enrichment=enrichment, archetype=archetype)
+    user = build_facts_user_prompt(
+        audience_facts, enrichment=enrichment, archetype=archetype
+    )
     candidate = await _call_composer(service, system, user, model, effort, facts.ply)
 
-    if candidate and validate_facts_comment(candidate, facts):
+    # Validate against the same audience view the prompt was built from: the
+    # LLM is asked to copy the (level-appropriate) PV token verbatim, so a
+    # beginner-trimmed PV is the contract there. Alternative/refutation
+    # naming requirements still apply whenever the view carries them.
+    if candidate and validate_facts_comment(candidate, audience_facts):
         return _result(candidate, "llm", True, lvl)
     if candidate:
         logger.info(

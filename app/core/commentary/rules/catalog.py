@@ -25,6 +25,7 @@ from .piece_rules import (
     rule_bishop_pair,
     rule_center_and_space,
     rule_connected_rooks,
+    rule_intent,
     rule_king_activity,
     rule_king_safety,
     rule_piece_activity,
@@ -54,6 +55,7 @@ ALL_RULES: list[Rule] = [
     rule_material,
     rule_threats,
     rule_pin,
+    rule_intent,
     rule_pawn_structure,
     rule_doubled_pawns,
     rule_bishop_pair,
@@ -82,7 +84,12 @@ def run_rules(
     start_board: chess.Board | None = None,
     leaf_board: chess.Board | None = None,
 ) -> list[Claim]:
-    """Fire all rules; keep the strongest few claims."""
+    """Fire all rules; keep the strongest few claims.
+
+    A concrete material claim (``material_won`` / ``material_standing`` /
+    ``tactical_material_loss``) is exempt from the per-move cap — winning or
+    losing material is the single most important fact about a move and must
+    never be crowded out by positional claims (it always leads)."""
     ctx = _Ctx(
         diff, phase, mover, eval_cp, start_board=start_board, leaf_board=leaf_board
     )
@@ -96,7 +103,10 @@ def run_rules(
     # routine bishop trade) is no longer enough to earn a sentence.
     claims = [c for c in claims if c.delta_cp >= THRESHOLDS["min_claim_cp"]]
     claims.sort(key=lambda c: -c.delta_cp)
-    return claims[:MAX_CLAIMS_PER_MOVE]
+    material_ids = {"material_won", "material_standing", "tactical_material_loss"}
+    material = [c for c in claims if c.rule_id in material_ids]
+    rest = [c for c in claims if c.rule_id not in material_ids]
+    return material + rest[:MAX_CLAIMS_PER_MOVE]
 
 
 # ---------------------------------------------------------------------------

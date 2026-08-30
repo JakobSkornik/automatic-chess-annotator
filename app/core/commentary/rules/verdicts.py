@@ -46,7 +46,6 @@ def verdict_for_transition(
     a = sign * int(after_cp)
     d = a - b
     a_lab = _adv_bracket(a)
-    _adv_bracket(b)
 
     if abs(d) < TRANSITION_MIN_CP:  # nothing really changed
         if a_lab is None:

@@ -102,7 +102,10 @@ class EnginePipelineState:
 
 
 def _build_game_move(
-    state: EnginePipelineState, idx: int, row: AnalyzedMoveData
+    state: EnginePipelineState,
+    idx: int,
+    row: AnalyzedMoveData,
+    seen_transitions: dict[str, int] | None = None,
 ) -> GameMove:
     """Assemble one GameMove (comment + facts + variations + debug) for the UI."""
     game, moves_list, move_events = state.game, state.moves_list, state.move_events
@@ -122,7 +125,12 @@ def _build_game_move(
     side_ok = side_sel == "both" or (side_sel == "white") == mover_is_white
 
     comment = _resolve_move_comment(
-        row, analyzed_move, move_event, key_moment, side_ok=side_ok
+        row,
+        analyzed_move,
+        move_event,
+        key_moment,
+        side_ok=side_ok,
+        seen_transitions=seen_transitions,
     ).comment
 
     board_before = _board_before_mainline_move(game, idx)
@@ -162,8 +170,10 @@ def _build_game_move(
 
 def assemble_game_json(state: EnginePipelineState) -> GameJson:
     """Build GameJson from pipeline state (engine + optional LLM fields)."""
+    seen_transitions: dict[str, int] = {}
     game_moves = [
-        _build_game_move(state, idx, row) for idx, row in enumerate(state.analyzed_rows)
+        _build_game_move(state, idx, row, seen_transitions)
+        for idx, row in enumerate(state.analyzed_rows)
     ]
     return GameJson(
         metadata=state.metadata,
@@ -194,6 +204,10 @@ _STRUCTURAL_RULE_IDS = frozenset(
         "rooks_connected",
         "passed_pawn_created",
         "outside_passer",
+        # A standing material edge (e.g. "White is a rook up") describes a
+        # lasting state, not a one-off event: without the wide window it would
+        # resurface on every quiet move in a winning endgame.
+        "material_standing",
     }
 )
 
@@ -386,11 +400,15 @@ def _dedup_claims(
 
 
 def _attach_comment_facts(
-    move_events: list[MoveEvent], analyzed_rows: list[AnalyzedMoveData]
+    move_events: list[MoveEvent],
+    analyzed_rows: list[AnalyzedMoveData],
+    engine_connector: EngineConnector | None = None,
 ) -> None:
     """Fire the rule engine per move, dedup persistent claims, promote key moments."""
     from app.core.commentary.rules import build_comment_facts
+    from app.core.commentary.features.envisioned import trim_envisioned_line_by_probe
 
+    prober = _leaf_probe_prober(engine_connector) if engine_connector else None
     claim_window = int(os.environ.get("CLAIM_DEDUP_WINDOW_PLIES", "6"))
     structural_window = int(os.environ.get("STRUCTURAL_DEDUP_WINDOW_PLIES", "24"))
     last_claim_ply: dict[tuple[str | None, str | None], int] = {}
@@ -405,6 +423,13 @@ def _attach_comment_facts(
             continue
         if facts is None:
             continue
+        if prober is not None and facts.display_line is not None and facts.claims:
+            try:
+                trimmed = trim_envisioned_line_by_probe(facts.display_line, prober)
+                if trimmed is not facts.display_line:
+                    facts = facts.model_copy(update={"display_line": trimmed})
+            except Exception as e:
+                logger.warning("leaf probe failed at ply %s: %s", move_event.ply, e)
         facts = _dedup_claims(
             facts, move_event.ply, last_claim_ply, claim_window, structural_window
         )
@@ -441,6 +466,33 @@ def _build_analysis_context(
     )
 
 
+def _board_turn_is_white(fen: str) -> bool:
+    try:
+        return chess.Board(fen).turn == chess.WHITE
+    except Exception:
+        return True
+
+
+def _leaf_probe_prober(engine_connector: EngineConnector):
+    """Cheap depth-limited eval prober for envisioned-line sanity checks.
+
+    Returns None (probe skipped) when the env knob disables it or the engine
+    fails, so the trim is a no-op — the pipeline never hard-depends on it."""
+    import os
+
+    depth = int(os.environ.get("LEAF_PROBE_DEPTH", "6"))
+    if depth <= 0:
+        return None
+
+    def prober(fen: str) -> int | None:
+        try:
+            return engine_connector.evaluate_position(fen, depth=depth)
+        except Exception:
+            return None
+
+    return prober
+
+
 async def run_engine_analysis_to_json(
     pgn_string: str,
     engine_connector: EngineConnector,
@@ -472,7 +524,30 @@ async def run_engine_analysis_to_json(
     )
     move_events = extractor.extract_events(game, analyzed_rows)
 
-    _attach_comment_facts(move_events, analyzed_rows)
+    # Targeted refutation scan (Guid: refute moves that look good at low
+    # depth) over key-moment positions only. Optional; failures are logged
+    # and never block the pipeline.
+    try:
+        from app.core.commentary.features.refutation_scan import RefutationScanner
+
+        scanner = RefutationScanner(engine_connector)
+        for mi, me in enumerate(move_events):
+            if not me.key_moment_type or not me.fen_before:
+                continue
+            deep_after = me.eval_after_cp
+            if deep_after is None:
+                continue
+            sign = -1 if _board_turn_is_white(me.fen_before) else 1
+            mover_pov_deep = sign * int(deep_after)
+            found = scanner.scan(me.fen_before, mover_pov_deep)
+            if found:
+                move_events[mi] = me.model_copy(
+                    update={"refutations": [f.as_dict() for f in found]}
+                )
+    except Exception as e:
+        logger.warning("refutation scan skipped: %s", e)
+
+    _attach_comment_facts(move_events, analyzed_rows, engine_connector)
     context = _build_analysis_context(headers, move_events, opening_name, opening_eco)
 
     await progress_callback(ANALYSIS_DONE_PROGRESS_PCT, "Engine analysis complete.")

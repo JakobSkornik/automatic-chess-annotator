@@ -32,6 +32,7 @@ KEY_MOMENT_PRIORITY: dict[str, int] = {
     "blunder": 1,
     "critical_decision": 2,
     "structural_transformation": 2,
+    "kingside_attack": 2,
     "great_move": 3,
     "mistake": 3,
     "king_safety_crisis": 3,
@@ -186,6 +187,42 @@ def _king_safety_crisis(curr_hf: dict, prev_hf: dict, side: str) -> list[str]:
         if curr - prev >= KING_SAFETY_CRISIS_EXPOSURE_JUMP
         else []
     )
+
+
+# An attack arc: the mover's king-zone attack count jumps by this many pieces
+# in one move (a piece arriving in the enemy king's zone — sacrifice/lift/
+# rook to the open file against the king).
+KING_ZONE_ATTACK_JUMP = 2
+
+
+def _zone_attacks_for(hf: dict, key: str) -> int | None:
+    """A side's king-zone attack count from the Guid vector dump (if present)."""
+    guid = hf.get("_guid") if isinstance(hf.get("_guid"), dict) else None
+    if not guid:
+        return None
+    entry = guid.get(key)
+    if isinstance(entry, dict) and entry.get("flag") is not None:
+        return int(entry["flag"])
+    return None
+
+
+def _kingside_attack_arc(current_move: Move, previous_move: Move | None) -> list[str]:
+    """A piece newly joins the attack on the enemy king's zone.
+
+    The mover's own zone count is read from the Guid vector dump; a jump of
+    ``KING_ZONE_ATTACK_JUMP`` or more in one move means a piece arrived in
+    the enemy king's zone (sacrifice, lift, rook to the file against the king)."""
+    is_white = current_move.depth % 2 == 1
+    own_key = "WHITE_KING_ZONE_ATTACKS" if is_white else "BLACK_KING_ZONE_ATTACKS"
+    curr = _zone_attacks_for(current_move.hiddenFeatures or {}, own_key)
+    prev = (
+        _zone_attacks_for(previous_move.hiddenFeatures or {}, own_key)
+        if previous_move
+        else None
+    )
+    if curr is None or prev is None:
+        return []
+    return ["kingside_attack"] if curr - prev >= KING_ZONE_ATTACK_JUMP else []
 
 
 def _initiative_shift(curr_hf: dict, prev_hf: dict, side: str) -> list[str]:
@@ -367,6 +404,7 @@ class KeyMomentDetector:
         return [
             *self._structural_transformation(curr_hf),
             *_king_safety_crisis(curr_hf, prev_hf, side),
+            *_kingside_attack_arc(current_move, previous_move),
             *_initiative_shift(curr_hf, prev_hf, side),
             *_piece_activation(curr_hf, prev_hf, side),
             *self._opening_transition(current_move),

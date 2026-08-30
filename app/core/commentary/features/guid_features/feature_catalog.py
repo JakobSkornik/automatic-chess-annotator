@@ -251,6 +251,15 @@ _SPECS: tuple[FeatureSpec, ...] = (
         "around it. Negative for the side whose king is under fire.",
     ),
     FeatureSpec(
+        "KING_ZONE_ATTACKS",
+        "King Zone Attacks",
+        "King",
+        "count",
+        "stockfish",
+        "Minor/major pieces aiming at the enemy king's zone — an attack-arc "
+        "counter that registers pressure before it becomes outright danger.",
+    ),
+    FeatureSpec(
         "BACK_RANK",
         "Back-Rank Weakness",
         "King",

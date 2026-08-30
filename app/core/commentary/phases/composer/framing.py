@@ -41,6 +41,8 @@ def comment_archetype(key_moment_type: str | None) -> str:
     kmt = key_moment_type or ""
     if kmt == "brilliant":
         return "brilliant_sacrifice"
+    if kmt == "kingside_attack":
+        return "kingside_attack"
     if kmt in ("best_move", "great_move"):
         return "engine_choice"
     if kmt in ("inaccuracy", "missed_opportunity"):
@@ -53,4 +55,5 @@ def comment_archetype(key_moment_type: str | None) -> str:
 _ARCHETYPE_OPENER: dict[str, str] = {
     "engine_choice": "is the strongest move here,",
     "brilliant_sacrifice": "is a brilliant sacrifice,",
+    "kingside_attack": "turns the pieces toward the enemy king,",
 }

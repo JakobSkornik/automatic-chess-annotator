@@ -1,8 +1,10 @@
-"""Pinned enemy pieces (Stockfish ``pinned`` / ``blockers_for_king``).
+"""Pinned enemy pieces.
 
 Counts the enemy minor/major pieces absolutely pinned to their king — i.e. ones
-our sliders hold in place. A pin is a concrete, pragmatic asset, so it is worth
-stating even when the evaluation is already decided.
+our sliders hold in place (python-chess ``Board.is_pinned``, the absolute-pin
+notion; a subset of Stockfish's pin concepts, which also cover relative/skewer
+pins). A pin is a concrete, pragmatic asset, so it is worth stating even when
+the evaluation is already decided.
 """
 
 from __future__ import annotations

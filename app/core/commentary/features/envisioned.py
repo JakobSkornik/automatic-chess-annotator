@@ -15,6 +15,7 @@ engine pass already paid for.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 
 import chess
 
@@ -161,6 +162,52 @@ def build_envisioned_line(
         start_quiescent=start_q,
         leaf_quiescent=leaf_q,
     )
+
+
+def trim_envisioned_line_by_probe(
+    line: EnvisionedLine,
+    prober: Callable[[str], int | None],
+    tolerance_cp: int = 150,
+) -> EnvisionedLine:
+    """Trim the line's tail while a shallow sanity probe contradicts it.
+
+    A statically quiescent leaf can still be tactically loaded (discovered
+    attack, skewer). ``prober(fen)`` returns the engine's cheap eval of a
+    position; when the leaf's probe disagrees IN SIGN with the line's backed-up
+    eval beyond ``tolerance_cp``, tail plies are dropped one at a time (each
+    re-probed) and the longest prefix whose eval story survives is kept.
+    Engine-free lines and missing evals pass through untouched."""
+    if line.root_eval_cp is None or len(line.fens) < 2:
+        return line
+
+    def _contradicts(idx: int) -> bool:
+        leaf_eval = prober(line.fens[idx])
+        if leaf_eval is None:
+            return False
+        # Mover-POV: positive root = the line was supposed to favor White.
+        white_story = line.root_eval_cp > 0
+        white_leaf = leaf_eval > tolerance_cp
+        black_leaf = leaf_eval < -tolerance_cp
+        return (
+            (white_story and black_leaf) or (not white_story and white_leaf)
+        )
+
+    keep = len(line.fens)
+    while keep > 1 and _contradicts(keep - 1):
+        keep -= 1
+    if keep == len(line.fens):
+        return line
+    trimmed_line = line.model_copy(
+        update={
+            "line_uci": line.line_uci[:keep],
+            "line_san": line.line_san[:keep],
+            "fens": line.fens[:keep],
+            "leaf_fen": line.fens[keep - 1],
+            "trimmed_plies": line.trimmed_plies + (len(line.fens) - keep),
+            "leaf_quiescent": True,
+        }
+    )
+    return trimmed_line
 
 
 def diff_vectors(
