@@ -92,6 +92,7 @@ def run_rules(
     eval_cp: int | None = None,
     start_board: chess.Board | None = None,
     leaf_board: chess.Board | None = None,
+    cap: bool = True,
 ) -> list[Claim]:
     """Fire all rules; keep the strongest few claims.
 
@@ -124,7 +125,7 @@ def run_rules(
     material_ids = {"material_won", "material_standing", "tactical_material_loss"}
     material = [c for c in claims if c.rule_id in material_ids]
     rest = [c for c in claims if c.rule_id not in material_ids]
-    if len(rest) > MAX_CLAIMS_PER_MOVE:
+    if cap and len(rest) > MAX_CLAIMS_PER_MOVE:
         logger.debug(
             "run_rules: MAX_CLAIMS_PER_MOVE cap dropped %d claim(s) (mover=%s, cap=%d): %s",
             len(rest) - MAX_CLAIMS_PER_MOVE,
@@ -132,7 +133,7 @@ def run_rules(
             MAX_CLAIMS_PER_MOVE,
             [c.rule_id for c in rest[MAX_CLAIMS_PER_MOVE:]],
         )
-    return material + rest[:MAX_CLAIMS_PER_MOVE]
+    return material + (rest[:MAX_CLAIMS_PER_MOVE] if cap else rest)
 
 
 # ---------------------------------------------------------------------------

@@ -110,8 +110,13 @@ def _material_standing(leaf_board: chess.Board, changed: bool) -> _MatStanding |
     white_extra = {pt: d for pt, d in imb.items() if d > 0}
     black_extra = {pt: -d for pt, d in imb.items() if d < 0}
     val = sum(d * _MAT_VAL[pt] for pt, d in imb.items())
+    # A piece-count imbalance can still be equal in material (for example a
+    # rook against a bishop and two pawns). Do not choose a "subject" by the
+    # number of pieces or manufacture a one-pawn advantage for that side.
+    if val == 0:
+        return None
     white_subject = (
-        val > 0 if val != 0 else sum(white_extra.values()) >= sum(black_extra.values())
+        val > 0
     )
     side = "WHITE" if white_subject else "BLACK"
     subj = white_extra if white_subject else black_extra
@@ -119,7 +124,7 @@ def _material_standing(leaf_board: chess.Board, changed: bool) -> _MatStanding |
     return _MatStanding(
         label=_side_label(side),
         benef=_benef(side),
-        delta_cp=max(abs(val) * 100, 100),
+        delta_cp=abs(val) * 100,
         subj=subj,
         opp=opp,
         nonpawn_subj={pt: c for pt, c in subj.items() if pt != chess.PAWN},
@@ -160,9 +165,14 @@ def _phrase_exchange(s: _MatStanding) -> tuple[str, str, int] | None:
     )
     if not is_exchange:
         return None
+    # The short exchange phrases account for the opponent's extra pawns below,
+    # but not additional pawns held by the subject. Defer to the full inventory
+    # description whenever the subject also has a pawn surplus.
+    if s.subj_pawns:
+        return None
     if s.opp_pawns:
         return (
-            f"{s.label} has won an exchange for {_pawns_phrase(s.opp_pawns)}.",
+            f"{s.label} {'has won' if s.changed else 'is up'} an exchange for {_pawns_phrase(s.opp_pawns)}.",
             s.benef,
             s.delta_cp,
         )
@@ -178,12 +188,14 @@ def _phrase_single_minor(s: _MatStanding) -> tuple[str, str, int] | None:
     minor = _single_minor(s.nonpawn_subj)
     if not minor or s.nonpawn_opp:
         return None
+    if s.subj_pawns:
+        return None
     # Vary generic ("a piece") vs. specific ("a bishop"/"a knight") naming for
     # the same imbalance (Guid), chosen deterministically per position.
     noun = "piece" if s.seed % 2 == 0 else minor
     if s.opp_pawns:
         return (
-            f"{s.label} has won a {noun} for {_pawns_phrase(s.opp_pawns)}.",
+            f"{s.label} {'has won' if s.changed else 'is up'} a {noun} for {_pawns_phrase(s.opp_pawns)}.",
             s.benef,
             s.delta_cp,
         )
@@ -199,9 +211,11 @@ def _phrase_single_rook(s: _MatStanding) -> tuple[str, str, int] | None:
     )
     if not is_lone_rook:
         return None
+    if s.subj_pawns:
+        return None
     if s.opp_pawns:
         return (
-            f"{s.label} has won a rook for {_pawns_phrase(s.opp_pawns)}.",
+            f"{s.label} {'has won' if s.changed else 'is up'} a rook for {_pawns_phrase(s.opp_pawns)}.",
             s.benef,
             s.delta_cp,
         )
@@ -220,8 +234,9 @@ def _phrase_general(s: _MatStanding) -> tuple[str, str, int]:
     if opp_desc:
         connector = "against" if set(s.nonpawn_opp) == {chess.QUEEN} else "for"
         return f"{s.label} has {subj_desc} {connector} {opp_desc}.", s.benef, s.delta_cp
-    verb = "has won" if s.changed else "has"
-    return f"{s.label} {verb} {subj_desc}.", s.benef, s.delta_cp
+    text = (f"{s.label} has won {subj_desc}." if s.changed
+            else f"{s.label} is {subj_desc} up.")
+    return text, s.benef, s.delta_cp
 
 
 _MATERIAL_PHRASERS = (

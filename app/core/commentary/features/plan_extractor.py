@@ -56,7 +56,8 @@ def _targets_from_uci(
             m = chess.Move.from_uci(u)
             if m not in b.legal_moves:
                 break
-            dests.append(chess.square_name(m.to_square))
+            if b.piece_at(m.from_square).color == board.turn:
+                dests.append(chess.square_name(m.to_square))
             b.push(m)
         except Exception:
             break
@@ -73,16 +74,12 @@ def _side_cluster_label(
     if not files:
         return "unclear"
     avg = sum(files) / len(files)
-    if mover == chess.WHITE:
-        if avg >= 5:
-            return "kingside_activity"
-        if avg <= 2:
-            return "queenside_activity"
-    else:
-        if avg <= 2:
-            return "kingside_activity"
-        if avg >= 5:
-            return "queenside_activity"
+    # File names describe the same board wings for either color: files f-h
+    # are kingside and files a-c are queenside.
+    if avg >= 5:
+        return "kingside_activity"
+    if avg <= 2:
+        return "queenside_activity"
     return "central_play"
 
 
@@ -117,9 +114,15 @@ def classify_pv_plan(
             break
 
         mover = piece.color
+        root_mover = board.turn
         fr, ff = chess.square_rank(m.from_square), chess.square_file(m.from_square)
         tr, tf = chess.square_rank(m.to_square), chess.square_file(m.to_square)
-        dest_files.append(tf)
+        if mover == root_mover:
+            dest_files.append(tf)
+
+        if mover != root_mover:
+            b.push(m)
+            continue
 
         if piece.piece_type == chess.PAWN:
             if (
@@ -198,7 +201,7 @@ def build_plan_comparison(
     Returns (played_targets, best_targets, played_seed, best_seed,
              played_recurring_destinations, best_recurring_destinations,
              played_plan_tags, best_plan_tags).
-    Best: PV1 from root. Played: if differs from PV1[0], use PV2 line as proxy for an alternate plan.
+    Best: PV1 from root. Played: use a PV rooted at the played move, if present.
     """
     try:
         b0 = chess.Board(fen_before)
@@ -221,14 +224,23 @@ def build_plan_comparison(
         played_seed = best_seed
         played_chain = best_chain
         played_tags = best_tags
-    elif len(pvs) > 1 and pvs[1]:
-        alt_ucis = _uci_seq_from_pv(pvs[1])
-        played_targets = _targets_from_uci(b0, alt_ucis)
-        played_seed = _side_cluster_label(b0, played_targets, mover)
-        played_chain = _destination_chain(b0, alt_ucis)
-        played_tags = classify_pv_plan(b0, alt_ucis)
-    elif best_ucis:
-        played_seed = "deviation_from_engine_top_line"
+    else:
+        matching_line = next(
+            (
+                line
+                for line in pvs or []
+                if line and _uci_seq_from_pv(line)[:1] == [played_uci]
+            ),
+            None,
+        )
+        if matching_line:
+            alt_ucis = _uci_seq_from_pv(matching_line)
+            played_targets = _targets_from_uci(b0, alt_ucis)
+            played_seed = _side_cluster_label(b0, played_targets, mover)
+            played_chain = _destination_chain(b0, alt_ucis)
+            played_tags = classify_pv_plan(b0, alt_ucis)
+        else:
+            played_seed = "unknown"
 
     return (
         played_targets,

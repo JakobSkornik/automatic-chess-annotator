@@ -60,6 +60,7 @@ class EnvisionedLine(BaseModel):
     # (point 0 = start position, then one per kept ply). White-POV cp.
     # Lets the UI chart how the fired-rule features evolve through the line.
     feature_series: dict[str, list[int]] = Field(default_factory=dict)
+    evidence_valid: bool = True
 
 
 class Claim(BaseModel):
@@ -86,6 +87,9 @@ class Claim(BaseModel):
     # up and it materializes deeper in the line. Drives hedged phrasing
     # ("may lead to ...", "missed the potential to ...") in the composer.
     realization: str = "immediate"
+    support_ply: int | None = None
+    support_fen: str | None = None
+    baseline_fen: str | None = None
 
 
 class BestAlternative(BaseModel):
@@ -96,10 +100,12 @@ class BestAlternative(BaseModel):
     san: str
     uci: str
     eval_cp: int | None = None
+    eval_mate: int | None = None  # White-POV signed mate distance
     verdict: str = ""
     display_line: EnvisionedLine | None = None
     claims: list[Claim] = Field(default_factory=list)
     is_inferior: bool = False
+    horizon_matched: bool | None = None
     # Feature-diff-of-diffs against the played move (Improvement 3): the
     # features where this alternative's own start->leaf swing differs most
     # from the played move's, in cp. Additive to ``claims`` -- the existing
@@ -122,6 +128,8 @@ class CommentFacts(BaseModel):
         None  # White-POV cp before the move (transition verdicts)
     )
     eval_mate: int | None = None
+    terminal_result: str | None = None
+    move_number: int | None = None
     # For dubious moves: the opponent's punishing reply (SAN), straight from
     # the engine continuation — the "why it is bad" at board level.
     refutation_san: str | None = None
@@ -138,6 +146,7 @@ class CommentFacts(BaseModel):
     # ("In return, ..."), "consequence" for inaccuracies/mistakes/blunders
     # (the concessions ARE the explanation of the eval swing).
     concession_mode: str = "tradeoff"
+    selection_metadata: dict = Field(default_factory=dict)
 
     def feature_refs(self) -> list[str]:
         """Distinct feature names referenced across all claims, in first-seen order."""

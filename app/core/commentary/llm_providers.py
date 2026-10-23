@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+from pathlib import Path
 import queue
 import subprocess
 import sys
@@ -347,7 +348,7 @@ class CursorProvider:
         return _AgentOptions(
             api_key=api_key,
             model=model,
-            local=_LocalAgentOptions(cwd=os.getcwd()),
+            local=_LocalAgentOptions(cwd=str(Path(__file__).resolve().parents[3])),
         )
 
     async def _prompt(self, prompt: str, *, model: str) -> tuple[str, int]:
@@ -357,10 +358,23 @@ class CursorProvider:
         def _run() -> Any:
             return _Agent.prompt(prompt, opts)
 
-        try:
-            result = await asyncio.to_thread(_run)
-        except _CursorAgentError:
-            raise
+        for attempt in range(3):
+            try:
+                result = await asyncio.to_thread(_run)
+                break
+            except Exception as exc:
+                # The SDK can report code=internal with HTTP status 200.
+                # Retry only transient provider failures, never auth/input errors.
+                status = getattr(exc, "status", None)
+                code = getattr(exc, "code", None)
+                transient = code in ("internal", "unavailable", "resource_exhausted") or (
+                    isinstance(status, int) and (status == 429 or 500 <= status < 600)
+                )
+                if not transient or attempt == 2:
+                    raise
+                logger.warning("Cursor transient failure (%s, code=%s, status=%s); retry %d/2",
+                               type(exc).__name__, code, status, attempt + 1)
+                await asyncio.sleep(2 ** attempt)
         usage = _usage_total_cursor(result)
         status = getattr(result, "status", None)
         if status == "error":

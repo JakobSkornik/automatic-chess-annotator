@@ -48,7 +48,14 @@ def validate_facts_comment(text: str, facts: CommentFacts) -> bool:
         return False
     if facts.refutation_san and facts.refutation_san not in t:
         return False
-    return not ungrounded_motif_terms(t, facts)
+    if ungrounded_motif_terms(t, facts):
+        return False
+    # This legacy text entry point accepts only application-owned renderings.
+    # Free prose cannot be certified by vocabulary/SAN substring checks.
+    from .template import render_facts_template
+    from .framing import _ARCHETYPE_OPENER
+    return any(t == _normalize(render_facts_template(facts, archetype=arch))
+               for arch in (None, *_ARCHETYPE_OPENER))
 
 
 # Named tactics are checkable board facts, not shades of phrasing: either the

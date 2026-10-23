@@ -32,8 +32,6 @@ class MoveCommentaryContext:
     final_text: str = ""
     fallback_used: str | None = None
     composer_pass_label: str | None = None
-    # Reverse-order generation: what the game already "knows" about its future
-    future_context: str | None = None
     # Audience level the comment is generated at (job parameter)
     commentary_level: str = "intermediate"
 
@@ -69,20 +67,9 @@ class FactsComposeStage:
         facts = ctx.move_event.comment_facts
         if facts is None:
             return
-        from app.core.commentary.forbidden_phrases import scrub_forbidden
+        from app.core.commentary.forbidden_phrases import scrub_forbidden, forbidden_hit_strings
         from app.core.commentary.phases.composer import compose_facts_comment
-
-        enrichment: dict[str, Any] = {}
-        gc = ctx.game_context
-        # Opening scene-setting is only relevant while still in the opening;
-        # passing it on every key moment makes the model restate the opening
-        # line in every comment (Guid feedback).
-        if (gc.opening_name or gc.opening_eco) and ctx.move_event.phase == "opening":
-            enrichment["opening"] = (
-                f"{gc.opening_name or ''} ({gc.opening_eco or ''})".strip()
-            )
-        if ctx.future_context:
-            enrichment["what_happens_later"] = ctx.future_context
+        from app.core.commentary.phases.composer.framing import alt_gap_cp, ALT_MATERIAL_GAP_CP
 
         pl = ctx.composer_pass_label or (
             "key_moment" if ctx.move_event.key_moment_type else "teaching"
@@ -93,19 +80,61 @@ class FactsComposeStage:
             facts,
             model=model,
             effort=ctx.composer_effort,
-            enrichment=enrichment,
             level=ctx.commentary_level,
             key_moment_type=ctx.move_event.key_moment_type,
         )
-        text, forbidden_hits = scrub_forbidden(str(result.get("text") or ""))
+        text = str(result.get("text") or "")
+        if result.get("rendering_contract") == "grounded_narrative_v3" and result.get("semantic_review") in {"accepted", "disabled"}:
+            # Do not alter screened prose (including spaces before ...SAN).
+            # Historical phrase flags remain observable, without deleting words.
+            forbidden_hits = forbidden_hit_strings(text)
+        else:
+            text, forbidden_hits = scrub_forbidden(text)
         ctx.final_text = text
+        record_annotation = getattr(ctx.service, "record_annotation", None)
+        if record_annotation is not None:
+            await record_annotation({
+                "ply": ctx.move_event.ply,
+                "san": ctx.move_event.san,
+                "uci": ctx.move_event.uci,
+                "fen_after": ctx.move_event.fen_after,
+                "text": text,
+                "rendering": result.get("rendering"),
+                "contract_ok": result.get("contract_ok"),
+            })
         ctx.llm_debug.update(
             {
                 "facts_renderings": {ctx.commentary_level: result.get("rendering")},
                 "facts_contract_ok": result.get("contract_ok"),
+                "rendering_contract": result.get("rendering_contract", "claim_selection_v1"),
+                "prompt_version": result.get("prompt_version"),
+                "semantic_review": result.get("semantic_review", "not_applicable"),
+                "review_scope": result.get("review_scope"),
+                "selected_claims": result.get("selected_claims"),
+                "raw_proposal": result.get("raw_proposal"),
+                "claim_catalog": result.get("claim_catalog"),
+                "review_decisions": result.get("review_decisions"),
+                "fallback_reason": result.get("fallback_reason"),
+                "commentary_reason": result.get("commentary_reason"),
+                "commentary_status": result.get("commentary_status",
+                    "llm_unreviewed" if result.get("rendering") == "llm" else "template"),
+                "selection_metadata": facts.selection_metadata,
+                "missed_improvement": {
+                    "gap_cp": alt_gap_cp(facts),
+                    "threshold_cp": ALT_MATERIAL_GAP_CP,
+                    "detected": bool(
+                        facts.better_alternative and not facts.better_alternative.is_inferior
+                        and alt_gap_cp(facts) is not None
+                        and alt_gap_cp(facts) >= ALT_MATERIAL_GAP_CP
+                    ),
+                    "scope": "renderer_comparison_not_primary_key_moment_class",
+                },
                 "forbidden_phrase_hits": len(forbidden_hits),
                 "claims": [c.text for c in facts.claims],
                 "feature_refs": facts.feature_refs(),
+                "conversation_mode": "game_session" if getattr(
+                    ctx.service, "is_commentary_session", False
+                ) else "independent",
             }
         )
 

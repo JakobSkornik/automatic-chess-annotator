@@ -112,8 +112,14 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
         )
 
         # --- bishops ---
-        pair = _w("bishop_pair") if len(bishops) >= 2 else 0
-        put(f"{prefix}_BISHOP_PAIR", sign * pair, flag=len(bishops))
+        # The bishop-pair bonus requires one bishop on each square color.
+        # Two promoted bishops of the same color do not form a bishop pair.
+        bishop_colors = {
+            (chess.square_file(sq) + chess.square_rank(sq)) % 2
+            for sq in bishops
+        }
+        pair = _w("bishop_pair") if len(bishop_colors) == 2 else 0
+        put(f"{prefix}_BISHOP_PAIR", sign * pair, flag=len(bishop_colors))
 
         bishop_mobility = 0
         bad_bishops = 0
@@ -174,9 +180,11 @@ def compute_feature_vector(board: chess.Board) -> FeatureVector:
                 if chess.square_file(p) != f:
                     continue
                 rr, pr = chess.square_rank(sq), chess.square_rank(p)
-                if (color == chess.WHITE and rr < pr) or (
+                behind = (color == chess.WHITE and rr < pr) or (
                     color == chess.BLACK and rr > pr
-                ):
+                )
+                clear_path = p in board.attacks(sq)
+                if behind and clear_path:
                     behind_passer += 1
         connected = 0
         if len(rooks) >= 2:

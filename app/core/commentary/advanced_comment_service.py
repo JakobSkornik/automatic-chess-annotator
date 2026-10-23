@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 from app.core.commentary.llm_call_log import log_call as log_llm_call
@@ -45,6 +46,34 @@ class AdvancedCommentService:
     @property
     def provider_name(self) -> str:
         return self._provider.name
+
+    @property
+    def is_commentary_session(self) -> bool:
+        from app.core.commentary.commentary_session import CommentarySession
+        return isinstance(self._provider, CommentarySession)
+
+    @asynccontextmanager
+    async def commentary_session(self, game_id: str):
+        """Isolate conversation state per game, even when this service is shared."""
+        from app.core.commentary.commentary_session import CommentarySession
+        provider = CommentarySession(self._provider, game_id)
+        try:
+            yield AdvancedCommentService(provider=provider)
+        finally:
+            await provider.close()
+
+    async def record_annotation(self, record: dict[str, Any]) -> None:
+        if self.is_commentary_session:
+            await self._provider.record_annotation(record)
+
+    async def review_json(self, system: str, user: str, **kwargs) -> str:
+        """Screen prose without changing the writer's per-game conversation."""
+        provider = self._provider.provider if self.is_commentary_session else self._provider
+        reviewer = AdvancedCommentService(provider=provider)
+        try:
+            return await reviewer._llm_call_json_schema(system, user, **kwargs)
+        finally:
+            self._last_token_usage = (self._last_token_usage or 0) + (reviewer._last_token_usage or 0)
 
     # ------------------------------------------------------------------
     # LLM call helper
@@ -99,6 +128,11 @@ class AdvancedCommentService:
                 elapsed_ms=(time.perf_counter() - t0) * 1000,
                 ok=ok,
                 err=err,
+                session_context=({
+                    "session_id": self._provider.session_id,
+                    "turn_count": self._provider.turn_count,
+                    "request": self._provider.last_request,
+                } if self.is_commentary_session else None),
             )
 
     @staticmethod
@@ -114,6 +148,7 @@ class AdvancedCommentService:
         elapsed_ms: float,
         ok: bool,
         err: str | None,
+        session_context: dict[str, Any] | None = None,
     ) -> None:
         if ok and usage is None:
             logger.warning(
@@ -134,4 +169,5 @@ class AdvancedCommentService:
             elapsed_ms=elapsed_ms,
             ok=ok,
             error=err,
+            session_context=session_context,
         )

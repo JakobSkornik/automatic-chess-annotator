@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+import chess
+
 from app.core.commentary.features.guid_features import (
     doubled_pawn_files,
     passed_pawn_squares,
@@ -13,6 +15,32 @@ from .context import _benef, _benef_opp, _Ctx, _side_label, _toward
 from .material import _imbalance, describe_material
 
 logger = logging.getLogger(__name__)
+
+
+def _has_advanced_passer(ctx: _Ctx, side: str) -> bool:
+    """Require board evidence that a same-file passed pawn moved forward."""
+    if ctx.start_board is None or ctx.leaf_board is None:
+        return False
+    color = ctx.color(side)
+    start = passed_pawn_squares(ctx.start_board, color)
+    leaf = passed_pawn_squares(ctx.leaf_board, color)
+    leaf_by_file: dict[int, list[int]] = {}
+    for name in leaf:
+        square = chess.parse_square(name)
+        leaf_by_file.setdefault(chess.square_file(square), []).append(square)
+    for name in start:
+        square = chess.parse_square(name)
+        file = chess.square_file(square)
+        start_rank = chess.square_rank(square)
+        for after in leaf_by_file.get(file, []):
+            rank_gain = (
+                chess.square_rank(after) - start_rank
+                if color == chess.WHITE
+                else start_rank - chess.square_rank(after)
+            )
+            if rank_gain > 0:
+                return True
+    return False
 
 
 def rule_material(ctx: _Ctx) -> list[Claim]:
@@ -27,7 +55,8 @@ def rule_material(ctx: _Ctx) -> list[Claim]:
     changed = ctx.start_board is None or _imbalance(ctx.start_board) != _imbalance(
         ctx.leaf_board
     )
-    described = describe_material(ctx.leaf_board, changed=changed)
+    # A leaf imbalance is a state, not the amount this particular move won.
+    described = describe_material(ctx.leaf_board, changed=False)
     if described is None:
         return []
     text, benef, delta_cp = described
@@ -63,7 +92,8 @@ def rule_pawn_structure(ctx: _Ctx) -> list[Claim]:
     for side in SIDES:
         net = _toward(side, ctx.delta("EVALUATE_PAWNS"))
         involved = [f"{side}_{f}" for f in count_feats] + ["EVALUATE_PAWNS"]
-        # Concrete pawn-count changes for this side (toward = good for side).
+        # These count features are defects: a positive side-oriented change
+        # means more doubled/isolated/backward pawns, so it is a defect created.
         count_changes = [
             _toward(side, ctx.delta(f"{side}_{f}")) for f in count_feats
         ]
@@ -133,8 +163,12 @@ def rule_doubled_pawns(ctx: _Ctx) -> list[Claim]:
                 Claim(
                     rule_id="doubled_pawns_resolved",
                     beneficiary=_benef(side),
-                    text=f"{_side_label(side)} gets rid of the doubled pawns.",
-                    text_state=f"{_side_label(side)}'s doubled pawns are gone.",
+                    text=f"{_side_label(side)} reduces the doubled-pawn weakness.",
+                    text_state=(
+                        f"{_side_label(side)} still has doubled-pawn weaknesses."
+                        if pair[1] > 0
+                        else f"{_side_label(side)} has no doubled-pawn weaknesses."
+                    ),
                     features_involved=[name],
                     delta_cp=ctx.claim_cp(name),
                     flag_note=ctx.flag_change(name),
@@ -153,7 +187,7 @@ def rule_rook_behind_passer(ctx: _Ctx) -> list[Claim]:
                 Claim(
                     rule_id="rook_behind_passer",
                     beneficiary=_benef(side),
-                    text=f"{_side_label(side)}'s rook gets behind the passed pawn.",
+                    text=f"{_side_label(side)} has a rook behind a passed pawn.",
                     text_state=f"{_side_label(side)}'s rook is behind the passed pawn.",
                     features_involved=[name],
                     delta_cp=abs(ctx.delta(name)),
@@ -188,13 +222,14 @@ def rule_passed_pawn(ctx: _Ctx) -> list[Claim]:
             and pair[1] == pair[0]
             and pair[1] > 0
             and d >= THRESHOLDS["passer_advance"]
+            and _has_advanced_passer(ctx, side)
         ):
             out.append(
                 Claim(
                     rule_id="passed_pawn_advances",
                     beneficiary=_benef(side),
-                    text=f"{_side_label(side)}'s passed pawn advances dangerously.",
-                    text_state=f"{_side_label(side)}'s passed pawn is far advanced.",
+                    text=f"{_side_label(side)}'s passed pawn advances.",
+                    text_state=f"{_side_label(side)}'s passed pawn is further advanced.",
                     features_involved=[name],
                     delta_cp=d,
                 )
@@ -236,8 +271,8 @@ def rule_passer_escort(ctx: _Ctx) -> list[Claim]:
                 Claim(
                     rule_id="king_escorts_passer",
                     beneficiary=_benef(side),
-                    text=f"{_side_label(side)}'s king escorts the passed pawn forward.",
-                    text_state=f"{_side_label(side)}'s king supports the passed pawn.",
+                    text=f"{_side_label(side)} has a passed pawn close to its king.",
+                    text_state=f"{_side_label(side)} has a passed pawn close to its king.",
                     features_involved=[name, f"{side}_KING_ACTIVITY"],
                     delta_cp=d,
                 )

@@ -55,24 +55,24 @@ def verdict_for_transition(
         return verdict_for_eval(after_cp)
 
     if d < 0:  # the mover lost ground
-        if b > EQUAL_MAX_CP and a > EQUAL_MAX_CP:
+        if b >= EQUAL_MAX_CP and a >= EQUAL_MAX_CP:
             return f"lets {mover}'s advantage shrink"
-        if b > EQUAL_MAX_CP and -EQUAL_MAX_CP <= a <= EQUAL_MAX_CP:
+        if b >= EQUAL_MAX_CP and -EQUAL_MAX_CP < a < EQUAL_MAX_CP:
             return "lets the advantage slip away to equality"
-        if b > EQUAL_MAX_CP and a < -EQUAL_MAX_CP:
+        if b >= EQUAL_MAX_CP and a <= -EQUAL_MAX_CP:
             return f"throws away the advantage and hands {opp} {_adv_bracket(-a)}"
-        if -EQUAL_MAX_CP <= b <= EQUAL_MAX_CP and a < -EQUAL_MAX_CP:
+        if -EQUAL_MAX_CP < b < EQUAL_MAX_CP and a <= -EQUAL_MAX_CP:
             return f"concedes {_adv_bracket(-a)} to {opp}"
-        if b < -EQUAL_MAX_CP and a < b:
+        if b <= -EQUAL_MAX_CP and a < b:
             return f"makes matters worse — {opp} now has {_adv_bracket(-a)}"
         return verdict_for_eval(after_cp)
 
     # the mover gained ground (usually cashing in on the opponent's error)
-    if a > EQUAL_MAX_CP and b <= EQUAL_MAX_CP:
+    if a >= EQUAL_MAX_CP and b < EQUAL_MAX_CP:
         return f"seizes {a_lab} for {mover}"
-    if a > EQUAL_MAX_CP and b > EQUAL_MAX_CP:
+    if a >= EQUAL_MAX_CP and b >= EQUAL_MAX_CP:
         return f"extends {mover}'s advantage"
-    if -EQUAL_MAX_CP <= a <= EQUAL_MAX_CP:
+    if -EQUAL_MAX_CP < a < EQUAL_MAX_CP:
         return "restores the balance"
     return f"fights back, though {opp} keeps {_adv_bracket(-a)}"
 

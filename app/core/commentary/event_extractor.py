@@ -118,7 +118,11 @@ def _move_quality_for(
     negative = (MoveQuality.INACCURACY, MoveQuality.MISTAKE, MoveQuality.BLUNDER)
     if move_quality in negative and best_eval is not None and cur_score is not None:
         decisive = decisive_eval_cp()
-        if abs(best_eval) > decisive and abs(cur_score) > decisive:
+        if (
+            abs(best_eval) > decisive
+            and abs(cur_score) > decisive
+            and best_eval * cur_score > 0
+        ):
             move_quality = MoveQuality.GOOD
     return move_quality
 
@@ -433,6 +437,8 @@ class ChessEventExtractor:
         board_after: chess.Board | None = None,
     ) -> str | None:
         # Book plies carry no engine data and are never key moments.
+        if board_after is not None and board_after.is_game_over():
+            return "checkmate" if board_after.is_checkmate() else "game_end"
         key_moment = (
             None
             if in_book_ply

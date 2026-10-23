@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import logging
 import os
+import chess
 
 from app.models.Move import Move
 
 logger = logging.getLogger(__name__)
+
+
+def _mover_is_white(move: Move) -> bool:
+    """The position is after the move; custom games need not start with White."""
+    try:
+        return not chess.Board(move.position).turn
+    except ValueError:
+        return move.depth % 2 == 1
 
 
 def decisive_eval_cp() -> int:
@@ -219,7 +228,7 @@ def _kingside_attack_arc(current_move: Move, previous_move: Move | None) -> list
     The mover's own zone count is read from the Guid vector dump; a jump of
     ``KING_ZONE_ATTACK_JUMP`` or more in one move means a piece arrived in
     the enemy king's zone (sacrifice, lift, rook to the file against the king)."""
-    is_white = current_move.depth % 2 == 1
+    is_white = _mover_is_white(current_move)
     own_key = "WHITE_KING_ZONE_ATTACKS" if is_white else "BLACK_KING_ZONE_ATTACKS"
     curr = _zone_attacks_for(current_move.hiddenFeatures or {}, own_key)
     prev = (
@@ -329,7 +338,7 @@ class KeyMomentDetector:
         *,
         pv1_change_count: int = 0,
     ) -> list[str]:
-        is_white_move = current_move.depth % 2 == 1
+        is_white_move = _mover_is_white(current_move)
         score_change = current_move.score - previous_move.score  # type: ignore[operator]
         perspective_change = score_change if is_white_move else -score_change
         prev_hf = (previous_move.hiddenFeatures or {}) if previous_move else {}
@@ -340,7 +349,9 @@ class KeyMomentDetector:
         # is not a real mistake (Guid) — the negative triggers self-suppress.
         decisive = decisive_eval_cp()
         decided = (
-            abs(current_move.score) > decisive and abs(previous_move.score) > decisive
+            abs(current_move.score) > decisive
+            and abs(previous_move.score) > decisive
+            and current_move.score * previous_move.score > 0
         )
         return [
             *_eval_swing_class(perspective_change, decided),
@@ -407,7 +418,7 @@ class KeyMomentDetector:
     ) -> list[str]:
         curr_hf = current_move.hiddenFeatures or {}
         prev_hf = (previous_move.hiddenFeatures if previous_move else None) or {}
-        side = "white" if current_move.depth % 2 == 1 else "black"
+        side = "white" if _mover_is_white(current_move) else "black"
         return [
             *self._structural_transformation(curr_hf),
             *_king_safety_crisis(curr_hf, prev_hf, side),

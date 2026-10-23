@@ -9,6 +9,8 @@ EVAL_STORY_MIN_CP = 50  # show before->after eval story when it moved this much
 
 
 def eval_token(facts: CommentFacts) -> str:
+    if facts.terminal_result is not None:
+        return f"(Result: {facts.terminal_result})"
     if facts.eval_mate is not None:
         side = "White" if facts.eval_mate > 0 else "Black"
         return f"(#{abs(facts.eval_mate)} for {side}, {facts.engine}:{facts.depth})"
@@ -40,7 +42,7 @@ def _alt_pv_token(alt: BestAlternative) -> str:
 
 
 def _move_label(facts: CommentFacts) -> str:
-    move_no = (facts.ply + 1) // 2
+    move_no = facts.move_number or (facts.ply + 1) // 2
     dots = "." if facts.mover == "White" else "..."
     return f"{move_no}{dots}{facts.san}"
 

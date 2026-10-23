@@ -3,6 +3,8 @@ used whenever an LLM rendering fails the fact contract."""
 
 from __future__ import annotations
 
+import chess
+
 from app.core.commentary.rules.constants import INFERIOR_ALT_WEAKER_CP
 from app.models.comment_facts import Claim, CommentFacts
 
@@ -11,6 +13,7 @@ from .framing import (
     _is_alt_materially_better,
     _missed_noun,
     alt_gap_cp,
+    alternative_comparison,
 )
 from .tokens import _alt_pv_token, _gerundize, _move_label, eval_token, pv_token
 
@@ -19,9 +22,32 @@ def _claim_text(c: Claim, *, prefer_state: bool) -> str:
     """Change-form vs state-form (Guid subproblem 5), per claim: a change the
     move itself makes is stated in change form; one that only develops deeper
     in the line reads as a property of the envisioned position."""
-    if c.realization != "immediate" and c.text_state:
+    if prefer_state and c.realization != "immediate" and c.text_state:
         return c.text_state
     return c.text
+
+
+def _anchored_claims(claims, line) -> str:
+    """Keep later observations tied to their own displayed supporting move."""
+    out = []
+    for c in claims:
+        anchor = None
+        if line and c.support_ply and 1 <= c.support_ply <= len(line.line_uci):
+            try:
+                board = chess.Board(line.start_fen)
+                for uci in line.line_uci[:c.support_ply]:
+                    move = chess.Move.from_uci(uci)
+                    anchor = f"{board.fullmove_number}{'.' if board.turn else '...'}{board.san(move)}"
+                    board.push(move)
+            except ValueError:
+                anchor = None
+        prefix = f"After {anchor} in the analysed line, " if anchor else "In the analysed continuation, "
+        text = _claim_text(c, prefer_state=True)
+        if text.lower().startswith("in the displayed exchange"):
+            # This sentence already identifies its own displayed exchange.
+            prefix = ""
+        out.append(prefix + text)
+    return " ".join(out)
 
 
 def _render_head(facts: CommentFacts, variant: int, *, archetype: str | None) -> str:
@@ -43,7 +69,7 @@ def _render_head(facts: CommentFacts, variant: int, *, archetype: str | None) ->
 
 
 def _render_concessions(
-    concessions: list[Claim], concession_mode: str, variant: int
+    concessions: list[Claim], concession_mode: str, variant: int, line=None
 ) -> list[str]:
     """Immediate concessions stated as fact; envisioned ones framed as a risk."""
     if not concessions:
@@ -57,16 +83,17 @@ def _render_concessions(
             prefix = prefixes[variant % len(prefixes)]
             clauses = [c.text.rstrip(".") for c in immediate]
         else:
-            prefixes = ("In return, ", "On the other hand, ", "At the cost of ")
+            prefixes = (
+                "In return, ",
+                "On the other hand, ",
+                "The trade-off is that ",
+            )
             prefix = prefixes[variant % len(prefixes)]
             clauses = [_claim_text(c, prefer_state=False).rstrip(".") for c in immediate]
         out.append(prefix + " and ".join(clauses) + ".")
     if envisioned:
         # Envisioned concessions read as the state the line is heading toward.
-        clauses = [
-            _claim_text(c, prefer_state=True).rstrip(".") for c in envisioned
-        ]
-        out.append("Down the line, " + " and ".join(clauses) + ".")
+        out.append(_anchored_claims(envisioned, line))
     return out
 
 
@@ -85,13 +112,14 @@ def _render_claims(facts: CommentFacts, variant: int) -> list[str]:
         out.append(
             " ".join(_claim_text(c, prefer_state=True) for c in immediate_merits)
         )
-    if envisioned_merits:
-        clauses = [
-            _claim_text(c, prefer_state=True).rstrip(".") for c in envisioned_merits
-        ]
-        out.append("This sets up the following deeper in the line: "
-                   + " and ".join(clauses) + ".")
-    out += _render_concessions(concessions, facts.concession_mode, variant)
+    out += _render_concessions(
+        [c for c in concessions if c.realization != "envisioned"],
+        facts.concession_mode, variant, facts.display_line)
+    forecasts = sorted(
+        envisioned_merits + [c for c in concessions if c.realization == "envisioned"],
+        key=lambda c: c.support_ply or 0)
+    if forecasts:
+        out.append(_anchored_claims(forecasts, facts.display_line))
     return out
 
 
@@ -99,16 +127,21 @@ def _render_alternative(facts: CommentFacts, variant: int) -> str | None:
     alt = facts.better_alternative
     if alt is None:
         return None
+    def explanation() -> str:
+        immediate = [c.text for c in alt.claims if c.realization == "immediate"]
+        forecast = [c for c in alt.claims if c.realization != "immediate"]
+        return " ".join(immediate + ([_anchored_claims(forecast, alt.display_line)] if forecast else []))
     alt_pv = _alt_pv_token(alt)
     if alt.is_inferior:
         # The played move WAS best; contrast it with the runner-up. Wording
         # depends on the gap: clearly worse -> "Weaker was", else "comparable".
-        gap = alt_gap_cp(facts)  # mover-POV; <= 0 for a runner-up
-        clearly_weaker = gap is None or -gap >= INFERIOR_ALT_WEAKER_CP
+        comparison = alternative_comparison(facts, threshold_cp=INFERIOR_ALT_WEAKER_CP)
+        clearly_weaker = comparison == "weaker"
         lead = (
             f"Weaker was {alt.san}"
             if clearly_weaker
-            else (f"A comparable alternative was {alt.san}")
+            else (f"A comparable alternative was {alt.san}" if comparison == "comparable"
+                  else f"Another alternative was {alt.san}")
         )
         s = lead
         if alt.verdict:
@@ -117,16 +150,21 @@ def _render_alternative(facts: CommentFacts, variant: int) -> str | None:
             s += f" after {alt_pv}"
         s += "."
         if alt.claims:
-            s += " " + " ".join(c.text for c in alt.claims)
+            s += " " + explanation()
         return s
     if not _is_alt_materially_better(facts):
         # Roughly equal: present it as an option, not a miss.
-        s = f"A comparable alternative was {alt.san}"
+        comparison = alternative_comparison(facts)
+        label = "A comparable alternative" if comparison == "comparable" else (
+            "A weaker alternative" if comparison == "weaker" else "Another alternative")
+        s = f"{label} was {alt.san}"
+        if alt.verdict:
+            s += f", which {alt.verdict}"
         if alt_pv:
             s += f" after {alt_pv}"
         s += "."
         if alt.claims:
-            s += " The point: " + " ".join(c.text for c in alt.claims)
+            s += " " + explanation()
         return s
     if variant == 0:
         s = f"Better was {alt.san}"
@@ -141,12 +179,12 @@ def _render_alternative(facts: CommentFacts, variant: int) -> str | None:
         if alt_pv:
             s += f" after {alt_pv}"
     s += "."
+    gap = alt_gap_cp(facts)
+    if gap is not None:
+        s += (f" {facts.mover} missed a better continuation"
+              f" ({gap / 100:.2f} pawns better in the engine evaluation).")
     if alt.claims:
-        # The alternative's merits are what the mover passed up.
-        noun = _missed_noun(alt.claims)
-        s += f" {facts.mover} missed the {noun} here — " + " ".join(
-            c.text for c in alt.claims
-        )
+        s += " " + explanation()
     return s
 
 

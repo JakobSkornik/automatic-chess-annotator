@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class MoveScore(BaseModel):
@@ -33,13 +33,25 @@ class GameMove(BaseModel):
     score: MoveScore | None = None
     variations: list[Variation] = []
     comment: str | None = None
+    has_comment: bool = False
+    # Historical saved analyses have no generation provenance.
+    comment_kind: str | None = None
+    commentary_status: str | None = None
+    commentary_reason: str | None = None
+    @model_validator(mode="before")
+    @classmethod
+    def derive_comment_presence(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "has_comment" not in data:
+            data = dict(data)
+            data["has_comment"] = bool(str(data.get("comment") or "").strip())
+        return data
+
     classification: str | None = None
     # NAG-style symbol derived from the key-moment classification
     # (!! brilliant, ! best/great, ?! inaccuracy, ? mistake, ?? blunder).
     annotation: str | None = None
-    # True only for moves that received a real key-moment commentary pass
-    # (drives the move-list dot) — not the template-floor facts that every
-    # analyzed move carries.
+    # Key-moment eligibility is separate from actual comment presence;
+    # has_comment drives the move-list marker.
     is_key_moment: bool = False
     # True when this move carries a substantive comment that would actually be
     # used in the final annotated game (a key moment with real prose, not a
@@ -59,6 +71,7 @@ class GameMetadata(BaseModel):
     white: str
     black: str
     result: str
+    initial_fen: str | None = None
     eventId: str | None = None
     site: str | None = None
     round: str | None = None

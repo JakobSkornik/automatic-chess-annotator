@@ -103,6 +103,11 @@ class RefutationScanner:
             return []
 
         sign = 1 if board.turn == chess.WHITE else -1
+        shallow_scores = [sign * int(info["score"].white().score(mate_score=1000000))
+                          for info in shallow if isinstance(info, dict) and info.get("score") is not None]
+        if not shallow_scores or any(abs(cp) >= 999000 for cp in shallow_scores):
+            return []
+        best_shallow = max(shallow_scores)
         findings: list[RefutationFinding] = []
         for info in shallow:
             if not isinstance(info, dict):
@@ -116,7 +121,7 @@ class RefutationScanner:
                 cp = sign * int(sc.white().score(mate_score=1000000))
             except Exception:
                 continue
-            if cp < PLAUSIBLE_GAP_CP:
+            if best_shallow - cp > PLAUSIBLE_GAP_CP:
                 continue  # not plausible for the mover even at shallow depth
             # Deep re-search of just this move's line: push it, search deep.
             try:
@@ -131,15 +136,16 @@ class RefutationScanner:
                 deep_info = deep_info[0]
             if isinstance(deep_info, dict) and deep_info.get("score") is not None:
                 try:
-                    # Score after the mover's move, from the opponent's seat:
-                    # negate to get the mover-POV continuation eval.
-                    deep_cp = -sign * int(
+                    # .white() already fixes POV regardless of the child turn.
+                    deep_cp = sign * int(
                         deep_info["score"].white().score(mate_score=1000000)
                     )
                 except Exception:
                     continue
             if deep_cp is None:
                 continue
+            if abs(deep_cp) >= 999000:
+                continue  # mate distances are not centipawn differences
             collapse = cp - deep_cp
             if collapse >= REFUTATION_COLLAPSE_CP:
                 try:

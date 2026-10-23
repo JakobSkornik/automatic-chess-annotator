@@ -35,14 +35,19 @@ def classify_move_event(move_event: MoveEvent) -> MoveCategory:
     if move_event.move_quality == MoveQuality.INACCURACY:
         return MoveCategory.INACCURACY
 
+    try:
+        mover_sign = 1 if chess.Board(move_event.fen_before).turn else -1
+    except ValueError:
+        mover_sign = None  # Unknown mover: abstain from a perspective claim.
     if (
-        move_event.eval_before_cp is not None
-        and move_event.eval_before_cp <= -UNDER_PRESSURE_CP
+        mover_sign is not None
+        and move_event.eval_before_cp is not None
+        and mover_sign * move_event.eval_before_cp <= -UNDER_PRESSURE_CP
     ):
         if (
             move_event.eval_after_cp is not None
-            and move_event.eval_after_cp
-            >= move_event.eval_before_cp - DEFENSIVE_HOLD_TOLERANCE_CP
+            and mover_sign * (move_event.eval_after_cp - move_event.eval_before_cp)
+            >= -DEFENSIVE_HOLD_TOLERANCE_CP
         ):
             return MoveCategory.DEFENSIVE
 

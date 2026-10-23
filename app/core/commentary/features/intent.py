@@ -1,18 +1,8 @@
-"""Move-intent predicates (Guid: what the move is *for*).
+"""Conservative board-supported relationships at a selected evidence node.
 
-Feature deltas describe what changed; these predicates describe the plan a
-quiet move serves. All are cheap board comparisons between the position right
-after the move and the starting position, computed on demand inside the rule
-context (no new vector entries — intent is per-move, not a position metric):
-
-  - newly attacked enemy piece (h4-h5 ideas, rook lifts, knight outposts
-    aiming at a defender) -> "targets the bishop on g6"
-  - pawn phalanx facing an enemy pawn with own support behind -> "prepares
-    the break f5"
-  - pawn advance opening a file for an own rook behind it -> "opens the
-    h-file for the rook"
-
-Each predicate yields at most one claim; ``rule_intent`` keeps the strongest.
+These predicates compare the baseline with the displayed support position.
+They do not infer a player's intention or promise a future engine outcome.
+Each predicate yields at most one claim; ``rule_intent`` keeps the first.
 """
 
 from __future__ import annotations
@@ -41,6 +31,20 @@ def _piece_label(piece: chess.Piece) -> str:
     return names.get(piece.piece_type, "piece")
 
 
+def _for_side(board: chess.Board, color: chess.Color) -> chess.Board:
+    """Inspect legal opportunities for a side, without fabricating en passant."""
+    result = board.copy(stack=False)
+    if result.turn != color:
+        result.ep_square = None
+    result.turn = color
+    return result
+
+
+def _can_capture(board: chess.Board, color: chess.Color, square: int) -> bool:
+    view = _for_side(board, color)
+    return any(move.to_square == square for move in view.generate_legal_captures())
+
+
 def newly_attacked_enemy_piece(
     start: chess.Board, leaf: chess.Board, mover: chess.Color
 ) -> tuple[int, str] | None:
@@ -52,9 +56,9 @@ def newly_attacked_enemy_piece(
     for sq, piece in leaf.piece_map().items():
         if piece.color != enemy or piece.piece_type in (chess.PAWN, chess.KING):
             continue
-        if not leaf.is_attacked_by(mover, sq):
+        if not _can_capture(leaf, mover, sq):
             continue
-        if start.is_attacked_by(mover, sq):
+        if start.piece_at(sq) == piece and _can_capture(start, mover, sq):
             continue  # already attacked before the move — nothing new
         value = -piece.piece_type  # QUEEN=5 sorts first
         if best is None or value < best[0]:
@@ -64,60 +68,86 @@ def newly_attacked_enemy_piece(
     return best[1], best[2]
 
 
+def _prepared_break_move(
+    start: chess.Board, leaf: chess.Board, mover: chess.Color
+) -> chess.Move | None:
+    """A supported, quietly advanced pawn can advance again to contact a pawn.
+
+    A pawn blocked by an enemy pawn directly ahead cannot make this break.
+    Require a legal next advance and a new diagonal enemy-pawn contact; this
+    describes an available idea, not a forced continuation.
+    """
+    before = set(start.pieces(chess.PAWN, mover))
+    after = set(leaf.pieces(chess.PAWN, mover))
+    arrived, departed = after - before, before - after
+    if len(arrived) != 1 or len(departed) != 1:
+        return None
+    dest, origin = next(iter(arrived)), next(iter(departed))
+    step = 8 if mover else -8
+    if chess.square_file(origin) != chess.square_file(dest) or dest-origin not in (step, 2*step):
+        return None
+    if not (leaf.attackers(mover, dest) & leaf.pieces(chess.PAWN, mover)):
+        return None
+    target = dest + step
+    if not 0 <= target < 64 or chess.square_rank(target) in (0, 7):
+        return None
+    move = chess.Move(dest, target)
+    view = _for_side(leaf, mover)
+    if move not in view.legal_moves:
+        return None
+    enemy_pawns = leaf.pieces(chess.PAWN, not mover)
+    if leaf.attacks(dest) & enemy_pawns:
+        return None  # already in contact; no newly prepared advance
+    view.push(move)
+    if not (view.attacks(target) & enemy_pawns):
+        return None
+    return move
+
+
 def pawn_break_prepared(
     start: chess.Board, leaf: chess.Board, mover: chess.Color
 ) -> str | None:
-    """File letter of a break the moved pawn now threatens: the moved pawn's
-    file has exactly one enemy pawn directly ahead (a capturable target), the
-    pawn is supported by a friendly pawn, and the advance was quiet."""
-    enemy = not mover
-    # Which pawn moved? Diff the pawn sets.
-    start_pawns = set(start.pieces(chess.PAWN, mover))
-    leaf_pawns = set(leaf.pieces(chess.PAWN, mover))
-    arrived = leaf_pawns - {sq for sq in start_pawns}
-    if len(arrived) != 1 or len(start_pawns - leaf_pawns) != 1:
-        return None
-    dest = arrived.pop()
-    if chess.square_rank(dest) == 0 or chess.square_rank(dest) == 7:
-        return None
-    f = chess.square_file(dest)
-    ahead_sq = dest + (8 if mover == chess.WHITE else -8)
-    if not 0 <= ahead_sq < 64:
-        return None
-    if leaf.piece_type_at(ahead_sq) != chess.PAWN:
-        return None
-    if leaf.piece_at(ahead_sq).color != enemy:
-        return None
-    # Supported by a friendly pawn from behind-left/right on the origin side.
-    support_from = []
-    for df in (-1, 1):
-        sf = f + df
-        back = dest - (8 if mover == chess.WHITE else -8)
-        if 0 <= sf <= 7 and 0 <= back < 64:
-            s = chess.square(sf, chess.square_rank(back))
-            p = leaf.piece_at(s)
-            if p and p.piece_type == chess.PAWN and p.color == mover:
-                support_from.append(s)
-    if not support_from:
-        return None
-    return chess.FILE_NAMES[f]
+    """File of a supported pawn with a legal, pawn-challenging next advance."""
+    move = _prepared_break_move(start, leaf, mover)
+    return chess.FILE_NAMES[chess.square_file(move.from_square)] if move else None
+
+
+def _new_rook_file(
+    start: chess.Board, leaf: chess.Board, mover: chess.Color, *, semi_open: bool
+) -> int | None:
+    """A newly open/semi-open file, with a rook that can use its file ray."""
+    for sq in sorted(leaf.pieces(chess.ROOK, mover)):
+        f = chess.square_file(sq)
+        mask = chess.BB_FILES[f]
+        own_before = start.pieces_mask(chess.PAWN, mover) & mask
+        own_after = leaf.pieces_mask(chess.PAWN, mover) & mask
+        enemy_after = leaf.pieces_mask(chess.PAWN, not mover) & mask
+        if own_after or bool(enemy_after) != semi_open:
+            continue
+        if semi_open:
+            if not own_before:
+                continue
+        elif not (start.pawns & mask):
+            continue  # already open before the line
+        # A rook boxed in by friendly pieces has not gained usable access.
+        if not (leaf.attacks_mask(sq) & mask & ~leaf.occupied_co[mover]):
+            continue
+        return f
+    return None
 
 
 def file_opened_for_rook(
     start: chess.Board, leaf: chess.Board, mover: chess.Color
 ) -> int | None:
-    """File index whose only pawn left it this move while an own rook now
-    stands on that file behind the pawn's former position."""
-    start_pawns = set(start.pieces(chess.PAWN, mover))
-    leaf_pawns = set(leaf.pieces(chess.PAWN, mover))
-    departed = start_pawns - leaf_pawns
-    if len(departed) != 1:
-        return None
-    f = chess.square_file(departed.pop())
-    for sq in leaf.pieces(chess.ROOK, mover):
-        if chess.square_file(sq) == f:
-            return f
-    return None
+    """Newly pawn-free file for an own rook; advances on the file do not count."""
+    return _new_rook_file(start, leaf, mover, semi_open=False)
+
+
+def file_semi_opened_for_rook(
+    start: chess.Board, leaf: chess.Board, mover: chess.Color
+) -> int | None:
+    """Own pawns left the rook's file, but at least one enemy pawn remains."""
+    return _new_rook_file(start, leaf, mover, semi_open=True)
 
 
 def build_intent_claim(
@@ -139,15 +169,14 @@ def build_intent_claim(
             delta_cp=INTENT_CLAIM_CP,
         )
 
-    break_file = pawn_break_prepared(start, leaf, color)
-    if break_file is not None:
+    break_move = _prepared_break_move(start, leaf, color)
+    if break_move is not None:
+        advance = chess.square_name(break_move.to_square)
         return Claim(
             rule_id="intent_pawn_break",
             beneficiary=mover.lower(),
-            text=f"{side} prepares the break {break_file}-file pawn advance.",
-            text_state=(
-                f"{side} is preparing a pawn break on the {break_file}-file."
-            ),
+            text=f"{side} can consider {advance} to challenge an enemy pawn.",
+            text_state=f"{side} can consider {advance} to challenge an enemy pawn.",
             features_involved=[],
             delta_cp=INTENT_CLAIM_CP,
         )
@@ -158,8 +187,19 @@ def build_intent_claim(
         return Claim(
             rule_id="intent_opens_file",
             beneficiary=mover.lower(),
-            text=f"{side} opens the {fname}-file for the rook.",
+            text=f"The {fname}-file becomes open for {side.lower()}'s rook.",
             text_state=f"The {fname}-file is open for {side.lower()}'s rook.",
+            features_involved=[],
+            delta_cp=INTENT_CLAIM_CP,
+        )
+    semi_opened = file_semi_opened_for_rook(start, leaf, color)
+    if semi_opened is not None:
+        fname = chess.FILE_NAMES[semi_opened]
+        return Claim(
+            rule_id="intent_semi_opens_file",
+            beneficiary=mover.lower(),
+            text=f"The {fname}-file becomes semi-open for {side.lower()}'s rook.",
+            text_state=f"The {fname}-file is semi-open for {side.lower()}'s rook.",
             features_involved=[],
             delta_cp=INTENT_CLAIM_CP,
         )

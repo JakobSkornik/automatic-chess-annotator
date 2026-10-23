@@ -70,7 +70,7 @@ def _sanitized_game_id(game_id: str) -> str:
 
 
 def _path_for_game(game_id: str) -> Path:
-    return Path("logs") / "llm" / f"{_sanitized_game_id(game_id)}.jsonl"
+    return Path(os.environ.get("LOG_LLM_DIR", "logs/llm")) / f"{_sanitized_game_id(game_id)}.jsonl"
 
 
 def _lock_for_game(game_id: str) -> threading.Lock:
@@ -125,6 +125,7 @@ def log_call(
     elapsed_ms: float,
     ok: bool,
     error: str | None = None,
+    session_context: dict[str, Any] | None = None,
 ) -> int | None:
     if not is_enabled():
         return None
@@ -156,5 +157,8 @@ def log_call(
             "response": response,
             **_optional_context_fields(),
         }
+        if session_context is not None:
+            record["session_context"] = session_context
+            record["prompt_size_scope"] = "current_move_only; see session_context for conversation input"
         _append_call_record(gid, record)
         return seq

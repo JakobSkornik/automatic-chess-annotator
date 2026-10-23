@@ -17,6 +17,10 @@ def is_weak_enemy(board: chess.Board, square: int, attacker: chess.Color) -> boo
     piece = board.piece_at(square)
     if piece is None or piece.color != enemy:
         return False
+    # Kings are not capturable pieces. Their attacked squares belong in king
+    # safety logic, never in a weak-enemy or hanging-piece count.
+    if piece.piece_type == chess.KING:
+        return False
     if is_pawn_defended(board, square, enemy):
         return False
     attacks = attacker_count(board, attacker, square)

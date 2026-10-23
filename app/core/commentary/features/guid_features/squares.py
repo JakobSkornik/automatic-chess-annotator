@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import chess
 
+from .features.pieces._squares import is_outpost_square
 from .geometry import _is_passed, _pawn_files, _relative_rank
 
 
@@ -21,31 +22,11 @@ def doubled_pawn_files(board: chess.Board, color: chess.Color) -> list[str]:
 
 
 def outpost_squares(board: chess.Board, color: chess.Color) -> list[str]:
-    out: list[str] = []
-    for sq in board.pieces(chess.KNIGHT, color):
-        rel = _relative_rank(sq, color)
-        if not (3 <= rel <= 5):
-            continue
-        defended = any(
-            (p := board.piece_at(att)) is not None
-            and p.piece_type == chess.PAWN
-            and p.color == color
-            for att in board.attackers(color, sq)
-        )
-        if not defended:
-            continue
-        f, r = chess.square_file(sq), chess.square_rank(sq)
-        assailable = any(
-            abs(chess.square_file(esq) - f) == 1
-            and (
-                (color == chess.WHITE and chess.square_rank(esq) > r)
-                or (color == chess.BLACK and chess.square_rank(esq) < r)
-            )
-            for esq in board.pieces(chess.PAWN, not color)
-        )
-        if not assailable:
-            out.append(chess.square_name(sq))
-    return out
+    return [
+        chess.square_name(sq)
+        for sq in board.pieces(chess.KNIGHT, color)
+        if is_outpost_square(board, sq, color)
+    ]
 
 
 def bad_bishop_squares(board: chess.Board, color: chess.Color) -> list[str]:

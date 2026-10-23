@@ -51,6 +51,7 @@ from app.models.PgnMetadata import PgnMetadata
 from .analysis.board_utils import _board_before_mainline_move, _score_to_move_score
 from .analysis.comment_assembly import (
     _build_move_debug,
+    _comment_status,
     _build_variations,
     _resolve_comment_tokens,
     _resolve_move_comment,
@@ -60,6 +61,7 @@ from .analysis.engine_pass import AnalysisRetriever
 from .analysis.key_moments import (
     _annotation_symbol,
     _apply_back_to_back_key_moment_suppression,
+    _comment_selection,
     _promote_key_moment,
 )
 from .analysis.serialization import _build_feature_series, _facts_to_json
@@ -122,17 +124,24 @@ def _build_game_move(
     # Commentary side gate: when a side is selected, the other side's moves get
     # NO commentary apparatus at all (no comment, facts, dot, charts).
     side_sel = (state.metadata.comment_side or "both").lower()
-    mover_is_white = move_obj.depth % 2 == 1
+    mover_is_white = chess.Board(row.fen_before).turn == chess.WHITE
     side_ok = side_sel == "both" or (side_sel == "white") == mover_is_white
+    selection = _comment_selection(move_event) if move_event else {"allowed": False}
+    prose_ok = side_ok and selection["allowed"]
+    if move_event and move_event.comment_facts:
+        move_event.comment_facts.selection_metadata["comment_selection"] = selection
 
     comment = _resolve_move_comment(
         row,
         analyzed_move,
         move_event,
         key_moment,
-        side_ok=side_ok,
+        side_ok=prose_ok,
         seen_transitions=seen_transitions,
     ).comment
+    # Opening book labels are metadata rather than substantive move comments.
+    if not side_ok or (not prose_ok and (row.phase_raw or "") != "early"):
+        comment = None
 
     board_before = _board_before_mainline_move(game, idx)
     try:
@@ -141,6 +150,12 @@ def _build_game_move(
         san_main = move_obj.move
 
     facts = move_event.comment_facts if (move_event and side_ok) else None
+    status = _comment_status(analyzed_move, move_event, comment, row.phase_raw or "",
+                             eligible=bool(prose_ok and move_event and move_event.key_moment_type),
+                             llm_done=state.llm_done)
+    debug = _build_move_debug(analyzed_move, move_event, facts, comment, row.phase_raw or "")
+    if debug is not None:
+        debug.update(status)
     return GameMove(
         mn=board_before.fullmove_number,
         color="w" if board_before.turn == chess.WHITE else "b",
@@ -148,24 +163,25 @@ def _build_game_move(
         uci=move_obj.move,
         fen=move_obj.position,
         phase=str(row.phase_raw or analyzed_move.phase or "mid"),
-        score=_score_to_move_score(analyzed_move.score),
+        # Mate(0) loses the winner when serialized as an integer. A finished
+        # game has a result, rather than an ongoing position evaluation.
+        score=None if chess.Board(move_obj.position).is_game_over() else _score_to_move_score(analyzed_move.score),
         variations=_build_variations(game, idx, pvs),
         comment=comment,
+        **status,
         classification=key_moment,
         annotation=_annotation_symbol(key_moment) if side_ok else None,
-        is_key_moment=bool(move_event and move_event.key_moment_type and side_ok),
+        is_key_moment=bool(move_event and move_event.key_moment_type and prose_ok),
         final_comment=bool(
             comment
             and move_event
             and move_event.key_moment_type
-            and side_ok
+            and prose_ok
             and not move_event.brief_commentary
         ),
         resolved_tokens=_resolve_comment_tokens(comment, move_event),
         comment_facts=_facts_to_json(facts) if facts is not None else None,
-        debug=_build_move_debug(
-            analyzed_move, move_event, facts, comment, (row.phase_raw or "")
-        ),
+        debug=debug,
     )
 
 
@@ -246,6 +262,7 @@ def _build_metadata(
         white=headers.whiteName,
         black=headers.blackName,
         result=headers.result,
+        initial_fen=game.board().fen(),
         date=game.headers.get("Date"),
         eventId=headers.event,
         site=headers.site,
@@ -354,6 +371,23 @@ def _engine_analysis_order(total_moves: int) -> range:
     return range(total_moves)
 
 
+def _requires_tactical_analysis(board_before: chess.Board, board_after: chess.Board) -> bool:
+    """Book membership is metadata, not proof that a move is safe."""
+    if board_after.is_game_over() or board_before.is_check() or board_after.is_check():
+        return True
+    for source in (board_before, board_after):
+        board = source.copy(stack=False)
+        for move in list(board.legal_moves):
+            if not board.gives_check(move):
+                continue
+            board.push(move)
+            mate = board.is_checkmate()
+            board.pop()
+            if mate:
+                return True
+    return False
+
+
 async def _run_engine_pass(
     game: Game,
     retriever: AnalysisRetriever,
@@ -387,6 +421,8 @@ async def _run_engine_pass(
         board_after = chess.Board(move_obj.position)
         uci_prefix = retriever._uci_prefix_for_depth(move_obj.depth)
         move_obj.phase = phase_classifier.classify(board_after, uci_prefix)
+        if move_obj.phase == "early" and _requires_tactical_analysis(board_before, board_after):
+            move_obj.phase = "mid"
 
         if move_obj.phase == "early":
             await progress_callback(progress, f"Book: move {idx + 1}/{total_moves}")
@@ -436,20 +472,46 @@ async def _run_engine_pass(
 def _dedup_claims(
     facts: Any,
     ply: int,
-    last_claim_ply: dict[tuple[str | None, str | None], int],
+    last_claim_ply: dict[tuple[Any, ...], int],
     claim_window: int,
     structural_window: int,
 ) -> Any:
-    """Keep a claim's first occurrence; mute repeats within the dedup window."""
+    """Mute only repeated, evidence-identical persistent positional claims.
+
+    Concrete events must survive: a forecast capture and its later execution,
+    or two different captures by the same side, are separate explanations.
+    ``claim_window`` remains accepted for historical callers; event claims no
+    longer share a coarse rule/side repetition budget.
+    """
     kept = []
-    muted: list[str] = []
+    muted = list(facts.muted_claims)
     for c in facts.claims:
-        key = (c.rule_id, c.beneficiary)
-        window = (
-            structural_window if c.rule_id in _STRUCTURAL_RULE_IDS else claim_window
+        if c.rule_id not in _STRUCTURAL_RULE_IDS:
+            kept.append(c)
+            continue
+        # Position counters are irrelevant, but piece placement, turn, castling
+        # and en-passant rights all belong to the evidence. Realization keeps a
+        # previously forecast state from suppressing the move that achieves it.
+        baseline_fen = c.baseline_fen or (
+            facts.display_line.start_fen if facts.display_line else ""
+        )
+        support_fen = c.support_fen or (
+            facts.display_line.leaf_fen if facts.display_line else ""
+        )
+        key = (
+            c.rule_id,
+            c.beneficiary,
+            c.realization,
+            c.text,
+            tuple(c.features_involved),
+            c.delta_cp,
+            c.flag_note,
+            c.is_concession,
+            " ".join(baseline_fen.split()[:4]),
+            " ".join(support_fen.split()[:4]),
         )
         prev = last_claim_ply.get(key)
-        if prev is not None and (ply - prev) <= window:
+        if prev is not None and (ply - prev) <= structural_window:
             muted.append(c.text)
             continue
         last_claim_ply[key] = ply
@@ -468,7 +530,7 @@ def _attach_comment_facts(
     prober = _leaf_probe_prober(engine_connector) if engine_connector else None
     claim_window = int(os.environ.get("CLAIM_DEDUP_WINDOW_PLIES", "6"))
     structural_window = int(os.environ.get("STRUCTURAL_DEDUP_WINDOW_PLIES", "24"))
-    last_claim_ply: dict[tuple[str | None, str | None], int] = {}
+    last_claim_ply: dict[tuple[Any, ...], int] = {}
     for mi, move_event in enumerate(move_events):
         if not (0 <= move_event.move_index < len(analyzed_rows)):
             continue
@@ -488,10 +550,34 @@ def _attach_comment_facts(
             continue
         if facts is None:
             continue
-        facts = _dedup_claims(
-            facts, move_event.ply, last_claim_ply, claim_window, structural_window
-        )
+        # Selection must see all evidence, before editorial repetition filtering.
         new_km = _promote_key_moment(move_event, facts, facts.claims)
+        selection = _comment_selection(move_event, facts)
+        metadata = dict(facts.selection_metadata)
+        metadata["comment_selection"] = selection
+        if mi > 0:
+            previous = move_events[mi - 1]
+            try:
+                before = chess.Board(previous.fen_before)
+                previous_move = chess.Move.from_uci(previous.uci)
+                if previous_move in before.legal_moves:
+                    san = before.san(previous_move)
+                    before.push(previous_move)
+                    if before.fen() == previous.fen_after == move_event.fen_before:
+                        metadata["previous_move"] = {
+                            "fen_before": previous.fen_before,
+                            "fen_after": previous.fen_after,
+                            "uci": previous.uci, "san": san,
+                        }
+            except ValueError:
+                pass
+        facts = facts.model_copy(update={"selection_metadata": metadata})
+        if not selection["allowed"]:
+            new_km = None
+        if new_km:
+            facts = _dedup_claims(
+                facts, move_event.ply, last_claim_ply, claim_window, structural_window
+            )
         update: dict[str, Any] = {"comment_facts": facts}
         if new_km != move_event.key_moment_type:
             update["key_moment_type"] = new_km
@@ -595,7 +681,7 @@ async def run_engine_analysis_to_json(
             deep_after = me.eval_after_cp
             if deep_after is None:
                 continue
-            sign = -1 if _board_turn_is_white(me.fen_before) else 1
+            sign = 1 if _board_turn_is_white(me.fen_before) else -1
             mover_pov_deep = sign * int(deep_after)
             found = scanner.scan(me.fen_before, mover_pov_deep)
             if found:

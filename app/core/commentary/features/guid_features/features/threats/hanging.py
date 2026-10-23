@@ -22,6 +22,43 @@ def is_hanging(board: chess.Board, square: int, attacker: chess.Color) -> bool:
     return attacker_count(board, enemy, square) == 0
 
 
+def is_concretely_hanging(
+    board: chess.Board, square: int, attacker: chess.Color
+) -> bool:
+    """Conservative evidence for saying an enemy piece is hanging.
+
+    Require an undefended non-king target and at least one legal capture. The
+    feature count below remains the broader positional pressure heuristic; a
+    commentary claim needs evidence that the capture is actually available.
+    """
+    piece = board.piece_at(square)
+    if piece is None or piece.color == attacker or piece.piece_type == chess.KING:
+        return False
+    enemy = not attacker
+    if attacker_count(board, enemy, square) != 0:
+        return False
+
+    # board.attackers() is geometric, so a pinned piece can appear to attack
+    # the target even though moving it would expose its own king. Test capture
+    # legality with the attacking side to move, including when this is a
+    # non-moving-side static comparison.
+    probe = board.copy(stack=False)
+    if probe.turn != attacker:
+        probe.ep_square = None
+    probe.turn = attacker
+    return any(move.to_square == square for move in probe.generate_legal_captures())
+
+
+def squares(board: chess.Board, attacker: chess.Color) -> list[str]:
+    """Squares of undefended non-king pieces with a legal capture available."""
+    enemy = not attacker
+    return [
+        chess.square_name(square)
+        for square in chess.SquareSet(board.occupied_co[enemy])
+        if is_concretely_hanging(board, square, attacker)
+    ]
+
+
 def count(board: chess.Board, attacker: chess.Color) -> int:
     """Number of hanging enemy pieces from ``attacker``'s side."""
     enemy = not attacker

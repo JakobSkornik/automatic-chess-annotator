@@ -30,10 +30,36 @@ class EngineConnector:
         :param engine_path: The filesystem path to the engine executable.
         """
         self.engine_path = engine_path
-        self.hash_size = 32
-        self.threads = 4
-        self.use_nnue = False
+        self.threads = self._positive_env_int("STOCKFISH_THREADS", 4)
+        self.hash_size = self._positive_env_int("STOCKFISH_HASH_MB", 32)
+        requested_nnue = self._env_bool("STOCKFISH_USE_NNUE", False)
+        self.use_nnue: bool | None = requested_nnue
         self.engine = self._start_engine()
+
+    @staticmethod
+    def _positive_env_int(name: str, default: int) -> int:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a positive integer, got {value!r}") from exc
+        if parsed <= 0:
+            raise ValueError(f"{name} must be a positive integer, got {value!r}")
+        return parsed
+
+    @staticmethod
+    def _env_bool(name: str, default: bool) -> bool:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        raise ValueError(f"{name} must be a boolean value, got {value!r}")
 
     def _start_engine(self) -> chess.engine.SimpleEngine:
         """
@@ -43,12 +69,23 @@ class EngineConnector:
         """
         try:
             engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
-            engine.configure(
-                {
-                    "Hash": self.hash_size,
-                    "Threads": self.threads,
-                    "Use NNUE": self.use_nnue,
-                }
+            advertised = engine.options
+            options: dict[str, int | bool] = {}
+            if "Hash" in advertised:
+                options["Hash"] = self.hash_size
+            if "Threads" in advertised:
+                options["Threads"] = self.threads
+            if "Use NNUE" in advertised:
+                options["Use NNUE"] = bool(self.use_nnue)
+            else:
+                self.use_nnue = None
+            if options:
+                engine.configure(options)
+            logger.info(
+                "Engine configuration: Threads=%s, Hash=%s MB, Use NNUE=%s",
+                options.get("Threads", "engine default/unsupported"),
+                options.get("Hash", "engine default/unsupported"),
+                options.get("Use NNUE", "engine default/unsupported"),
             )
             return engine
         except Exception as e:

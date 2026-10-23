@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import chess
 
@@ -20,6 +20,11 @@ from app.core.commentary.features.envisioned import (
     trim_envisioned_line_by_probe,
 )
 from app.core.commentary.features.guid_features import compute_feature_vector_fen
+from app.core.commentary.features.experiment_selectors import (
+    horizons_match,
+    select_adaptive_horizon,
+    select_contrastive_claims,
+)
 from app.models.chess_events import AnalyzedMoveData, MoveEvent
 from app.models.comment_facts import (
     BestAlternative,
@@ -44,6 +49,7 @@ from .constants import (
 )
 from .realization import _line_feature_series
 from .verdicts import verdict_for_eval, verdict_for_transition
+from .tactical_evidence import CONCRETE_IDS, replay, tactical_claims
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +83,9 @@ class _FactsCtx:
     # Optional cheap engine prober for the post-build horizon-effect trim
     # (Improvement 1). None disables the trim (engine-free callers/tests).
     prober: Prober | None = None
+    horizon_policy: str = "current_quiet_bounded"
+    claim_policy: str = "current"
+    evidence_suppressions: list[dict] = field(default_factory=list)
 
 
 def _trim_line(line: EnvisionedLine, prober: Prober | None) -> EnvisionedLine:
@@ -200,18 +209,27 @@ def _two_horizon_claims(
     Immediate claims win per rule and per dominant feature; forecast claims are
     added only for features the move did not already move. Returns the merged
     claims and the leaf vector (for the material-loss fallback)."""
+    leaf_vec = compute_feature_vector_fen(line.leaf_fen)
+    if not replay(line):
+        return [], leaf_vec
+    if (
+        not line.evidence_valid
+        or not is_quiescent(ctx.board_before)
+        or not is_quiescent(chess.Board(line.leaf_fen))
+        or chess.Board(line.leaf_fen).is_game_over()
+    ):
+        return tactical_claims(line), leaf_vec
     immediate_fen = _first_quiet_fen(line)
     immediate_vec = compute_feature_vector_fen(immediate_fen)
-    leaf_vec = compute_feature_vector_fen(line.leaf_fen)
     common = {
         "phase": ctx.phase_raw,
         "mover": ctx.mover.upper(),
         "eval_cp": eval_cp,
         "start_board": ctx.board_before,
+        "cap": ctx.claim_policy != "contrastive",
     }
-    immediate_diff = _sharpen_immediate_diff(
-        diff_vectors(ctx.start_vec, immediate_vec), line, immediate_fen
-    )
+    # Numeric deltas, flags and square geometry must describe the SAME node.
+    immediate_diff = diff_vectors(ctx.start_vec, immediate_vec)
     immediate = run_rules(
         immediate_diff,
         leaf_board=chess.Board(immediate_fen),
@@ -223,9 +241,15 @@ def _two_horizon_claims(
         **common,
     )
     for claim in immediate:
-        claim.realization = "immediate"
+        claim.support_ply = line.fens.index(immediate_fen) + 1
+        claim.support_fen = immediate_fen
+        claim.baseline_fen = line.start_fen
+        claim.realization = "immediate" if claim.support_ply == 1 else "envisioned"
     for claim in forecast:
         claim.realization = "envisioned"
+        claim.support_ply = len(line.fens)
+        claim.support_fen = line.leaf_fen
+        claim.baseline_fen = line.start_fen
 
     seen_rules = {(c.rule_id, c.beneficiary) for c in immediate}
     seen_feats = {
@@ -240,28 +264,94 @@ def _two_horizon_claims(
         primary = c.features_involved[0] if c.features_involved else None
         return (primary, c.beneficiary) not in seen_feats
 
-    merged = immediate + [c for c in forecast if _is_new(c)]
-    return merged, leaf_vec
+    # Deduplicate only after checking persistence: an unstable immediate
+    # claim must not conceal a properly anchored, stable forecast fact.
+    merged = immediate + forecast
+    boards = replay(line)
+    kept = []
+    for claim in merged:
+        reason = None
+        support = claim.support_ply or 0
+        if boards and support < len(boards) - 1:
+            if "MATERIAL_BALANCE" in claim.features_involved:
+                # Material standing is an exact state. A temporary capture
+                # surplus must not survive a displayed recapture.
+                from .material import _imbalance
+                if any(_imbalance(b) != _imbalance(boards[support]) for b in boards[support + 1:]):
+                    reason = "material_state_changes_in_displayed_continuation"
+            elif any("PASS" in name for name in claim.features_involved):
+                import re
+                anchors = re.findall(r"\b[a-h][1-8]\b", claim.text)
+                for anchor in anchors:
+                    square = chess.parse_square(anchor)
+                    piece = boards[support].piece_at(square)
+                    if piece is None or piece.piece_type != chess.PAWN:
+                        continue
+                    # Follow the actual pawn, allowing legal advances/captures.
+                    for index in range(support + 1, len(boards)):
+                        move = chess.Move.from_uci(line.line_uci[index - 1])
+                        if move.from_square == square and boards[index - 1].piece_at(square) == piece:
+                            square = move.to_square
+                        if boards[index].piece_at(square) != piece:
+                            reason = "passed_pawn_anchor_removed_in_displayed_continuation"
+                            break
+        if reason:
+            ctx.evidence_suppressions.append({"rule_id": claim.rule_id, "reason": reason,
+                                              "support_ply": support, "branch": line.line_uci[:1]})
+        else:
+            kept.append(claim)
+    immediate_ids = {id(c) for c in immediate}
+    surviving_immediate = [c for c in kept if id(c) in immediate_ids]
+    seen_rules = {(c.rule_id, c.beneficiary) for c in surviving_immediate}
+    seen_feats = {(c.features_involved[0], c.beneficiary)
+                  for c in surviving_immediate if c.features_involved}
+    kept = surviving_immediate + [c for c in kept if id(c) not in immediate_ids and _is_new(c)]
+    concrete = tactical_claims(line)
+    if concrete:
+        # Concrete actions explain the move before broad activity scores. The
+        # opponent's incidental activity must not crowd out the reply evidence.
+        activity = {"activity_improved", "activity_reduced", "rooks_activated", "king_under_pressure", "king_safer", "piece_pinned"}
+        kept = [c for c in kept if c.rule_id not in activity]
+    return concrete + kept, leaf_vec
 
 
 def _played_line_claims(
     ctx: _FactsCtx,
-) -> tuple[EnvisionedLine, FeatureDiff, dict, list[Claim]]:
+) -> tuple[EnvisionedLine, FeatureDiff, dict, list[Claim], dict]:
     """Envisioned played line + its feature diff, leaf vector, and ordered claims."""
     move_event = ctx.move_event
     engine_meta = (ctx.row.hidden_features or {}).get("_engine") or {}
     after_pv = list(engine_meta.get("after_pv_uci") or [])
-    played_line = envisioned_for_played_move(
-        move_event.fen_before,
-        move_event.uci,
-        after_pv,
-        played_eval_cp=move_event.eval_after_cp,
-        depth=ctx.depth,
-    )
-    played_line = _trim_line(played_line, ctx.prober)
+    if ctx.horizon_policy == "adaptive_feature":
+        played_line, selection = select_adaptive_horizon(
+            move_event.fen_before,
+            [move_event.uci, *after_pv],
+            root_eval_cp=move_event.eval_after_cp,
+            depth=ctx.depth,
+            prober=ctx.prober,
+        )
+    else:
+        played_line = envisioned_for_played_move(
+            move_event.fen_before,
+            move_event.uci,
+            after_pv,
+            played_eval_cp=move_event.eval_after_cp,
+            depth=ctx.depth,
+        )
+        played_line = _trim_line(played_line, ctx.prober)
+        selection = {"version": "current_quiet_bounded", "selected_ply": len(played_line.fens)}
     claims, leaf_vec = _two_horizon_claims(ctx, played_line, move_event.eval_after_cp)
     line_diff = diff_vectors(ctx.start_vec, leaf_vec)
-    return played_line, line_diff, leaf_vec, order_claims_for_mover(claims, ctx.mover)
+    ordered = claims if ctx.claim_policy == "contrastive" else order_claims_for_mover(claims, ctx.mover)
+    return played_line, line_diff, leaf_vec, _concrete_first(ordered), selection
+
+
+def _concrete_first(claims: list[Claim]) -> list[Claim]:
+    """Event priority is independent of feature magnitudes or beneficiary."""
+    return sorted(claims, key=lambda c: (
+        0 if c.rule_id in CONCRETE_IDS else 1,
+        (c.support_ply or 0) if c.rule_id in CONCRETE_IDS else 0,
+    ))
 
 
 def _net_material_cp(vec: dict) -> int:
@@ -302,16 +392,20 @@ def _fallback_claim(
 
 
 def _alternative_merits(
-    best_claims: list[Claim], main_claims: list[Claim], mover: str
+    best_claims: list[Claim], main_claims: list[Claim], mover: str, claim_policy: str = "current"
 ) -> list[Claim]:
     """The alternative's own merits (max 2), never repeating the main block's claims."""
+    concrete = [c.model_copy(update={"is_concession": c.beneficiary not in (mover.lower(), None)})
+                for c in _concrete_first(best_claims) if c.rule_id in CONCRETE_IDS][:3]
+    if claim_policy == "contrastive":
+        return concrete + [c for c in best_claims if c.rule_id not in CONCRETE_IDS]
     main_texts = {c.text for c in main_claims}
     mover_key = mover.lower()
-    return [
+    return concrete + [
         c
         for c in best_claims
-        if c.beneficiary in (mover_key, None) and c.text not in main_texts
-    ][:MAX_ALTERNATIVE_MERITS]
+        if c.rule_id not in CONCRETE_IDS and c.beneficiary in (mover_key, None) and c.text not in main_texts
+    ][:max(0, MAX_ALTERNATIVE_MERITS - len(concrete))]
 
 
 def _feature_advantages(
@@ -354,10 +448,16 @@ def _build_better_alternative(
         else []
     )
     best_cp, best_mate = _decode_eval(move_event.best_move_eval_cp)
-    best_line = envisioned_for_best_move(
-        move_event.fen_before, best_pv_uci, best_eval_cp=best_cp, depth=ctx.depth
-    )
-    best_line = _trim_line(best_line, ctx.prober)
+    if ctx.horizon_policy == "adaptive_feature":
+        best_line, _selection = select_adaptive_horizon(
+            move_event.fen_before, best_pv_uci, root_eval_cp=best_cp,
+            depth=ctx.depth, prober=ctx.prober,
+        )
+    else:
+        best_line = envisioned_for_best_move(
+            move_event.fen_before, best_pv_uci, best_eval_cp=best_cp, depth=ctx.depth
+        )
+        best_line = _trim_line(best_line, ctx.prober)
     best_claims, best_leaf_vec = _two_horizon_claims(ctx, best_line, best_cp)
     if _is_decided(best_cp, best_mate):
         best_claims = _material_only(best_claims)
@@ -366,9 +466,10 @@ def _build_better_alternative(
         san=move_event.best_move_san or move_event.best_move_uci,
         uci=move_event.best_move_uci,
         eval_cp=best_cp,
+        eval_mate=best_mate,
         verdict=verdict_for_eval(best_cp, best_mate),
         display_line=best_line,
-        claims=_alternative_merits(best_claims, main_claims, ctx.mover),
+        claims=_alternative_merits(best_claims, main_claims, ctx.mover, ctx.claim_policy),
         feature_advantages=_feature_advantages(played_diff, alt_diff),
     )
 
@@ -404,10 +505,16 @@ def _build_inferior_alternative(
     except (ValueError, chess.IllegalMoveError):
         second_san = second_uci
     second_pv_uci = [str(m.move) for m in pvs[1] if getattr(m, "move", None)]
-    alt_line = envisioned_for_best_move(
-        move_event.fen_before, second_pv_uci, best_eval_cp=second_cp, depth=ctx.depth
-    )
-    alt_line = _trim_line(alt_line, ctx.prober)
+    if ctx.horizon_policy == "adaptive_feature":
+        alt_line, _selection = select_adaptive_horizon(
+            move_event.fen_before, second_pv_uci, root_eval_cp=second_cp,
+            depth=ctx.depth, prober=ctx.prober,
+        )
+    else:
+        alt_line = envisioned_for_best_move(
+            move_event.fen_before, second_pv_uci, best_eval_cp=second_cp, depth=ctx.depth
+        )
+        alt_line = _trim_line(alt_line, ctx.prober)
     alt_claims, alt_leaf_vec = _two_horizon_claims(ctx, alt_line, second_cp)
     if _is_decided(second_cp, second_mate):
         alt_claims = _material_only(alt_claims)
@@ -416,9 +523,10 @@ def _build_inferior_alternative(
         san=second_san,
         uci=second_uci,
         eval_cp=second_cp,
+        eval_mate=second_mate,
         verdict=verdict_for_eval(second_cp, second_mate),
         display_line=alt_line,
-        claims=_alternative_merits(alt_claims, main_claims, ctx.mover),
+        claims=_alternative_merits(alt_claims, main_claims, ctx.mover, ctx.claim_policy),
         is_inferior=True,
         feature_advantages=_feature_advantages(played_diff, alt_diff),
     )
@@ -455,7 +563,7 @@ def _is_decided(eval_cp: int | None, eval_mate: int | None) -> bool:
 def _material_only(claims: list[Claim]) -> list[Claim]:
     """In a decided position positional claims are noise (a passed pawn in
     mate-in-4); only the material standing still explains the result."""
-    return [c for c in claims if "MATERIAL_BALANCE" in c.features_involved]
+    return [c for c in claims if "MATERIAL_BALANCE" in c.features_involved or c.rule_id in CONCRETE_IDS]
 
 
 def _filter_claims(
@@ -495,7 +603,7 @@ def _filter_claims(
         claims = [
             c
             for c in claims
-            if c.is_concession or c.beneficiary not in (mover_key, None)
+            if c.rule_id in CONCRETE_IDS or c.is_concession or c.beneficiary not in (mover_key, None)
         ]
         if len(claims) < len(before):
             logger.debug(
@@ -506,18 +614,8 @@ def _filter_claims(
                 len(before) - len(claims),
                 [c.rule_id for c in before if c not in claims],
             )
-    if not claims and move_quality in _DUBIOUS:
-        fallback = _fallback_claim(ctx, leaf_vec, refutation_san)
-        if fallback is not None:
-            claims = [fallback]
-        else:
-            logger.debug(
-                "_filter_claims: zero claims survived for a %s move (ply=%s) and "
-                "no fallback claim was groundable — comment will rely on the "
-                "template head/verdict alone",
-                move_quality,
-                ctx.move_event.ply,
-            )
+    # When rules abstain, the verdict and legal variation are the explanation.
+    # Do not turn a partial tactical leaf into an ungrounded material claim.
     return claims
 
 
@@ -544,6 +642,8 @@ def build_comment_facts(
     *,
     depth: int = 16,
     prober: Prober | None = None,
+    horizon_policy: str = "current_quiet_bounded",
+    claim_policy: str = "current",
 ) -> CommentFacts | None:
     """Assemble the move's inviolable facts from data the engine pass already paid for.
 
@@ -551,11 +651,18 @@ def build_comment_facts(
     used to sanity-check envisioned lines' leaves against a horizon-effect
     contradiction before any claim/feature-diff is computed from them
     (Improvement 1); omit it for engine-free/offline callers and tests."""
+    if horizon_policy not in {"current_quiet_bounded", "adaptive_feature"}:
+        raise ValueError(f"unknown horizon policy: {horizon_policy}")
+    if claim_policy not in {"current", "contrastive"}:
+        raise ValueError(f"unknown claim policy: {claim_policy}")
     phase_raw = row.phase_raw or "mid"
     if phase_raw == "early":
         return None
 
     board_before = chess.Board(move_event.fen_before)
+    board_after = chess.Board(move_event.fen_after)
+    outcome = board_after.outcome()
+    terminal_result = outcome.result() if outcome is not None else None
     mover = "White" if board_before.turn == chess.WHITE else "Black"
     eval_cp, eval_mate = _decode_eval(move_event.eval_after_cp)
     eval_before_cp, _before_mate = _decode_eval(move_event.eval_before_cp)
@@ -568,9 +675,11 @@ def build_comment_facts(
         depth=depth,
         start_vec=compute_feature_vector_fen(move_event.fen_before),
         prober=prober,
+        horizon_policy=horizon_policy,
+        claim_policy=claim_policy,
     )
 
-    played_line, diff, leaf_vec, claims = _played_line_claims(ctx)
+    played_line, diff, leaf_vec, claims, horizon_selection = _played_line_claims(ctx)
     move_quality = move_event.move_quality.value if move_event.move_quality else ""
     refutation_san = _refutation_san(played_line, move_quality)
     claims = _filter_claims(
@@ -583,10 +692,38 @@ def build_comment_facts(
         leaf_vec=leaf_vec,
         refutation_san=refutation_san,
     )
-    better = _build_better_alternative(
+    better = None if terminal_result else (_build_better_alternative(
         ctx, claims, diff
-    ) or _build_inferior_alternative(ctx, claims, diff)
+    ) or _build_inferior_alternative(ctx, claims, diff))
+    contrast_selection = None
+    if better is not None:
+        better = better.model_copy(
+            update={"horizon_matched": horizons_match(played_line, better.display_line)}
+        )
+    if claim_policy == "contrastive" and better is not None:
+        played_concrete = [c for c in claims if c.rule_id in CONCRETE_IDS]
+        alternative_concrete = [c for c in better.claims if c.rule_id in CONCRETE_IDS]
+        claims, alt_claims, contrast_selection = select_contrastive_claims(
+            claims, better.claims, mover=mover
+        )
+        claims = played_concrete + [c for c in claims if c.rule_id not in CONCRETE_IDS]
+        alt_claims = alternative_concrete[:3] + [
+            c for c in alt_claims if c.rule_id not in CONCRETE_IDS
+        ][:max(0, MAX_ALTERNATIVE_MERITS - len(alternative_concrete))]
+        better = better.model_copy(update={"claims": _concrete_first(alt_claims)})
+    elif claim_policy == "contrastive":
+        played_concrete = [c for c in claims if c.rule_id in CONCRETE_IDS]
+        claims, _unused, contrast_selection = select_contrastive_claims(claims, [], mover=mover)
+        claims = played_concrete + [c for c in claims if c.rule_id not in CONCRETE_IDS]
+    claims = _concrete_first(claims)
     played_line, better = _attach_series(played_line, better, move_event.fen_before)
+    verdict = verdict_for_transition(eval_before_cp, eval_cp, eval_mate, mover)
+    if terminal_result:
+        claims = []
+        eval_mate = None  # integer zero cannot represent the winning side
+        eval_cp = None
+        verdict = (f"delivers checkmate for {mover}" if board_after.is_checkmate()
+                   else "ends the game in a draw")
 
     return CommentFacts(
         ply=move_event.ply,
@@ -594,7 +731,9 @@ def build_comment_facts(
         uci=move_event.uci,
         mover=mover,
         phase=phase_raw,
-        verdict=verdict_for_transition(eval_before_cp, eval_cp, eval_mate, mover),
+        verdict=verdict,
+        terminal_result=terminal_result,
+        move_number=board_before.fullmove_number,
         eval_cp=eval_cp,
         eval_before_cp=eval_before_cp,
         eval_mate=eval_mate,
@@ -606,4 +745,14 @@ def build_comment_facts(
         feature_diff=diff,
         better_alternative=better,
         concession_mode=_concession_mode(move_quality),
+        selection_metadata={
+            "horizon_policy": horizon_policy,
+            "claim_policy": claim_policy,
+            "horizon": horizon_selection,
+            "contrast": contrast_selection,
+            "evidence_suppressions": ctx.evidence_suppressions,
+            "alternative_horizon_matched": (
+                better.horizon_matched if better is not None else None
+            ),
+        },
     )

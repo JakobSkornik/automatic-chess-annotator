@@ -31,9 +31,9 @@ from app.models.comment_facts import (
 
 
 def base_display_plies() -> int:
-    """Standard PV length (Guid): 5 plies, extended only until quiescent."""
+    """Application display target; Guid does not prescribe a fixed ply count."""
     try:
-        return int(os.environ.get("ENVISIONED_BASE_PLIES", "5"))
+        return max(1, int(os.environ.get("ENVISIONED_BASE_PLIES", "5")))
     except ValueError:
         return 5
 
@@ -41,7 +41,7 @@ def base_display_plies() -> int:
 def max_display_plies() -> int:
     """Hard safety cap when extending the base length to reach a quiescent leaf."""
     try:
-        return int(os.environ.get("ENVISIONED_MAX_PLIES", "12"))
+        return max(1, int(os.environ.get("ENVISIONED_MAX_PLIES", "12")))
     except ValueError:
         return 12
 
@@ -111,14 +111,13 @@ def build_envisioned_line(
     depth: int | None = None,
     max_plies: int | None = None,
 ) -> EnvisionedLine:
-    """Walk the PV to a standard length, extending only until a quiescent leaf.
+    """Choose a bounded quiet endpoint, preserving terminal forcing lines.
 
-    Guid's spec: 5 plies as the standard PV length, or until a quiescent move
-    after 5 — so a line never ends mid-capture/-check, but also isn't padded
-    out to an arbitrary horizon.
+    If no quiet endpoint exists, retain the available tactical continuation
+    and mark its evidence unsuitable for strategic claims.
     """
     hard_cap = (
-        max_plies
+        max(1, max_plies)
         if max_plies is not None
         else max(base_display_plies(), max_display_plies())
     )
@@ -147,18 +146,20 @@ def build_envisioned_line(
 
     def _unsettled(k: int) -> bool:
         """Ply k ends on a forcing move or a non-quiescent leaf."""
+        if k == 0 or chess.Board(fens[k - 1]).is_game_over():
+            return False
         return _is_forcing(boards_before[k - 1], moves[k - 1]) or not is_quiescent(
             chess.Board(fens[k - 1])
         )
 
-    # Standard length is `base` plies; extend forward until the leaf settles
-    # (Guid: "5 plies, or until a quiescent move after 5").
+    # Extend past the display target to finish forcing play.
     keep = min(base, walked)
     while keep < walked and _unsettled(keep):
         keep += 1
-    # If the PV ran out mid-tactic, trim back so the line still ends quietly.
-    while keep > 1 and _unsettled(keep):
-        keep -= 1
+    if keep and _unsettled(keep):
+        quiet_prefixes = [k for k in range(1, keep) if not _unsettled(k)]
+        if quiet_prefixes:
+            keep = quiet_prefixes[-1]
     moves = moves[:keep]
     sans = sans[:keep]
     fens = fens[:keep]
@@ -178,6 +179,7 @@ def build_envisioned_line(
         trimmed_plies=trimmed,
         start_quiescent=start_q,
         leaf_quiescent=leaf_q,
+        evidence_valid=bool(keep) and not _unsettled(keep),
     )
 
 
@@ -194,26 +196,35 @@ def trim_envisioned_line_by_probe(
     eval beyond ``tolerance_cp``, tail plies are dropped one at a time (each
     re-probed) and the longest prefix whose eval story survives is kept.
     Engine-free lines and missing evals pass through untouched."""
-    if line.root_eval_cp is None or len(line.fens) < 2:
+    if (
+        line.root_eval_cp is None
+        or abs(line.root_eval_cp) >= 999000
+        or len(line.fens) < 2
+        or chess.Board(line.leaf_fen).is_game_over()
+    ):
         return line
 
     def _contradicts(idx: int) -> bool:
         leaf_eval = prober(line.fens[idx])
         if leaf_eval is None:
             return False
-        # Mover-POV: positive root = the line was supposed to favor White.
-        white_story = line.root_eval_cp > 0
-        white_leaf = leaf_eval > tolerance_cp
-        black_leaf = leaf_eval < -tolerance_cp
-        return (
-            (white_story and black_leaf) or (not white_story and white_leaf)
+        # Both scores are White-POV. Equality has no winning-side story.
+        return (line.root_eval_cp > tolerance_cp and leaf_eval < -tolerance_cp) or (
+            line.root_eval_cp < -tolerance_cp and leaf_eval > tolerance_cp
         )
 
-    keep = len(line.fens)
-    while keep > 1 and _contradicts(keep - 1):
-        keep -= 1
-    if keep == len(line.fens):
+    if not _contradicts(len(line.fens) - 1):
         return line
+    keep = 0
+    for k in range(len(line.fens) - 1, 0, -1):
+        before = chess.Board(line.start_fen if k == 1 else line.fens[k - 2])
+        move = chess.Move.from_uci(line.line_uci[k - 1])
+        leaf = chess.Board(line.fens[k - 1])
+        if is_quiescent(leaf) and not _is_forcing(before, move) and not _contradicts(k - 1):
+            keep = k
+            break
+    if not keep:
+        return line.model_copy(update={"evidence_valid": False})
     trimmed_line = line.model_copy(
         update={
             "line_uci": line.line_uci[:keep],
@@ -221,7 +232,8 @@ def trim_envisioned_line_by_probe(
             "fens": line.fens[:keep],
             "leaf_fen": line.fens[keep - 1],
             "trimmed_plies": line.trimmed_plies + (len(line.fens) - keep),
-            "leaf_quiescent": True,
+            "leaf_quiescent": is_quiescent(chess.Board(line.fens[keep - 1])),
+            "feature_series": {name: values[:keep + 1] for name, values in line.feature_series.items()},
         }
     )
     return trimmed_line
@@ -316,7 +328,7 @@ def diff_of_diffs(
                 advantage_cp=advantage_cp,
             )
         )
-    advantages.sort(key=lambda a: -abs(a.advantage_cp))
+    advantages.sort(key=lambda a: (-abs(a.advantage_cp), a.name))
     if max_features is not None:
         advantages = advantages[:max_features]
     return advantages

@@ -21,6 +21,7 @@ from app.models.GameJson import GameJson, GameMove
 logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"\[(\w+):([^\]]+)\]")
+_EVAL_TAG_RE = re.compile(r"\[%eval\s+[^\]]+\]")
 
 # Sentence-ending punctuation, but never the leading dots of a Black move
 # ("...Bd3"): those are notation, and without the guard the whitespace-tightening
@@ -76,6 +77,7 @@ def _flatten_tokens(text: str) -> tuple[str, list[list[str]]]:
         return content
 
     plain = _TOKEN_RE.sub(repl, text)
+    plain = re.sub(r"\(\s*\)", "", plain)
     # Adjacent tokens leave no space of their own, so a Black move can land
     # against the preceding word ("on e6...Bd3"); separate it before collapsing.
     plain = re.sub(r"(?<=\w)(\.\.\.(?=[KQRBNO]|[a-h][1-8]))", r" \1", plain)
@@ -212,12 +214,18 @@ def _try_add_line(
             )
         board.push(mv)
         advanced = True
-    if advanced and (leaf_cp is not None or leaf_mate is not None):
-        nag = _assessment_nag(leaf_cp, leaf_mate)
-        if nag:
-            cursor.nags.add(nag)
+    if advanced and board.is_game_over():
+        cursor.comment = (cursor.comment + f" Result: {board.result()}.").strip()
+    elif advanced and (leaf_cp is not None or leaf_mate is not None):
         tag = _eval_str(leaf_cp, leaf_mate, leaf_depth)
-        if tag:
+        # A merged PGN node can be reached by more than one PV. Keep the
+        # first evaluation and its assessment NAG attached to that position;
+        # later lines must not append contradictory eval/NAG pairs.
+        if not _EVAL_TAG_RE.search(cursor.comment):
+            nag = _assessment_nag(leaf_cp, leaf_mate)
+            if nag:
+                cursor.nags.add(nag)
+        if tag and not _EVAL_TAG_RE.search(cursor.comment):
             cursor.comment = (
                 f"{cursor.comment} {tag}".strip() if cursor.comment else tag
             )
@@ -266,7 +274,7 @@ def _flush_diverging_continuations(
             rest = cont[1:]
             if rest:
                 still_matching.append((rest, leaf))
-        elif len(cont) >= 2:
+        elif cont:
             _try_add_line(board_before, parent, cont, *leaf)
     return still_matching
 
@@ -298,6 +306,14 @@ def _annotate_move_node(
 
     if move.comment:
         plain, pv_lines = _flatten_tokens(move.comment)
+        if (move.final_comment and (move.debug or {}).get("rendering_contract") == "grounded_narrative_v3"):
+            # Narrative text deliberately contains no fixed PV/eval scaffolding.
+            # Preserve both analysis branches from the canonical fact record.
+            facts = move.comment_facts or {}
+            for branch in (facts, facts.get("better_alternative") or {}):
+                sans = (branch.get("display_line") or {}).get("san") or []
+                if sans and sans not in pv_lines:
+                    pv_lines.append(sans)
         if plain:
             comment_bits.append(plain)
         for sans in pv_lines:
@@ -324,7 +340,8 @@ def game_json_to_pgn(gj: GameJson) -> str:
     _build_pgn_headers(game, gj.metadata)
     default_depth = gj.analysis_info.depth if gj.analysis_info else None
 
-    board = chess.Board()
+    board = chess.Board(gj.metadata.initial_fen) if gj.metadata.initial_fen else chess.Board()
+    game.setup(board)
     node: chess.pgn.GameNode = game
     # Continuations that still match the game so far; they only become variations
     # at the ply where they diverge. Each carries its leaf eval for annotation.
@@ -332,7 +349,7 @@ def game_json_to_pgn(gj: GameJson) -> str:
     for move in gj.moves:
         mv = _legal_move_or_none(board, move)
         if mv is None:
-            break
+            raise ValueError(f"Cannot export illegal move {move.uci} from {board.fen()}")
         board_before = board.copy(stack=False)
         parent = node
         pending = _flush_diverging_continuations(
@@ -343,10 +360,17 @@ def game_json_to_pgn(gj: GameJson) -> str:
         _tag_move_nags(node, move)
         _annotate_move_node(node, parent, board_before, move, default_depth, pending)
 
-    # Continuations still matching at the end of the game extend past it.
+    # A first child after the final recorded move becomes PGN's mainline,
+    # falsely claiming the continuation was played. Keep such analysis in
+    # the final comment instead; branching before recorded moves stays RAV.
+    emitted_terminal_continuations: set[tuple[str, ...]] = set()
     for cont, leaf in pending:
-        if len(cont) >= 2:
-            _try_add_line(board, node, cont, *leaf)
+        if cont:
+            key = tuple(cont)
+            if key in emitted_terminal_continuations:
+                continue
+            emitted_terminal_continuations.add(key)
+            node.comment = (node.comment + " Continuation: " + " ".join(cont) + ".").strip()
 
     out = io.StringIO()
     exporter = chess.pgn.FileExporter(out)

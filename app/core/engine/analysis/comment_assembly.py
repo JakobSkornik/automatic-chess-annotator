@@ -77,8 +77,11 @@ def _fallback_comment(
         and move_event.brief_commentary
         and move_event.commentary_stub_ref_ply is not None
     ):
+        ref_ply = move_event.commentary_stub_ref_ply
+        ref_move = (ref_ply + 1) // 2
+        ref_notation = f"{ref_move}." if ref_ply % 2 else f"{ref_move}..."
         return (
-            f"Continues the same theme as around ply {move_event.commentary_stub_ref_ply} "
+            f"Continues the same theme as around move {ref_notation} "
             f"(see that move's commentary)."
         )
     return _facts_floor_comment(move_event) or _key_moment_comment(
@@ -137,6 +140,9 @@ def _resolve_move_comment(
     through to silence.
     """
     mc = _MoveComment()
+    if move_event and move_event.comment_facts and move_event.comment_facts.terminal_result:
+        mc.comment = _facts_floor_comment(move_event) if side_ok else None
+        return mc
     if (row.phase_raw or "") == "early":
         mc.comment = _opening_comment(analyzed_move)
     elif move_event and move_event.key_moment_type and side_ok:
@@ -148,7 +154,11 @@ def _resolve_move_comment(
             mc.comment = _fallback_comment(move_event, key_moment)
     elif move_event and move_event.brief_commentary and side_ok:
         mc.comment = _fallback_comment(move_event, key_moment)
-    _append_transition_sentence(mc, move_event, side_ok, seen_transitions)
+    llm = (analyzed_move.hiddenFeatures or {}).get("_llm", {})
+    whole_annotation = (isinstance(llm, dict) and llm.get("rendering_contract") == "grounded_narrative_v3"
+                        and llm.get("semantic_review") in {"accepted", "disabled"})
+    if not whole_annotation:
+        _append_transition_sentence(mc, move_event, side_ok, seen_transitions)
     return mc
 
 
@@ -175,6 +185,11 @@ def _append_transition_sentence(
     kind = move_event.phase_transition
     if not kind:
         return
+    from app.core.commentary.features.envisioned import is_quiescent
+    board = chess.Board(move_event.fen_after)
+    if (board.is_game_over() or not is_quiescent(board)
+            or (move_event.eval_after_cp is not None and abs(move_event.eval_after_cp) >= 999000)):
+        return
     if seen_transitions is not None:
         if kind in seen_transitions:
             return
@@ -190,11 +205,9 @@ def _append_transition_sentence(
 
 def _transition_sentence(move_event: MoveEvent, kind: str) -> str:
     base = (
-        "The queens are off — the game enters its final phase, where technique "
-        "matters more than tactics."
+        "Both queens are off the board."
         if kind == "queens_off"
-        else "With so few pieces left, this is an endgame now: king activity and "
-        "pawns decide it."
+        else "The reduced material marks the transition to an endgame."
     )
     eval_after = move_event.eval_after_cp
     if eval_after is None:
@@ -313,11 +326,42 @@ def _build_move_debug(
         "muted_claims": muted,
         "renderings": renderings,
         "contract_ok": contract_ok,
+        "rendering_contract": ((analyzed_move.hiddenFeatures or {}).get("_llm") or {}).get("rendering_contract"),
+        "commentary_validation": {
+            key: ((analyzed_move.hiddenFeatures or {}).get("_llm") or {}).get(key)
+            for key in ("prompt_version", "semantic_review", "review_scope", "selected_claims", "raw_proposal",
+                        "review_decisions", "fallback_reason", "commentary_status", "missed_improvement", "claim_catalog")
+        },
+        "selection_metadata": getattr(facts, "selection_metadata", {}),
         # Plausible moves that only deep search exposed as bad (Guid Search
         # Module). Empty list = nothing found / scan disabled.
         "refutations": list(move_event.refutations or []),
         "phase_transition": move_event.phase_transition,
     }
+
+
+def _comment_status(analyzed_move, move_event, comment, phase_raw, *, eligible, llm_done):
+    """Expose provenance separately from selection and the visible template floor."""
+    llm = ((analyzed_move.hiddenFeatures or {}).get("_llm") or {})
+    status = llm.get("commentary_status") if comment else None
+    reason = llm.get("commentary_reason") or llm.get("fallback_reason")
+    terminal = bool(move_event and move_event.comment_facts and move_event.comment_facts.terminal_result)
+    if phase_raw == "early" and comment:
+        kind, status = "book", "book"
+    elif move_event and move_event.brief_commentary and comment:
+        kind, status = "reference", "reference"
+    elif status:
+        kind = "llm" if status.startswith("llm_") else "template"
+    elif (eligible and not llm_done and not terminal and not llm.get("comment")
+          and not (move_event and _nothing_instructive_to_say(move_event))):
+        kind, status = "pending", "pending"
+    elif comment:
+        kind, status = "template", "template"
+    else:
+        kind, status = "none", "skipped"
+        reason = "not_selected" if not eligible else "no_instructive_comment"
+    return dict(has_comment=bool(comment and comment.strip()), comment_kind=kind,
+                commentary_status=status, commentary_reason=reason)
 
 
 def _resolve_comment_tokens(

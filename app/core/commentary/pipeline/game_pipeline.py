@@ -23,6 +23,7 @@ from app.core.engine.analysis_retriever import (
     _apply_back_to_back_key_moment_suppression,
     _pv_line_for_ai_payload,
 )
+from app.core.engine.analysis.key_moments import _comment_selection
 
 logger = logging.getLogger(__name__)
 
@@ -99,16 +100,6 @@ def _resolve_commentary_params(
     return eff, level, side
 
 
-def _game_outcome(result: str | None) -> tuple[str, str]:
-    result_str = str(result or "*")
-    winner_note = {
-        "1-0": "White went on to win",
-        "0-1": "Black went on to win",
-        "1/2-1/2": "the game ended in a draw",
-    }.get(result_str, "the result was unrecorded")
-    return result_str, winner_note
-
-
 def _promote_turning_points(move_events: list[Any], context: Any) -> None:
     """Mark heuristic turning points as critical_decision key moments."""
     turning_points = compute_turning_points(move_events)
@@ -128,14 +119,22 @@ def _promote_turning_points(move_events: list[Any], context: Any) -> None:
 def _key_moment_order(move_events: list[Any], side: str) -> list[int]:
     """Indices of side-relevant key moments, latest ply first (reverse-order pass)."""
 
-    def mover_matches(ply: int) -> bool:
-        return side == "both" or (side == "white") == (ply % 2 == 1)
+    def mover_matches(event: Any) -> bool:
+        import chess
+        white = chess.Board(event.fen_before).turn == chess.WHITE
+        return side == "both" or (side == "white") == white
+
+    for event in move_events:
+        selection = _comment_selection(event)
+        if event.comment_facts:
+            event.comment_facts.selection_metadata["comment_selection"] = selection
 
     return sorted(
         [
             mi
             for mi, move_event in enumerate(move_events)
-            if move_event.key_moment_type and mover_matches(move_event.ply)
+            if move_event.key_moment_type and mover_matches(move_event)
+            and _comment_selection(move_event)["allowed"]
         ],
         key=lambda i: -move_events[i].ply,
     )
@@ -169,6 +168,11 @@ def _write_llm_comment(
                 slot["facts_renderings"] = llm_debug["facts_renderings"]
             if "facts_contract_ok" in llm_debug:
                 slot["facts_contract_ok"] = llm_debug["facts_contract_ok"]
+            for key in ("rendering_contract", "prompt_version", "semantic_review", "review_scope",
+                        "selected_claims", "raw_proposal", "review_decisions", "fallback_reason",
+                        "selection_metadata", "missed_improvement", "claim_catalog", "commentary_status", "commentary_reason"):
+                if key in llm_debug:
+                    slot[key] = llm_debug[key]
         return
 
 
@@ -197,33 +201,9 @@ class _LlmRun:
     side: str
     progress_callback: Callable[[float, str], Awaitable[None]] | None
     commentary_callback: Callable[[str, dict[str, Any]], Awaitable[None]] | None
-    result_str: str
-    winner_note: str
-    future_comments: list[dict[str, Any]] = field(default_factory=list)
     audit_coverage: list[float] = field(default_factory=list)
     audit_evals: list[int] = field(default_factory=list)
     audit_forbidden: int = 0
-    # Prose variety: the game outcome is stated once (earliest commented ply
-    # in reading order = last one generated in this reverse sweep); later
-    # generations must not repeat it. Also counts how many comments already
-    # exist so prompts can vary their closers.
-    win_note_budget: int = 1
-
-    def future_context_text(self) -> str:
-        parts = []
-        if self.win_note_budget > 0:
-            parts.append(f"Game outcome: {self.result_str} ({self.winner_note}).")
-            self.win_note_budget -= 1
-        else:
-            parts.append(
-                "Game outcome: already mentioned earlier — do NOT repeat who "
-                "won or that the result is known."
-            )
-        for fc in self.future_comments[:3]:
-            parts.append(
-                f"Later, at move {(fc['ply'] + 1) // 2} ({fc['san']}): {fc['text'][:160]}"
-            )
-        return "\n".join(parts)[:1200]
 
 
 class GameAnnotationPipeline:
@@ -252,7 +232,6 @@ class GameAnnotationPipeline:
             _promote_turning_points(state.move_events, state.context)
             _apply_back_to_back_key_moment_suppression(state.move_events, state.context)
 
-            result_str, winner_note = _game_outcome(state.metadata.result)
             run = _LlmRun(
                 state=state,
                 service=advanced_commenter,
@@ -261,8 +240,6 @@ class GameAnnotationPipeline:
                 side=side,
                 progress_callback=progress_callback,
                 commentary_callback=commentary_callback,
-                result_str=result_str,
-                winner_note=winner_note,
             )
             # Reverse order: each comment can see what happens later (foreshadowing).
             ordered_mis = _key_moment_order(state.move_events, side)
@@ -272,8 +249,10 @@ class GameAnnotationPipeline:
                 ),
                 1,
             )
-            for pos, mi in enumerate(ordered_mis):
-                await self._comment_one_key_moment(run, mi, pos, n_total)
+            async with advanced_commenter.commentary_session(state.metadata.id) as session:
+                run.service = session
+                for pos, mi in enumerate(ordered_mis):
+                    await self._comment_one_key_moment(run, mi, pos, n_total)
 
             state.context.critical_moments = [
                 e for e in state.move_events if e.is_critical
@@ -299,7 +278,6 @@ class GameAnnotationPipeline:
         level = run.level
         progress_callback = run.progress_callback
         commentary_callback = run.commentary_callback
-        future_comments = run.future_comments
         move_event = move_events[mi]
         composer_model = resolve_model(
             advanced_commenter.provider_name,
@@ -334,6 +312,7 @@ class GameAnnotationPipeline:
                         "moveId": move_id,
                         "context": "mainline",
                         "status": "start",
+                        "commentary_status": "generating",
                         "startedAt": time.time(),
                         "model": composer_model,
                         "effort": eff,
@@ -348,35 +327,20 @@ class GameAnnotationPipeline:
                     composer_effort=eff,
                     key_moment_type=move_event.key_moment_type,
                     composer_pass_label="key_moment",
-                    future_context=run.future_context_text(),
                     commentary_level=level,
                 )
                 mctx = await MoveCommentaryPipeline().run(mctx)
                 text = mctx.final_text
                 llm_debug = dict(mctx.llm_debug or {})
+                status = llm_debug.get("commentary_status", "template_provider_failed")
+                comment_status = {"has_comment": bool(text and text.strip()),
+                                  "comment_kind": "llm" if status.startswith("llm_") else "template",
+                                  "commentary_status": status,
+                                  "commentary_reason": llm_debug.get("commentary_reason") or llm_debug.get("fallback_reason")}
+                llm_debug.update(comment_status)
 
                 if text:
                     _write_llm_comment(analyzed_rows, move_event.ply, text, llm_debug)
-                    arch_snip = str(
-                        (context.game_digest or {}).get("strategic_archetype") or ""
-                    )
-                    motif_hint = ", ".join(
-                        llm_debug.get("composer_named_motifs") or []
-                    ) or (
-                        "heuristic-fallback"
-                        if llm_debug.get("fallback_used") == "heuristic"
-                        else "—"
-                    )
-                    hints = list(context.prior_context_snippets or [])
-                    hints.append(
-                        f"After {move_event.san} (ply {move_event.ply}): {motif_hint}; archetype={arch_snip}"
-                    )
-                    context.prior_context_snippets = hints[-6:]
-                    # Reverse order: this comment is "the future" for
-                    # every move still to be commented.
-                    future_comments.insert(
-                        0, {"ply": move_event.ply, "san": move_event.san, "text": text}
-                    )
                 _record_audit(run, llm_debug)
                 if commentary_callback and text:
                     resolved_tokens = resolve_tokens_for_comment(
@@ -388,6 +352,7 @@ class GameAnnotationPipeline:
                             "moveId": move_id,
                             "context": "mainline",
                             "data": {
+                                **comment_status,
                                 "summary": text,
                                 "commentary": text,
                                 "pv_line": _pv_line_for_ai_payload(row),

@@ -9,9 +9,7 @@ from app.core.commentary.features.guid_features import (
 )
 from app.models.comment_facts import Claim
 
-import chess
-
-from .constants import SIDES, THRESHOLDS
+from .constants import COUNT_CLAIM_CP, DECISIVE_CLAIM_CP, SIDES, THRESHOLDS
 from .context import _benef, _benef_opp, _Ctx, _side_label, _toward
 
 logger = logging.getLogger(__name__)
@@ -82,11 +80,22 @@ def rule_strong_knight(ctx: _Ctx) -> list[Claim]:
                 )
             )
         elif -d >= THRESHOLDS["strong_knight"]:
+            remaining = ctx.flag_pair(name)
+            still_has_one = bool(remaining and remaining[1] > 0)
             out.append(
                 Claim(
                     rule_id="strong_knight_lost",
                     beneficiary=_benef_opp(side),
-                    text=f"{_side_label(side)} no longer has a strong knight.",
+                    text=(
+                        f"{_side_label(side)} loses one of the strong knights."
+                        if still_has_one
+                        else f"{_side_label(side)} no longer has a strong knight."
+                    ),
+                    text_state=(
+                        f"{_side_label(side)} still has a strong knight."
+                        if still_has_one
+                        else f"{_side_label(side)} has no strong knight."
+                    ),
                     features_involved=[name, cent],
                     delta_cp=ctx.claim_cp(name),
                     flag_note=ctx.flag_change(name),
@@ -133,8 +142,14 @@ def rule_bad_bishop(ctx: _Ctx) -> list[Claim]:
                 Claim(
                     rule_id="bad_bishop_solved",
                     beneficiary=_benef(side),
-                    text=f"{_side_label(side)} solves the problem of the bad bishop{where}.",
-                    text_state=f"{_side_label(side)}'s bad bishop{where} is no longer a problem.",
+                    text=(
+                        f"{_side_label(side)} reduces the problem of the bad bishop{where}."
+                    ),
+                    text_state=(
+                        f"{_side_label(side)} has fewer bad bishops."
+                        if pair[1] > 0
+                        else f"{_side_label(side)} has no bad bishop."
+                    ),
                     features_involved=[
                         name,
                         f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR",
@@ -168,16 +183,22 @@ def rule_rook_activity(ctx: _Ctx) -> list[Claim]:
             )
             continue
         feats = [f"{side}_ROOK_OPEN_FILE", f"{side}_ROOK_HALF_OPEN_FILE"]
-        d = sum(_toward(side, ctx.delta(f)) for f in feats)
-        if d >= THRESHOLDS["rook_activity"]:
+        open_delta = _toward(side, ctx.delta(feats[0]))
+        half_open_delta = _toward(side, ctx.delta(feats[1]))
+        d = open_delta + half_open_delta
+        cp_delta = (
+            open_delta * COUNT_CLAIM_CP["ROOK_OPEN_FILE"]
+            + half_open_delta * COUNT_CLAIM_CP["ROOK_HALF_OPEN_FILE"]
+        )
+        if d >= THRESHOLDS["rook_activity"] and cp_delta > 0:
             out.append(
                 Claim(
                     rule_id="rooks_activated",
                     beneficiary=_benef(side),
-                    text=f"{_side_label(side)}'s rooks become more active on the open files.",
-                    text_state=f"{_side_label(side)}'s rooks are active on the open files.",
+                    text=f"{_side_label(side)}'s rooks become more active on open or semi-open files.",
+                    text_state=f"{_side_label(side)}'s rooks are more active on open or semi-open files.",
                     features_involved=feats,
-                    delta_cp=ctx.claim_cp(feats[0]) + ctx.claim_cp(feats[1]),
+                    delta_cp=cp_delta,
                 )
             )
     return out
@@ -200,8 +221,8 @@ def rule_king_safety(ctx: _Ctx) -> list[Claim]:
                 Claim(
                     rule_id="king_under_pressure",
                     beneficiary=_benef_opp(side),
-                    text=f"{_side_label(side)}'s king comes under pressure.",
-                    text_state=f"{_side_label(side)}'s king is under pressure.",
+                    text=f"{_side_label(side)}'s king comes under more pressure.",
+                    text_state=f"{_side_label(side)}'s king is under more pressure.",
                     features_involved=[name, f"{opp}_KING_TROPISM"],
                     delta_cp=-d,
                 )
@@ -215,7 +236,7 @@ def rule_king_safety(ctx: _Ctx) -> list[Claim]:
                     rule_id="king_safer",
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)}'s king is now safer.",
-                    text_state=f"{_side_label(side)}'s king is safe.",
+                    text_state=f"{_side_label(side)}'s king is under less pressure.",
                     features_involved=[name, f"{opp}_KING_TROPISM"],
                     delta_cp=d,
                 )
@@ -281,7 +302,7 @@ def rule_piece_activity(ctx: _Ctx) -> list[Claim]:
                     rule_id="activity_improved",
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)} has improved the activity of the pieces.",
-                    text_state=f"{_side_label(side)}'s pieces are actively placed.",
+                    text_state=f"{_side_label(side)}'s pieces are more active.",
                     features_involved=[name],
                     delta_cp=ctx.claim_cp(name),
                 )
@@ -292,7 +313,7 @@ def rule_piece_activity(ctx: _Ctx) -> list[Claim]:
                     rule_id="activity_reduced",
                     beneficiary=_benef_opp(side),
                     text=f"{_side_label(side)}'s pieces become more passive.",
-                    text_state=f"{_side_label(side)}'s pieces are passive.",
+                    text_state=f"{_side_label(side)}'s pieces are less active.",
                     features_involved=[name],
                     delta_cp=ctx.claim_cp(name),
                 )
@@ -310,8 +331,8 @@ def rule_center_and_space(ctx: _Ctx) -> list[Claim]:
                 Claim(
                     rule_id="center_control",
                     beneficiary=_benef(side),
-                    text=f"{_side_label(side)} takes control of the center.",
-                    text_state=f"{_side_label(side)} controls the center.",
+                    text=f"{_side_label(side)} increases its influence over the center.",
+                    text_state=f"{_side_label(side)} exerts more influence over central squares.",
                     features_involved=[f"{side}_CENTER_CONTROL"],
                     delta_cp=c,
                 )
@@ -323,7 +344,7 @@ def rule_center_and_space(ctx: _Ctx) -> list[Claim]:
                     rule_id="space_gained",
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)} gains space.",
-                    text_state=f"{_side_label(side)} has a space advantage.",
+                    text_state=f"{_side_label(side)} attacks more squares in the enemy half.",
                     features_involved=[f"{side}_SPACE"],
                     delta_cp=s,
                 )
@@ -346,8 +367,8 @@ def rule_king_activity(ctx: _Ctx) -> list[Claim]:
                 Claim(
                     rule_id="king_activated",
                     beneficiary=_benef(side),
-                    text=f"{_side_label(side)}'s king becomes active.",
-                    text_state=f"{_side_label(side)}'s king is active.",
+                    text=f"{_side_label(side)}'s king moves closer to the center.",
+                    text_state=f"{_side_label(side)}'s king is closer to the center.",
                     features_involved=[name],
                     delta_cp=d,
                 )
@@ -361,18 +382,19 @@ def rule_intent(ctx: _Ctx) -> list[Claim]:
     it reads them from the context; at most one intent claim per pass, for
     the mover only. Suppressed in decided positions — plans are noise there
     (Guid: positional claims dropped when the eval is decisive)."""
-    if ctx.leaf_board is None:
+    if ctx.start_board is None or ctx.leaf_board is None:
         return []
-    if ctx.eval_cp is not None and abs(ctx.eval_cp) > 500:
+    if ctx.eval_cp is not None and abs(ctx.eval_cp) > DECISIVE_CLAIM_CP:
         logger.debug(
-            "rule_intent: suppressed outright (|eval_cp|=%d > 500) mover=%s",
+            "rule_intent: suppressed outright (|eval_cp|=%d > %d) mover=%s",
             abs(ctx.eval_cp),
+            DECISIVE_CLAIM_CP,
             ctx.mover,
         )
         return []
     from app.core.commentary.features.intent import build_intent_claim
 
     claim = build_intent_claim(
-        ctx.start_board or chess.Board(), ctx.leaf_board, _side_label(ctx.mover)
+        ctx.start_board, ctx.leaf_board, _side_label(ctx.mover)
     )
     return [claim] if claim is not None else []

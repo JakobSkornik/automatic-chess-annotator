@@ -1,6 +1,6 @@
-"""Guid-format comment composition.
+"""Evidence-grounded composition with versioned comparison modes.
 
-Every comment follows the dissertation's shape (Fig. 5.2):
+The deterministic fallback and legacy modes follow this rigid shape:
 
     {move} {verdict} after {variation} ({eval}, Stockfish:{depth}).
     {fired-rule claims}. [Better was {best move}: {its claims}.]
@@ -20,10 +20,13 @@ is explained around them:
                 (what a passed pawn IS), jargon avoided or defined inline,
                 one short takeaway tied to a fired claim's concept.
 
-A single LLM call renders the level chosen at submit time; the text is
-validated against the fact contract (eval + PV tokens verbatim, alternative
-named) and any failure falls back to the deterministic template. With no LLM
-configured (or ``HUMANIZATION_LEVEL=0``) the output is always the template.
+By default a writer owns the whole annotation with deterministic validation.
+Set COMMENTARY_LLM_REVIEW_ENABLED=1 to add an isolated semantic screening call. The application supplies facts, protected values and variations.
+``grounded_rewrite_v2`` preserves the earlier fragment-rewriting comparison.
+Rejection falls back to a deterministic template. This screening is not proof of
+chess correctness. ``COMMENTARY_RENDER_MODE=bounded`` retains the original
+one-call ID/order/wording editor for comparisons. With no configured provider or
+``HUMANIZATION_LEVEL=0`` the output is always the template.
 
 This package splits that work into cohesive modules:
   tokens       verbatim eval/PV strings and move labels
@@ -36,23 +39,24 @@ This package splits that work into cohesive modules:
 from __future__ import annotations
 
 import logging
+import json
 import os
 from typing import Any
 
-from app.models.comment_facts import CommentFacts, EnvisionedLine
+from app.models.comment_facts import Claim, CommentFacts, EnvisionedLine
 
 from .framing import ALT_MATERIAL_GAP_CP, alt_gap_cp, comment_archetype
 from .prompts import (
-    ARCHETYPE_RULES,
-    AUDIENCE_BLOCKS,
-    ENRICHMENT_RULES,
-    GUID_COMPOSER_SYSTEM,
     SINGLE_LEVEL_SCHEMA,
     build_facts_user_prompt,
 )
 from .template import render_facts_template
 from .tokens import eval_token, pv_token
 from .validation import _parse_text, validate_facts_comment
+from .grounded import (
+    EDITOR_SCHEMA, EDITOR_SYSTEM, EDITOR_VERSION, SESSION_SYSTEM, editor_prompt,
+    has_editorial_choice, render_editor_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +68,8 @@ DEFAULT_LEVEL = "intermediate"
 BEGINNER_MAX_MERITS = 2
 BEGINNER_MAX_CONCESSIONS = 1
 
-# Displayed-variation length per audience (Guid subproblem 3: how long a
-# variation to show depends on the reader's strength). Beginners see fewer
-# plies; experts keep the full envisioned line. The stored CommentFacts keep
-# the full line — this trims only the PV token rendered into the comment.
+# Legacy experiment settings retained for importing research scripts. The
+# current renderer preserves evidence endpoints; these caps are not applied.
 LEVEL_BASE_PLIES: dict[str, int] = {
     "beginner": 3,
     "intermediate": 5,
@@ -114,6 +116,7 @@ def _result(text: str, rendering: str, contract_ok: bool, level: str) -> dict[st
         "rendering": rendering,
         "contract_ok": contract_ok,
         "level": level,
+        "prompt_version": EDITOR_VERSION,
     }
 
 
@@ -124,42 +127,13 @@ def _is_provider_configured(service: Any) -> bool:
         return False
 
 
-def _build_system_prompt(level: str, archetype: str) -> str:
-    system = (
-        GUID_COMPOSER_SYSTEM + "\n" + AUDIENCE_BLOCKS[level] + "\n" + ENRICHMENT_RULES
-    )
-    if archetype in ARCHETYPE_RULES:
-        system += "\n" + ARCHETYPE_RULES[archetype]
-    return system
-
-
-async def _call_composer(
-    service: Any, system: str, user: str, model: str | None, effort: str, ply: int
-) -> str:
-    """One fact-contract LLM call; returns the parsed text, or "" on failure."""
-    try:
-        raw = await service._llm_call_json_schema(
-            system,
-            user,
-            model=model,
-            effort=effort,
-            schema=SINGLE_LEVEL_SCHEMA,
-            schema_name="facts_comment",
-            max_output_tokens=COMPOSER_MAX_OUTPUT_TOKENS,
-        )
-        return _parse_text(raw)
-    except Exception as e:
-        logger.warning("facts composer LLM call failed (ply %s): %s", ply, e)
-        return ""
-
-
 def _audience_claims(facts: CommentFacts, level: str) -> list[Claim]:
     """Trim the claim list to the audience's budget (strongest kept).
 
-    Beginner: the fewest and most fundamental claims; expert/intermediate:
-    everything fired. The stored CommentFacts stay complete — this only shapes
+    Beginner/intermediate: two merits and one concession; expert: everything
+    fired. The stored CommentFacts stay complete — this only shapes
     what the comment itself conveys."""
-    if level != "beginner" or len(facts.claims) <= BEGINNER_MAX_MERITS + BEGINNER_MAX_CONCESSIONS:
+    if level == "expert":
         return facts.claims
     merits = [c for c in facts.claims if not c.is_concession]
     concessions = [c for c in facts.claims if c.is_concession]
@@ -167,28 +141,16 @@ def _audience_claims(facts: CommentFacts, level: str) -> list[Claim]:
 
 
 def _audience_line(line: EnvisionedLine | None, level: str) -> EnvisionedLine | None:
-    """Trim the displayed line to the audience's variation length (Guid
-    subproblem 3). Never extends a line; only shortens, and never below one
-    ply. The cut point is not re-verified for quiescence — the full line was
-    quiescence-trimmed at build time and only the tail gets dropped."""
-    if line is None:
-        return None
-    cap = LEVEL_BASE_PLIES.get(level)
-    if cap is None or len(line.line_san) <= cap:
-        return line
-    return line.model_copy(
-        update={
-            "line_uci": line.line_uci[:cap],
-            "line_san": line.line_san[:cap],
-            "fens": line.fens[:cap],
-            "leaf_fen": line.fens[cap - 1],
-            "trimmed_plies": line.trimmed_plies + (len(line.fens) - cap),
-        }
-    )
+    """Keep the evidence endpoint: audience adaptation changes prose, not facts.
+
+    Shortening here would require recomputing every claim and feature series.
+    The facts builder has already selected a bounded supporting variation.
+    """
+    return line
 
 
 def _audience_view(facts: CommentFacts, level: str) -> CommentFacts:
-    """The facts as the chosen audience sees them: claim budget + PV length."""
+    """Apply the audience's claim budget while preserving evidence endpoints."""
     updates: dict[str, Any] = {"claims": _audience_claims(facts, level)}
     if facts.display_line is not None:
         updates["display_line"] = _audience_line(facts.display_line, level)
@@ -220,28 +182,108 @@ async def compose_facts_comment(
     audience_facts = _audience_view(facts, lvl)
     template = render_facts_template(audience_facts, archetype=archetype)
 
-    if not is_llm_rendering_enabled() or not _is_provider_configured(service):
-        return _result(template, "template", True, lvl)
+    if (audience_facts.terminal_result or not is_llm_rendering_enabled()
+            or not _is_provider_configured(service)):
+        return dict(_result(template, "template", True, lvl),
+                    commentary_status="template",
+                    commentary_reason="terminal_result") if audience_facts.terminal_result else dict(
+                        _result(template, "template", True, lvl),
+                        commentary_status="template_disabled" if not is_llm_rendering_enabled()
+                        else "template_provider_failed",
+                        commentary_reason="llm_disabled" if not is_llm_rendering_enabled()
+                        else "provider_not_configured")
 
-    system = _build_system_prompt(lvl, archetype)
-    user = build_facts_user_prompt(
-        audience_facts, enrichment=enrichment, archetype=archetype
-    )
-    candidate = await _call_composer(service, system, user, model, effort, facts.ply)
+    mode = os.environ.get("COMMENTARY_RENDER_MODE", "grounded_rewrite")
+    if mode in {"grounded_rewrite", "grounded_rewrite_v2"}:
+        # The writer selects the explanation, so it must see the complete ranked
+        # evidence. A pre-LLM two-merit cap could remove the decisive pin/reply.
+        return await _compose_rewrite(service, facts, lvl, archetype,
+                                      template, model=model, effort=effort,
+                                      legacy=mode == "grounded_rewrite_v2")
+    if mode != "bounded":
+        raise ValueError(f"Unknown COMMENTARY_RENDER_MODE: {mode}")
 
-    # Validate against the same audience view the prompt was built from: the
-    # LLM is asked to copy the (level-appropriate) PV token verbatim, so a
-    # beginner-trimmed PV is the contract there. Alternative/refutation
-    # naming requirements still apply whenever the view carries them.
-    if candidate and validate_facts_comment(candidate, audience_facts):
-        return _result(candidate, "llm", True, lvl)
-    if candidate:
-        logger.info(
-            "facts comment failed contract at ply %s — using template", facts.ply
+    if not has_editorial_choice(audience_facts):
+        # Preserve the same beginner explanations as an approved model response.
+        # There is only one effective ordering/wording, so no call is necessary.
+        choices = {"main": [{"id": i, "form": "change"} for i in range(len(audience_facts.claims))],
+                   "alternative": [{"id": i, "form": "change"} for i in range(
+                       len(audience_facts.better_alternative.claims)
+                       if audience_facts.better_alternative else 0)]}
+        text = render_editor_response(json.dumps(choices), audience_facts, lvl, archetype)
+        return _result(text, "template", True, lvl)
+
+    try:
+        context_profile = os.environ.get("COMMENTARY_CONTEXT_PROFILE", "board_grounded")
+        system = EDITOR_SYSTEM
+        if getattr(service, "is_commentary_session", False):
+            system += SESSION_SYSTEM
+        raw = await service._llm_call_json_schema(
+            system, editor_prompt(audience_facts, lvl, context_profile=context_profile), model=model,
+            effort=effort, schema=EDITOR_SCHEMA, schema_name="grounded_comment",
+            max_output_tokens=COMPOSER_MAX_OUTPUT_TOKENS,
         )
-    else:
-        logger.debug(
-            "compose_facts_comment: LLM produced no usable candidate at ply %s "
-            "(level=%s) — using template", facts.ply, lvl
-        )
+        text = render_editor_response(raw, audience_facts, lvl, archetype)
+        return _result(text, "llm", True, lvl)
+    except Exception as exc:
+        logger.warning("Grounded composer rejected at ply %s: %s", facts.ply, type(exc).__name__)
     return _result(template, "template", False, lvl)
+
+
+async def _compose_rewrite(service, facts, level, archetype, template, *, model, effort, legacy=False):
+    if legacy:
+        from . import rewrite
+    else:
+        from . import narrative as rewrite
+
+    result = {
+        "text": template, "rendering": "template", "contract_ok": True, "level": level,
+        "prompt_version": rewrite.VERSION, "rendering_contract": rewrite.VERSION,
+        "semantic_review": "not_needed", "review_scope": "model_screening_not_chess_ground_truth",
+    }
+    if legacy and not facts.claims and not (facts.better_alternative and facts.better_alternative.claims):
+        return result
+    review_enabled = os.environ.get("COMMENTARY_LLM_REVIEW_ENABLED", "0") == "1"
+    result["review_scope"] = ("model_screening_not_chess_ground_truth" if review_enabled
+                              else "deterministic_validation_only")
+    stage = "validation"
+    try:
+        user, evidence = rewrite.prompt(facts, level)
+        result["claim_catalog"] = evidence
+        stage = "provider"
+        raw = await service._llm_call_json_schema(
+            rewrite.SYSTEM, user, model=model, effort=effort,
+            schema=rewrite.SCHEMA, schema_name="grounded_rewrite", max_output_tokens=1200,
+        )
+        result["raw_proposal"] = raw
+        stage = "validation"
+        proposal, sentences = rewrite.parse_proposal(raw, evidence)
+        result["selected_claims"] = proposal
+        if not review_enabled:
+            result.update(text=rewrite.render(proposal, evidence, facts, archetype),
+                          rendering="llm", semantic_review="disabled",
+                          commentary_status="llm_unreviewed")
+            return result
+        stage = "review"
+        review = await service.review_json(
+            rewrite.REVIEW_SYSTEM, json.dumps({"sentences": sentences}, ensure_ascii=False),
+            model=model, effort=effort, schema=rewrite.REVIEW_SCHEMA,
+            schema_name="grounded_rewrite_review", max_output_tokens=1500,
+        )
+        review_data = json.loads(review)
+        if isinstance(review_data, dict):
+            result["review_decisions"] = review_data.get("sentences")
+        decisions = rewrite.validate_review(review, len(sentences))
+        result.update(text=rewrite.render(proposal, evidence, facts, archetype),
+                      rendering="llm", semantic_review="accepted", review_decisions=decisions,
+                      commentary_status="llm_approved")
+    except Exception as exc:
+        logger.warning("Grounded rewrite rejected at ply %s: %s", facts.ply, type(exc).__name__)
+        result.update(contract_ok=False,
+                      semantic_review="rejected_or_unavailable" if stage == "review"
+                      else "not_run" if review_enabled else "disabled",
+                      fallback_reason=str(exc)[:240],
+                      commentary_status={"validation": "template_validation_failed",
+                                         "provider": "template_provider_failed",
+                                         "review": "template_review_rejected"}[stage])
+    return result

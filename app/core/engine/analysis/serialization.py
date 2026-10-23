@@ -20,6 +20,10 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
             "san": list(dl.line_san),
             "fens": list(dl.fens),
             "feature_series": dict(getattr(dl, "feature_series", {}) or {}),
+            "leaf_fen": dl.leaf_fen,
+            "start_quiescent": dl.start_quiescent,
+            "leaf_quiescent": dl.leaf_quiescent,
+            "evidence_valid": dl.evidence_valid,
         }
 
     def _claims(claims: Any) -> list[dict[str, Any]]:
@@ -33,6 +37,10 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
                 "beneficiary": c.beneficiary,
                 "is_concession": c.is_concession,
                 "realization": c.realization,
+                "rule_id": c.rule_id,
+                "support_ply": c.support_ply,
+                "support_fen": c.support_fen,
+                "baseline_fen": c.baseline_fen,
             }
             for c in (claims or [])
         ]
@@ -41,11 +49,13 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
         "verdict": facts.verdict,
         "eval_cp": facts.eval_cp,
         "eval_mate": facts.eval_mate,
+        "terminal_result": facts.terminal_result,
         "depth": facts.depth,
         "engine": facts.engine,
         "display_line": _line(facts.display_line),
         "claims": _claims(facts.claims),
         "concession_mode": facts.concession_mode,
+        "selection_metadata": facts.selection_metadata,
     }
     alt = facts.better_alternative
     if alt is not None:
@@ -54,9 +64,11 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
             "uci": alt.uci,
             "verdict": alt.verdict,
             "eval_cp": alt.eval_cp,
+            "eval_mate": alt.eval_mate,
             "display_line": _line(alt.display_line),
             "claims": _claims(alt.claims),
             "is_inferior": alt.is_inferior,
+            "feature_advantages": [a.model_dump() for a in alt.feature_advantages],
         }
     return out
 
