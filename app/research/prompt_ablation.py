@@ -58,16 +58,20 @@ def package_version(name: str) -> str | None:
 
 
 def _provider_controls(provider: str, model: str, effort: str, max_output_tokens: int) -> dict:
+    import os
     if provider == "cursor":
         effort_effective, token_effective = "ignored_by_provider", "ignored_by_provider"
     elif provider == "anthropic":
-        effort_effective, token_effective = "not_exposed_by_provider", "passed_as_max_tokens"
+        from app.core.commentary.llm_runtime import anthropic_native_model
+        effort_effective = "passed" if anthropic_native_model(model) else "not_exposed_by_provider"
+        token_effective = "passed_as_max_tokens"
     else:
         # This provider applies effort only to models that use the reasoning API.
         from app.core.commentary.llm_providers import _openai_model_uses_reasoning_api
         effort_effective = "passed" if _openai_model_uses_reasoning_api(model) else "not_applicable_for_model"
         token_effective = "passed_as_max_output_tokens"
-    return {"requested": {"effort": effort, "max_output_tokens": max_output_tokens,
+    return {"truncation_retries": int(os.environ.get("COMMENTARY_TRUNCATION_RETRIES", "1")),
+            "requested": {"effort": effort, "max_output_tokens": max_output_tokens,
                            "temperature": "uncontrolled_not_exposed"},
             "effective": {"effort": effort_effective, "max_output_tokens": token_effective,
                           "temperature": "uncontrolled_not_exposed"}}
@@ -155,7 +159,7 @@ def prepare(parent: Path, folder: Path, *, provider: str, model: str, effort: st
         "evidence_version": EVIDENCE_VERSION,
         "schedule_hash": digest(schedule),
         "scope": "Same freshly recomputed B11 facts and editor contract; context profile is the only prompt treatment. Diagnostic comparison; no human quality claim.",
-        "provider_call_semantics": "One recorded logical call per C/E cell. Some providers (including CursorProvider) may retry internally; provider attempts are not exposed by this harness, so logical call counts are not request-attempt counts.",
+        "provider_call_semantics": "One logical call per C/E cell. OpenAI/Anthropic provider_trace records output caps, usage and token-truncation retries; SDK transport retries and Cursor internal retries are not enumerated. Logical calls are not HTTP-attempt counts.",
         "environment": environment, "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     folder.mkdir(parents=True, exist_ok=False)
     _write_new(folder / "source.json", source)
@@ -202,6 +206,11 @@ def _run_cell(folder: Path, cell: dict, provider_obj: Any, *, timeout: float = 1
     import asyncio
 
     manifest = verify_manifest(folder)
+    # New runs freeze the truncation policy as well as the initial output cap.
+    import os
+    retries = manifest["provider_controls"].get("truncation_retries")
+    if retries is not None and retries != int(os.environ.get("COMMENTARY_TRUNCATION_RETRIES", "1")):
+        raise ValueError("Truncation retry setting differs from the frozen experiment")
     snap = _load_snapshot(folder, cell["case_id"])
     variant = next(v for v in manifest["variants"] if v["id"] == cell["variant_id"])
     facts = CommentFacts(**snap["facts"])
@@ -235,11 +244,14 @@ def _run_cell(folder: Path, cell: dict, provider_obj: Any, *, timeout: float = 1
             row["fallback"] = True
             row["model_status"] = "invalid_response" if "raw" in locals() else "failed"
             if "raw" not in locals():
-                row["usage"] = {"status": "unknown", "tokens": None}
+                row["usage"] = _token_usage(getattr(exc, "token_usage", None))
+                call["usage"] = row["usage"]
             call["error"] = f"{type(exc).__name__}: {exc}"
             call["generation_seconds"] = time.perf_counter() - call_started
             output = snap["template"]
             row["actual_renderer"] = "template_fallback"
+        finally:
+            call["provider_trace"] = getattr(provider_obj, "last_request", None)
     else:
         row["actual_renderer"] = "template"
     row["samples"] = [{"sample_id": digest(cell)[:24], "case_id": cell["case_id"],

@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import logging
 import os
+from glob import escape as glob_escape
 import threading
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from app.core.output_paths import logs_root, utc_date
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +73,17 @@ def _sanitized_game_id(game_id: str) -> str:
 
 
 def _path_for_game(game_id: str) -> Path:
-    return Path(os.environ.get("LOG_LLM_DIR", "logs/llm")) / f"{_sanitized_game_id(game_id)}.jsonl"
+    safe_id = _sanitized_game_id(game_id)
+    explicit = os.environ.get("LOG_LLM_DIR")
+    if explicit is not None and explicit.strip():
+        # Explicit override is intentionally flat for benchmark compatibility.
+        return Path(explicit) / f"{safe_id}.jsonl"
+    root = logs_root()
+    # Keep a game's log stable across midnight when it already exists.
+    existing = sorted(root.glob(f"*/{glob_escape(safe_id)}.jsonl"), reverse=True)
+    if existing:
+        return existing[0]
+    return root / utc_date() / f"{safe_id}.jsonl"
 
 
 def _lock_for_game(game_id: str) -> threading.Lock:

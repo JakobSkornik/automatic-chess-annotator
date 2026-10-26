@@ -110,6 +110,20 @@ def is_llm_rendering_enabled() -> bool:
 COMPOSER_MAX_OUTPUT_TOKENS = 500
 
 
+def commentary_output_limit() -> int | None:
+    """Optional operator cap; otherwise provider policy budgets reasoning separately.
+
+    The narrative validator still limits the displayed prose to 140 words.
+    """
+    value = os.environ.get("COMMENTARY_MAX_OUTPUT_TOKENS", "").strip()
+    if not value:
+        return None
+    limit = int(value)
+    if not 1 <= limit <= 65536:
+        raise ValueError("COMMENTARY_MAX_OUTPUT_TOKENS must be between 1 and 65536")
+    return limit
+
+
 def _result(text: str, rendering: str, contract_ok: bool, level: str) -> dict[str, Any]:
     return {
         "text": text,
@@ -221,7 +235,7 @@ async def compose_facts_comment(
         raw = await service._llm_call_json_schema(
             system, editor_prompt(audience_facts, lvl, context_profile=context_profile), model=model,
             effort=effort, schema=EDITOR_SCHEMA, schema_name="grounded_comment",
-            max_output_tokens=COMPOSER_MAX_OUTPUT_TOKENS,
+            max_output_tokens=commentary_output_limit(),
         )
         text = render_editor_response(raw, audience_facts, lvl, archetype)
         return _result(text, "llm", True, lvl)
@@ -253,7 +267,7 @@ async def _compose_rewrite(service, facts, level, archetype, template, *, model,
         stage = "provider"
         raw = await service._llm_call_json_schema(
             rewrite.SYSTEM, user, model=model, effort=effort,
-            schema=rewrite.SCHEMA, schema_name="grounded_rewrite", max_output_tokens=1200,
+            schema=rewrite.SCHEMA, schema_name="grounded_rewrite", max_output_tokens=commentary_output_limit(),
         )
         result["raw_proposal"] = raw
         stage = "validation"
@@ -268,7 +282,7 @@ async def _compose_rewrite(service, facts, level, archetype, template, *, model,
         review = await service.review_json(
             rewrite.REVIEW_SYSTEM, json.dumps({"sentences": sentences}, ensure_ascii=False),
             model=model, effort=effort, schema=rewrite.REVIEW_SCHEMA,
-            schema_name="grounded_rewrite_review", max_output_tokens=1500,
+            schema_name="grounded_rewrite_review", max_output_tokens=commentary_output_limit(),
         )
         review_data = json.loads(review)
         if isinstance(review_data, dict):

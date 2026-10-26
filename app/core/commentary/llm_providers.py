@@ -22,6 +22,10 @@ from typing import (
 from openai import AsyncOpenAI
 
 from app.core.commentary.json_utils import strip_json_fence
+from app.core.commentary.llm_runtime import (
+    openai_reasoning_model, anthropic_native_model, anthropic_schema_options,
+    anthropic_json_text, output_token_budget, call_with_truncation_retry, anthropic_completion,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,13 +107,7 @@ def _patch_cursor_bridge_discovery() -> None:
 
 
 def _openai_model_uses_reasoning_api(model_id: str) -> bool:
-    m = (model_id or "").strip().lower()
-    return (
-        m.startswith("gpt-5")
-        or m.startswith("o1")
-        or m.startswith("o3")
-        or m.startswith("o4")
-    )
+    return openai_reasoning_model(model_id or "")
 
 
 def _strip_sentinel_for_openai(user_text: str) -> str:
@@ -224,9 +222,13 @@ class OpenAIProvider:
         }
         if _openai_model_uses_reasoning_api(model):
             kwargs["reasoning"] = {"effort": effort}
-        if max_output_tokens is not None:
-            kwargs["max_output_tokens"] = max_output_tokens
-        response = await self._client.responses.create(**kwargs)
+        budget = output_token_budget(model, effort, max_output_tokens)
+        if budget is not None:
+            kwargs["max_output_tokens"] = budget
+        self.last_request = {"provider": self.name}
+        response, usage = await call_with_truncation_retry(
+            self._client.responses.create, kwargs, provider=self.name,
+            usage_total=_usage_total_openai, trace=self.last_request)
         raw = ""
         if hasattr(response, "output_text") and response.output_text:
             raw = response.output_text.strip()
@@ -235,7 +237,7 @@ class OpenAIProvider:
                 raw = response.output[0].content[0].text.strip()
             except Exception:
                 raw = ""
-        return raw, _usage_total_openai(response)
+        return raw, usage
 
 
 class AnthropicProvider:
@@ -282,36 +284,22 @@ class AnthropicProvider:
         max_output_tokens: int | None = None,
     ) -> tuple[str, int]:
         tool_name = schema_name or "structured_output"
-        tools = [
-            {
-                "name": tool_name,
-                "description": "Emit structured JSON matching the requested schema.",
-                "input_schema": schema,
-            }
-        ]
-        max_tok = max_output_tokens if max_output_tokens is not None else 4096
-        user_payload = self._user_content_blocks(user)
         kwargs: dict[str, Any] = {
             "model": model,
-            "max_tokens": max_tok,
+            "max_tokens": output_token_budget(model, effort, max_output_tokens) or 4096,
             "system": system,
-            "tools": tools,
-            "tool_choice": {"type": "tool", "name": tool_name},
-            "messages": [{"role": "user", "content": user_payload}],
+            "messages": [{"role": "user", "content": self._user_content_blocks(user)}],
+            **anthropic_schema_options(model, effort, schema, tool_name),
         }
-        msg = await self._client.messages.create(**kwargs)
-        for block in getattr(msg, "content", []) or []:
-            if (
-                getattr(block, "type", None) == "tool_use"
-                and getattr(block, "name", "") == tool_name
-            ):
-                inp = getattr(block, "input", None)
-                if isinstance(inp, dict):
-                    return json.dumps(inp), _usage_total_anthropic(msg)
-                if isinstance(inp, str):
-                    return inp, _usage_total_anthropic(msg)
-        logger.warning("Anthropic json_schema_call: no matching tool_use in response")
-        return "", _usage_total_anthropic(msg)
+        self.last_request = {"provider": self.name}
+        msg, usage = await call_with_truncation_retry(
+            anthropic_completion(self._client.messages), kwargs, provider=self.name,
+            usage_total=_usage_total_anthropic, trace=self.last_request)
+        raw = anthropic_json_text(msg, tool_name, native=anthropic_native_model(model))
+        if not raw:
+            logger.warning("Anthropic json_schema_call: no structured output in response")
+        return raw, usage
+
 
 
 class CursorProvider:

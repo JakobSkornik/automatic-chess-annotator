@@ -1,34 +1,31 @@
 """Resolve concrete model ids per LLM provider and pipeline stage (server-side only)."""
 
 from __future__ import annotations
+import os
 
 _POLICY: dict[str, dict[str, str]] = {
-    "openai": {"composer": "gpt-4.1-mini"},
-    "anthropic": {"composer": "claude-haiku-4-5"},
+    "openai": {"composer": "gpt-6-luna"},
+    "anthropic": {"composer": "claude-haiku-5-5"},
     "cursor": {"composer": "composer-2.5"},
 }
-
-# When ``pass_label`` is passed for composer, override base composer model (optional per provider).
-_POLICY_COMPOSER_BY_PASS: dict[str, dict[str, str]] = {
-    "openai": {
-        "key_moment": "gpt-4.1",
-        "teaching": "gpt-4.1-mini",
-    },
-}
-
 
 def resolve_model(provider: str, stage: str, pass_label: str | None = None) -> str:
     """Return model id for ``stage`` (currently only ``composer``).
 
-    ``pass_label`` may be ``key_moment`` or ``teaching`` to pick a tiered composer model.
+    ``pass_label`` remains accepted for compatibility. All passes share one model
+    so a game's conversation cannot silently change models between turns.
     """
     p = (provider or "openai").strip().lower()
     if p not in _POLICY:
         p = "openai"
-    if stage == "composer" and pass_label:
-        sub = _POLICY_COMPOSER_BY_PASS.get(p, {}).get(pass_label.strip().lower())
-        if sub:
-            return sub
+    if stage == "composer":
+        override = os.environ.get(f"COMMENTARY_{p.upper()}_MODEL", "").strip()
+        if override:
+            prefixes = {"openai": ("gpt-", "o1", "o3", "o4"),
+                        "anthropic": ("claude-",), "cursor": ("composer-", "gpt-", "claude-")}
+            if not override.startswith(prefixes[p]):
+                raise ValueError(f"COMMENTARY_{p.upper()}_MODEL does not match provider {p}")
+            return override
     m = _POLICY[p].get(stage)
     if m:
         return m

@@ -11,19 +11,25 @@ from app.core.engine.analysis_retriever import (
 )
 from app.core.engine.engine_connector import get_global_engine_connector
 from app.core.queue_manager import queue_manager
+from app.core.output_paths import dated_game_path
 from app.models.job import JobStatus
 
 logger = logging.getLogger(__name__)
 
 
-GAMES_OUTPUT_DIR = "data/games"
+# Kept as a compatibility seam for deployments/tests that explicitly override it.
+GAMES_OUTPUT_DIR = None
 ENGINE_DONE_PROGRESS = 95
 JOB_COMPLETE_PROGRESS = 100
 
 
 def _job_output_path(job_id: str) -> str:
-    os.makedirs(GAMES_OUTPUT_DIR, exist_ok=True)
-    return os.path.join(GAMES_OUTPUT_DIR, f"{job_id}.json")
+    if GAMES_OUTPUT_DIR is not None:
+        os.makedirs(GAMES_OUTPUT_DIR, exist_ok=True)
+        return os.path.join(GAMES_OUTPUT_DIR, f"{job_id}.json")
+    path = dated_game_path(job_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 def _write_game_json(file_path: str, game_json) -> None:

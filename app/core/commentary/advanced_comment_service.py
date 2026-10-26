@@ -114,6 +114,8 @@ class AdvancedCommentService:
             ok = True
             return (raw or "").strip()
         except Exception as e:
+            usage = getattr(e, "token_usage", usage)
+            self._last_token_usage = usage
             err = repr(e)
             raise
         finally:
@@ -132,7 +134,9 @@ class AdvancedCommentService:
                     "session_id": self._provider.session_id,
                     "turn_count": self._provider.turn_count,
                     "request": self._provider.last_request,
-                } if self.is_commentary_session else None),
+                } if self.is_commentary_session else {
+                    "request": getattr(self._provider, "last_request", None),
+                }),
             )
 
     @staticmethod

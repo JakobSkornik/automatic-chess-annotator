@@ -8,6 +8,10 @@ import logging
 from typing import Any
 
 from app.core.commentary.json_utils import strip_json_fence
+from app.core.commentary.llm_runtime import (
+    anthropic_native_model, anthropic_schema_options, anthropic_json_text,
+    output_token_budget, call_with_truncation_retry, anthropic_completion,
+)
 from app.core.commentary.llm_providers import (
     _strip_sentinel_for_openai,
     _usage_total_anthropic,
@@ -148,7 +152,7 @@ class CommentarySession:
         if self.name == "openai":
             return await self._openai_call(user, effort=effort)
         if self.name == "anthropic":
-            return await self._anthropic_call(user)
+            return await self._anthropic_call(user, effort=effort)
         if self.name == "cursor":
             return await self._cursor_call(user)
         raise ValueError(f"Unsupported commentary provider: {self.name}")
@@ -175,10 +179,13 @@ class CommentarySession:
             kwargs["previous_response_id"] = self._response_id
         if _openai_model_uses_reasoning_api(str(self._model)):
             kwargs["reasoning"] = {"effort": effort}
-        if self._max_output_tokens is not None:
-            kwargs["max_output_tokens"] = self._max_output_tokens
-        self.last_request = {"provider": self.name, "request": kwargs}
-        response = await self.provider._client.responses.create(**kwargs)
+        budget = output_token_budget(str(self._model), effort, self._max_output_tokens)
+        if budget is not None:
+            kwargs["max_output_tokens"] = budget
+        self.last_request = {"provider": self.name}
+        response, usage = await call_with_truncation_retry(
+            self.provider._client.responses.create, kwargs, provider=self.name,
+            usage_total=_usage_total_openai, trace=self.last_request)
         response_id = getattr(response, "id", None)
         if not response_id:
             raise RuntimeError("OpenAI response did not include an id for conversation chaining")
@@ -189,9 +196,9 @@ class CommentarySession:
                 raw = response.output[0].content[0].text
             except Exception:
                 raw = ""
-        return str(raw).strip(), _usage_total_openai(response)
+        return str(raw).strip(), usage
 
-    async def _anthropic_call(self, user: str) -> tuple[str, int]:
+    async def _anthropic_call(self, user: str, *, effort: str) -> tuple[str, int]:
         tool_name = self._schema_name or "structured_output"
         # Anthropic has no native response chain. Reconstruct the complete
         # conversation from accepted canonical records on every request, so
@@ -209,27 +216,20 @@ class CommentarySession:
                          self.provider._user_content_blocks(user)})
         kwargs: dict[str, Any] = {
             "model": self._model,
-            "max_tokens": self._max_output_tokens or 4096,
+            "max_tokens": output_token_budget(str(self._model), effort, self._max_output_tokens) or 4096,
             "system": self._system,
-            "tools": [{"name": tool_name,
-                       "description": "Emit structured JSON matching the requested schema.",
-                       "input_schema": self._schema}],
-            "tool_choice": {"type": "tool", "name": tool_name},
             "messages": messages,
+            **anthropic_schema_options(str(self._model), effort, self._schema, tool_name),
         }
-        self.last_request = {"provider": self.name, "request": kwargs}
-        msg = await self.provider._client.messages.create(**kwargs)
-        usage = _usage_total_anthropic(msg)
-        for block in getattr(msg, "content", []) or []:
-            if (getattr(block, "type", None) == "tool_use"
-                    and getattr(block, "name", "") == tool_name):
-                result = getattr(block, "input", None)
-                if isinstance(result, dict):
-                    return json.dumps(result, ensure_ascii=False), usage
-                if isinstance(result, str):
-                    return result, usage
-        logger.warning("Anthropic commentary session returned no matching tool_use")
-        return "", usage
+        self.last_request = {"provider": self.name}
+        msg, usage = await call_with_truncation_retry(
+            anthropic_completion(self.provider._client.messages), kwargs, provider=self.name,
+            usage_total=_usage_total_anthropic, trace=self.last_request)
+        raw = anthropic_json_text(msg, tool_name, native=anthropic_native_model(str(self._model)))
+        if not raw:
+            logger.warning("Anthropic commentary session returned no structured output")
+        return raw, usage
+
 
     def _cursor_instruction(self) -> str:
         schema_hint = (

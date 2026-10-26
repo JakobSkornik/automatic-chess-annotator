@@ -1,12 +1,11 @@
 import json
-import os
-
 from fastapi import APIRouter, HTTPException, Query, WebSocket, status
 from pydantic import BaseModel
 from starlette.websockets import WebSocketDisconnect
 
 from app.core.io.pgn_reader import PGNReader
 from app.core.queue_manager import queue_manager
+from app.core.output_paths import find_game_path, iter_game_paths
 from app.models.GameJson import GameJson
 from app.models.job import JobResponse, JobStatus
 
@@ -93,8 +92,11 @@ async def get_job_status(job_id: str):
 
 @router.get("/{job_id}/game", response_model=GameJson)
 async def get_job_game(job_id: str):
-    file_path = f"data/games/{job_id}.json"
-    if os.path.exists(file_path):
+    try:
+        file_path = find_game_path(job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid job id") from e
+    if file_path is not None:
         try:
             with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -120,18 +122,13 @@ async def export_all_games():
 
     from fastapi.responses import Response
 
-    games_dir = "data/games"
-    files = (
-        sorted(f for f in os.listdir(games_dir) if f.endswith(".json"))
-        if os.path.isdir(games_dir)
-        else []
-    )
-    if not files:
+    paths = iter_game_paths()
+    if not paths:
         raise HTTPException(status_code=404, detail="No finished games to export")
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for fn in files:
-            zf.write(os.path.join(games_dir, fn), fn)
+        for path in paths:
+            zf.write(path, path.name)
     return Response(
         buf.getvalue(),
         media_type="application/zip",
@@ -146,8 +143,11 @@ async def get_job_pgn(job_id: str):
 
     from app.core.io.pgn_writer import game_json_to_pgn
 
-    file_path = f"data/games/{job_id}.json"
-    if not os.path.exists(file_path):
+    try:
+        file_path = find_game_path(job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid job id") from e
+    if file_path is None:
         job_status = queue_manager.get_job_status(job_id)
         if not job_status:
             raise HTTPException(status_code=404, detail="Job not found")
