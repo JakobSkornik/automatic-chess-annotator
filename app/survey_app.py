@@ -2,6 +2,7 @@
 
 Deploy with: uvicorn app.survey_app:app --host 0.0.0.0 --port 8000
 """
+import asyncio
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -13,11 +14,14 @@ load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 from app.routes.surveys import router
 from app.routes.survey_grid import router as grid_router
 from app.survey_bundle import install_bundled_surveys
+from app.drive_backup import backup_quietly
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     install_bundled_surveys()
+    # Catch up responses whose Drive upload failed before the last restart.
+    asyncio.get_running_loop().run_in_executor(None, backup_quietly)
     yield
 
 

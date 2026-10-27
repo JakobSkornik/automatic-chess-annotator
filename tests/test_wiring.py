@@ -160,7 +160,7 @@ class TestAudienceViewThroughModels:
 
         view = _audience_view(_facts(), "beginner")
         d = json.loads(view.model_dump_json())
-        assert d["display_line"]["line_san"] == ["Nc3", "Bd6", "Nf3"]  # trimmed to 3
+        assert d["display_line"]["line_san"] == ["Nc3", "Bd6", "Nf3", "e5"]
         # claims budget: merits <=2, concessions <=1
         merits = [c for c in d["claims"] if not c.get("is_concession")]
         assert len(merits) <= 2

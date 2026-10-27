@@ -2,9 +2,9 @@
 import csv
 import io
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Request, Response
 
-from app import grid_survey, survey
+from app import drive_backup, grid_survey, survey
 from app.routes.surveys import PrivateSurveyRoute, participant_token
 
 router = APIRouter(prefix='/surveys/grid', tags=['Comparison surveys'], route_class=PrivateSurveyRoute)
@@ -16,7 +16,7 @@ def manifest(token: str):
 
 
 @router.post('/{token}/session')
-def start(token: str, body: survey.StartRequest):
+def start(token: str, body: grid_survey.GridStartRequest):
     return grid_survey.start_response(token, body)
 
 
@@ -26,13 +26,21 @@ def resume(token: str, request: Request):
 
 
 @router.put('/{token}/session')
-def save(token: str, request: Request, body: grid_survey.ComparisonSave):
-    return grid_survey.save_response(token, participant_token(request), body)
+def save(token: str, request: Request, body: grid_survey.ComparisonSave, background: BackgroundTasks):
+    saved = grid_survey.save_response(token, participant_token(request), body)
+    if saved['completed']:
+        background.add_task(drive_backup.backup_quietly)
+    return saved
 
 
 @router.get('/{token}/round/{game_id}')
 def round_data(token: str, game_id: str, request: Request):
     return grid_survey.get_round(token, participant_token(request), game_id)
+
+
+@router.get('/{token}/round/{game_id}/board')
+def round_board(token: str, game_id: str, request: Request):
+    return grid_survey.get_round_board(token, participant_token(request), game_id)
 
 
 @router.get('/{token}/game/{candidate_id}')
@@ -49,8 +57,8 @@ def summary(token: str):
 def export_csv(token: str):
     data = grid_survey.results(token)
     output = io.StringIO(newline='')
-    fields = ['response_id', 'participant_rating', 'game_id', 'model', 'level', 'round_order',
-              'candidate_order', 'decision', 'best', 'worst', 'reason', 'round_feedback',
+    fields = ['response_id', 'participant_elo', 'participant_rating_system', 'participant_rating', 'game_id', 'model', 'level', 'round_order',
+              'candidate_order', 'decision', *[c['id'] for c in grid_survey.CRITERIA], 'round_feedback',
               'overall_feedback', 'submitted_at']
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader()

@@ -10,7 +10,8 @@ from app.core.commentary.features.plan_extractor import PlanTag, classify_pv_pla
 class TestPlanTags(unittest.TestCase):
     def test_pawn_storm_on_wing(self) -> None:
         board = chess.Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-        tags = classify_pv_plan(board, ["h2h4", "h7h5", "h4h5"])
+        # Two pushes by the root side, with legal opponent replies between.
+        tags = classify_pv_plan(board, ["h2h4", "a7a6", "h4h5", "a6a5"])
         self.assertIn(PlanTag.PAWN_STORM.value, tags)
 
     def test_piece_maneuver_opening(self) -> None:

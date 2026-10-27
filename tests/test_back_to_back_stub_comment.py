@@ -83,7 +83,8 @@ def test_suppressed_move_gets_stub_comment_not_silence():
         "back-to-back suppression promised a stub reference but the move "
         "ended up with no comment at all"
     )
-    assert "90" in result.comment
+    assert "move 45..." in result.comment
+    assert "ply 90" not in result.comment
     assert "commentary" in result.comment.lower()
 
 
@@ -132,3 +133,13 @@ def test_suppressed_move_respects_side_gate():
     )
 
     assert result.comment is None
+
+
+def test_stub_reference_formats_white_and_black_move_notation():
+    from app.core.engine.analysis.comment_assembly import _fallback_comment
+
+    for ply, notation in ((42, "move 21..."), (45, "move 23.")):
+        event = _suppressed_move_event(commentary_stub_ref_ply=ply)
+        result = _fallback_comment(event, None)
+        assert result is not None
+        assert notation in result

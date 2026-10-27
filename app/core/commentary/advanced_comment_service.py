@@ -45,7 +45,8 @@ class AdvancedCommentService:
 
     @property
     def provider_name(self) -> str:
-        return self._provider.name
+        """Model-policy key; differs from the transport name for Cursor-hosted models."""
+        return getattr(self._provider, "policy_key", self._provider.name)
 
     @property
     def is_commentary_session(self) -> bool:

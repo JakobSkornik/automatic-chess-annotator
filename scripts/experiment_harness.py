@@ -3,7 +3,7 @@ batch of human-annotated games from data/pgn/perle.pgn, and measure how much
 the generated commentary differs from the original human annotations.
 
 Usage (from the automatic-chess-annotator repo root, with the venv active and
-OPENAI_API_KEY / ANTHROPIC_API_KEY / stockfish available):
+OPENAI_API_KEY / CURSOR_API_KEY / stockfish available):
 
     python scripts/experiment_harness.py --n-games 20
     python scripts/experiment_harness.py --n-games 1 --start 0   # smoke test

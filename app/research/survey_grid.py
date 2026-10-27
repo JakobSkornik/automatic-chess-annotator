@@ -6,14 +6,12 @@ import json
 import os
 from pathlib import Path
 
+# 'provider' is the model-policy key passed to make_llm_provider: Grok and Composer
+# are both Cursor-hosted and share the Cursor agent transport.
 MODELS = [
-    {'id': 'gpt-6-astra', 'provider': 'openai', 'label': 'GPT-6 Astra'},
-    {'id': 'gpt-6.1-sol', 'provider': 'openai', 'label': 'GPT-6.1 Sol'},
     {'id': 'gpt-6-luna', 'provider': 'openai', 'label': 'GPT-6 Luna'},
-    {'id': 'claude-fable-5-1', 'provider': 'anthropic', 'label': 'Claude Fable 5.1'},
-    {'id': 'claude-opus-5-5', 'provider': 'anthropic', 'label': 'Claude Opus 5.5'},
-    {'id': 'claude-sonnet-5-5', 'provider': 'anthropic', 'label': 'Claude Sonnet 5.5'},
-    {'id': 'claude-haiku-5-5', 'provider': 'anthropic', 'label': 'Claude Haiku 5.5'},
+    {'id': 'grok-4.6', 'provider': 'grok', 'label': 'Grok 4.6'},
+    {'id': 'composer-2.5', 'provider': 'cursor', 'label': 'Composer 2.5'},
 ]
 LEVELS = ['beginner', 'intermediate', 'expert']
 ROOT = Path(__file__).resolve().parents[2]

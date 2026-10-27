@@ -20,7 +20,19 @@ data/cbh
 data/pgn
 
 logs/
+output/
 .cursor/
 .pytest_cache/
 .ruff_cache/
 .coverage
+
+# Google OAuth client for survey Drive backups (secret)
+google-client.json
+
+/experiments/
+/benchmarks/
+/docs/
+/requirements-dev.txt
+/requirements-survey.txt
+/data/*
+!/data/surveys/

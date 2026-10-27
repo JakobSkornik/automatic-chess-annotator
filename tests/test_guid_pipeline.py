@@ -491,7 +491,7 @@ def test_template_hedges_envisioned_concession():
     )
     text = render_facts_template(facts)
     # framed as a developing risk, not an accomplished fact
-    assert "Down the line, Black's pawn structure has been weakened." in text
+    assert "In the analysed continuation, Black's pawn structure has been weakened." in text
     assert "On the other hand" not in text
     assert "Now Black" not in text
 
@@ -525,15 +525,16 @@ def _alt(eval_cp: int, realization: str = "immediate") -> dict:
     }
 
 
-def test_template_missed_chance_vs_potential():
+def test_template_missed_improvement_and_separate_timing():
     base = _facts().model_copy(update={"mover": "Black", "eval_cp": 0})
-    # materially better alternative, gain lands at once -> "missed the chance"
+    # The miss is numerical; timing is attached to its supporting observation.
     immediate = base.model_copy(update=_alt(eval_cp=-300, realization="immediate"))
     t_imm = render_facts_template(immediate)
-    assert "Black missed the chance here" in t_imm
-    # materially better, gain only develops in the line -> "missed the potential"
+    assert "Black missed a better continuation (3.00 pawns better" in t_imm
+    assert "In the analysed continuation" not in t_imm
     envis = base.model_copy(update=_alt(eval_cp=-300, realization="envisioned"))
-    assert "Black missed the potential here" in render_facts_template(envis)
+    assert "Black missed a better continuation" in render_facts_template(envis)
+    assert "In the analysed continuation" in render_facts_template(envis)
 
 
 def test_template_comparable_alternative_not_a_miss():
@@ -560,7 +561,8 @@ def test_comment_archetype_mapping():
 def test_template_archetype_openers():
     facts = _facts()
     head = render_facts_template(facts, archetype="engine_choice")
-    assert "is the strongest move here" in head
+    assert "is the engine's preferred move" not in head
+    assert "leads to equality" in head
     # The opener must not contain a phrase the forbidden-phrase scrub strips
     # (which would otherwise leave debris like "is the ,").
     from app.core.commentary.forbidden_phrases import scrub_forbidden
@@ -730,7 +732,8 @@ def test_merit_suppressed_when_move_backfires():
     texts = [c.text for c in facts.claims]
     # the mover-merit is gone; the consequence remains
     assert "White's pawn structure has been weakened." not in texts
-    assert any("won a pawn" in t for t in texts)
+    # Quietness/provenance failures must not manufacture a material fallback.
+    assert not any("won a pawn" in t for t in texts)
 
 
 def test_promote_losing_sacrifice_is_not_brilliant():

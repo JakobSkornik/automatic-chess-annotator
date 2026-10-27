@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.core.commentary.llm_providers import (
     DYNAMIC_SECTION_SENTINEL,
-    AnthropicProvider,
     CursorProvider,
     OpenAIProvider,
     make_llm_provider,
@@ -23,9 +22,17 @@ class TestMakeLlmProvider(unittest.TestCase):
         p = make_llm_provider("openai")
         self.assertEqual(p.name, "openai")
 
-    def test_anthropic_name(self) -> None:
-        p = make_llm_provider("anthropic")
-        self.assertEqual(p.name, "anthropic")
+    def test_anthropic_is_no_longer_a_provider(self) -> None:
+        self.assertEqual(make_llm_provider("anthropic").name, "openai")
+
+    def test_grok_uses_cursor_transport_with_its_own_policy(self) -> None:
+        from app.core.commentary.advanced_comment_service import AdvancedCommentService
+        from app.core.commentary.llm_policy import resolve_model
+        p = make_llm_provider("grok")
+        self.assertEqual((p.name, p.policy_key), ("cursor", "grok"))
+        service = AdvancedCommentService(provider=p)
+        self.assertEqual(resolve_model(service.provider_name, "composer"), "grok-4.6")
+        self.assertEqual(resolve_model("cursor", "composer"), "composer-2.5")
 
     def test_cursor_name(self) -> None:
         p = make_llm_provider("cursor")
@@ -33,6 +40,31 @@ class TestMakeLlmProvider(unittest.TestCase):
 
 
 class TestCursorProvider(unittest.TestCase):
+    def test_transient_internal_200_retries_and_recovers(self):
+        import asyncio
+        error = RuntimeError("internal")
+        error.code, error.status = "internal", 200
+        self.mock_agent.prompt.side_effect = [error, SimpleNamespace(status="finished", result="OK", usage=None)]
+        with patch("app.core.commentary.llm_providers.asyncio.sleep", new_callable=AsyncMock) as sleep:
+            self.assertEqual(asyncio.run(CursorProvider()._prompt("test", model="composer-2.5"))[0], "OK")
+            sleep.assert_awaited_once_with(1)
+        self.assertEqual(self.mock_agent.prompt.call_count, 2)
+
+    def test_retry_exhaustion_and_auth_errors(self):
+        import asyncio
+        error = RuntimeError("internal")
+        error.code, error.status = "internal", 200
+        self.mock_agent.prompt.side_effect = error
+        with patch("app.core.commentary.llm_providers.asyncio.sleep", new_callable=AsyncMock):
+            with self.assertRaises(RuntimeError):
+                asyncio.run(CursorProvider()._prompt("test", model="composer-2.5"))
+        self.assertEqual(self.mock_agent.prompt.call_count, 3)
+        self.mock_agent.prompt.reset_mock()
+        error.code, error.status = "unauthenticated", 401
+        with self.assertRaises(RuntimeError):
+            asyncio.run(CursorProvider()._prompt("test", model="composer-2.5"))
+        self.assertEqual(self.mock_agent.prompt.call_count, 1)
+
     def setUp(self) -> None:
         super().setUp()
         self.env = patch.dict(
@@ -124,53 +156,6 @@ class TestOpenAIProvider(unittest.TestCase):
             )
             self.assertIn("named_motifs", raw)
             self.assertEqual(n, 7)
-
-        asyncio.run(_run())
-
-
-class TestAnthropicProvider(unittest.TestCase):
-    def setUp(self) -> None:
-        super().setUp()
-        self.env = patch.dict(
-            "os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test"}, clear=False
-        )
-        self.env.start()
-
-    def tearDown(self) -> None:
-        self.env.stop()
-        super().tearDown()
-
-    def test_json_schema_tool_use(self) -> None:
-        p = AnthropicProvider()
-        tool_block = MagicMock()
-        tool_block.type = "tool_use"
-        tool_block.name = "chess_commentary_composer"
-        tool_block.input = {"named_motifs": ["pin"], "text": "Hello"}
-        msg = MagicMock()
-        msg.content = [tool_block]
-        msg.usage = MagicMock(input_tokens=3, output_tokens=4)
-        p._client = MagicMock()
-        p._client.messages.create = AsyncMock(return_value=msg)
-
-        import asyncio
-
-        async def _run() -> None:
-            raw, n = await p.json_schema_call(
-                "sys",
-                "static" + DYNAMIC_SECTION_SENTINEL + "tail",
-                model="claude-haiku-4-5",
-                effort="low",
-                schema=SINGLE_LEVEL_SCHEMA,
-                schema_name="chess_commentary_composer",
-                max_output_tokens=256,
-            )
-            obj = json.loads(raw)
-            self.assertEqual(obj["text"], "Hello")
-            self.assertEqual(obj["named_motifs"], ["pin"])
-            self.assertEqual(n, 7)
-            kw = p._client.messages.create.call_args.kwargs
-            self.assertIn("tools", kw)
-            self.assertEqual(kw["tool_choice"]["name"], "chess_commentary_composer")
 
         asyncio.run(_run())
 

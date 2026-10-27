@@ -1,4 +1,4 @@
-"""LLM provider abstraction: OpenAI, Anthropic, and Cursor SDK."""
+"""LLM provider abstraction: OpenAI and Cursor-hosted models (Composer, Grok) via the Cursor SDK."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Mapping
@@ -23,8 +24,7 @@ from openai import AsyncOpenAI
 
 from app.core.commentary.json_utils import strip_json_fence
 from app.core.commentary.llm_runtime import (
-    openai_reasoning_model, anthropic_native_model, anthropic_schema_options,
-    anthropic_json_text, output_token_budget, call_with_truncation_retry, anthropic_completion,
+    openai_reasoning_model, output_token_budget, call_with_truncation_retry,
 )
 
 logger = logging.getLogger(__name__)
@@ -141,18 +141,6 @@ def _usage_total_openai(response: Any) -> int:
     return 0
 
 
-def _usage_total_anthropic(msg: Any) -> int:
-    u = getattr(msg, "usage", None)
-    if u is None:
-        return 0
-    inp = getattr(u, "input_tokens", None) or 0
-    out = getattr(u, "output_tokens", None) or 0
-    try:
-        return int(inp) + int(out)
-    except (TypeError, ValueError):
-        return 0
-
-
 @runtime_checkable
 class LlmProvider(Protocol):
     """A pluggable LLM backend. Every provider exposes a stable name, a
@@ -160,7 +148,7 @@ class LlmProvider(Protocol):
 
     @property
     def name(self) -> str:
-        """Stable provider key (e.g. 'openai', 'anthropic')."""
+        """Stable transport key (e.g. 'openai', 'cursor')."""
         ...
 
     def is_configured(self) -> bool:
@@ -240,72 +228,37 @@ class OpenAIProvider:
         return raw, usage
 
 
-class AnthropicProvider:
-    """Anthropic Messages API with optional prompt caching on the static user prefix."""
+# Effort parameter ids differ per Cursor-hosted model (Cursor.models.list(), 26 October 2026).
+# Models without an entry (e.g. composer-2.5) expose no effort setting.
+CURSOR_EFFORT_PARAMS = {"grok-4.6": "effort"}
+CURSOR_EFFORT_VALUES = {"low", "medium", "high", "xhigh"}
 
-    def __init__(self) -> None:
-        try:
-            from anthropic import AsyncAnthropic
-        except ImportError as e:
-            raise ImportError(
-                "Install the anthropic package to use AnthropicProvider"
-            ) from e
-        self._client = AsyncAnthropic()
 
-    @property
-    def name(self) -> str:
-        return "anthropic"
+def cursor_model_selection(model: str, effort: str | None) -> Any:
+    """Model id plus its effort parameter when the model supports one."""
+    param = CURSOR_EFFORT_PARAMS.get(model)
+    if param is None or effort not in CURSOR_EFFORT_VALUES:
+        return model
+    return {"id": model, "params": [{"id": param, "value": effort}]}
 
-    def is_configured(self) -> bool:
-        return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
 
-    def _user_content_blocks(self, user: str) -> Any:
-        if DYNAMIC_SECTION_SENTINEL in user:
-            static, dynamic = user.split(DYNAMIC_SECTION_SENTINEL, 1)
-            return [
-                {
-                    "type": "text",
-                    "text": static.strip(),
-                    "cache_control": {"type": "ephemeral"},
-                },
-                {"type": "text", "text": dynamic.strip()},
-            ]
-        return user
-
-    async def json_schema_call(
-        self,
-        system: str,
-        user: str,
-        *,
-        model: str,
-        effort: str,
-        schema: dict[str, Any],
-        schema_name: str,
-        max_output_tokens: int | None = None,
-    ) -> tuple[str, int]:
-        tool_name = schema_name or "structured_output"
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "max_tokens": output_token_budget(model, effort, max_output_tokens) or 4096,
-            "system": system,
-            "messages": [{"role": "user", "content": self._user_content_blocks(user)}],
-            **anthropic_schema_options(model, effort, schema, tool_name),
-        }
-        self.last_request = {"provider": self.name}
-        msg, usage = await call_with_truncation_retry(
-            anthropic_completion(self._client.messages), kwargs, provider=self.name,
-            usage_total=_usage_total_anthropic, trace=self.last_request)
-        raw = anthropic_json_text(msg, tool_name, native=anthropic_native_model(model))
-        if not raw:
-            logger.warning("Anthropic json_schema_call: no structured output in response")
-        return raw, usage
-
+def cursor_workspace() -> Path:
+    """Empty working directory for Cursor agents, keeping the repository and .env out of their workspace."""
+    configured = os.environ.get("CURSOR_AGENT_WORKSPACE", "").strip()
+    path = Path(configured) if configured else Path(tempfile.gettempdir()) / "aca-cursor-agent"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 class CursorProvider:
-    """Cursor SDK one-shot agent (Composer-2.5) via Agent.prompt in a worker thread."""
+    """Cursor-hosted models (Composer, Grok) through the Cursor SDK agent.
 
-    def __init__(self) -> None:
+    ``key`` selects the model policy ('cursor' = Composer, 'grok' = Grok); the
+    transport is the same Cursor agent for both.
+    """
+
+    def __init__(self, key: str = "cursor") -> None:
+        self.policy_key = key
         global _Agent, _AgentOptions, _LocalAgentOptions, _CursorAgentError
         try:
             from cursor_sdk import (
@@ -331,17 +284,20 @@ class CursorProvider:
     def is_configured(self) -> bool:
         return bool(os.environ.get("CURSOR_API_KEY", "").strip())
 
-    def _agent_options(self, model: str) -> Any:
+    def _agent_options(self, model: str, effort: str | None = None) -> Any:
         api_key = os.environ.get("CURSOR_API_KEY", "").strip()
         return _AgentOptions(
             api_key=api_key,
-            model=model,
-            local=_LocalAgentOptions(cwd=str(Path(__file__).resolve().parents[3])),
+            model=cursor_model_selection(model, effort),
+            # Empty workspace without user/project rules, so the repository and .env
+            # are not in the agent's workspace. This is not OS-level isolation: the
+            # Cursor bridge rejects sandboxing on Windows ("not supported in this environment").
+            local=_LocalAgentOptions(cwd=str(cursor_workspace()), setting_sources=[]),
         )
 
-    async def _prompt(self, prompt: str, *, model: str) -> tuple[str, int]:
-        """Run Agent.prompt off the event loop. effort/max_output_tokens are ignored."""
-        opts = self._agent_options(model)
+    async def _prompt(self, prompt: str, *, model: str, effort: str | None = None) -> tuple[str, int]:
+        """Run Agent.prompt off the event loop. max_output_tokens is not supported by Cursor."""
+        opts = self._agent_options(model, effort)
 
         def _run() -> Any:
             return _Agent.prompt(prompt, opts)
@@ -390,7 +346,7 @@ class CursorProvider:
             + json.dumps(schema, ensure_ascii=False)
         )
         prompt = f"{system.strip()}\n\n{schema_hint}\n\n{user.strip()}".strip()
-        raw, usage = await self._prompt(prompt, model=model)
+        raw, usage = await self._prompt(prompt, model=model, effort=effort)
         return strip_json_fence(raw), usage
 
 
@@ -401,8 +357,6 @@ def make_llm_provider(provider_key: str | None = None) -> LlmProvider:
         .strip()
         .lower()
     )
-    if k == "anthropic":
-        return AnthropicProvider()
-    if k == "cursor":
-        return CursorProvider()
+    if k in ("cursor", "grok"):
+        return CursorProvider(k)
     return OpenAIProvider()

@@ -8,19 +8,24 @@ import logging
 from typing import Any
 
 from app.core.commentary.json_utils import strip_json_fence
-from app.core.commentary.llm_runtime import (
-    anthropic_native_model, anthropic_schema_options, anthropic_json_text,
-    output_token_budget, call_with_truncation_retry, anthropic_completion,
-)
+from app.core.commentary.llm_runtime import output_token_budget, call_with_truncation_retry
 from app.core.commentary.llm_providers import (
     _strip_sentinel_for_openai,
-    _usage_total_anthropic,
     _usage_total_cursor,
+    cursor_model_selection,
     _usage_total_openai,
     _openai_model_uses_reasoning_api,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class CursorRunFailed(RuntimeError):
+    """A Cursor agent run finished with status 'error' (no further detail from the SDK)."""
+
+    def __init__(self, run_id: str) -> None:
+        super().__init__(f"Cursor commentary run failed: {run_id}")
+        self.run_id = run_id
 
 
 class CommentarySession:
@@ -54,6 +59,10 @@ class CommentarySession:
     @property
     def name(self) -> str:
         return str(getattr(self.provider, "name", "unknown"))
+
+    @property
+    def policy_key(self) -> str:
+        return str(getattr(self.provider, "policy_key", self.name))
 
     @property
     def session_id(self) -> str:
@@ -151,10 +160,8 @@ class CommentarySession:
     async def _call_provider(self, user: str, *, effort: str) -> tuple[str, int]:
         if self.name == "openai":
             return await self._openai_call(user, effort=effort)
-        if self.name == "anthropic":
-            return await self._anthropic_call(user, effort=effort)
         if self.name == "cursor":
-            return await self._cursor_call(user)
+            return await self._cursor_call(user, effort=effort)
         raise ValueError(f"Unsupported commentary provider: {self.name}")
 
     async def _openai_call(self, user: str, *, effort: str) -> tuple[str, int]:
@@ -198,39 +205,6 @@ class CommentarySession:
                 raw = ""
         return str(raw).strip(), usage
 
-    async def _anthropic_call(self, user: str, *, effort: str) -> tuple[str, int]:
-        tool_name = self._schema_name or "structured_output"
-        # Anthropic has no native response chain. Reconstruct the complete
-        # conversation from accepted canonical records on every request, so
-        # template/skipped records remain present on all future turns too.
-        messages: list[dict[str, Any]] = []
-        for record in self._canonical_records:
-            metadata = {key: value for key, value in record.items() if key != "text"}
-            messages.extend([
-                {"role": "user", "content":
-                 "Earlier commentary record (context only): "
-                 + json.dumps(metadata, ensure_ascii=False)},
-                {"role": "assistant", "content": str(record.get("text", ""))},
-            ])
-        messages.append({"role": "user", "content":
-                         self.provider._user_content_blocks(user)})
-        kwargs: dict[str, Any] = {
-            "model": self._model,
-            "max_tokens": output_token_budget(str(self._model), effort, self._max_output_tokens) or 4096,
-            "system": self._system,
-            "messages": messages,
-            **anthropic_schema_options(str(self._model), effort, self._schema, tool_name),
-        }
-        self.last_request = {"provider": self.name}
-        msg, usage = await call_with_truncation_retry(
-            anthropic_completion(self.provider._client.messages), kwargs, provider=self.name,
-            usage_total=_usage_total_anthropic, trace=self.last_request)
-        raw = anthropic_json_text(msg, tool_name, native=anthropic_native_model(str(self._model)))
-        if not raw:
-            logger.warning("Anthropic commentary session returned no structured output")
-        return raw, usage
-
-
     def _cursor_instruction(self) -> str:
         schema_hint = (
             f"Return ONLY a JSON object matching schema '{self._schema_name}'. "
@@ -239,19 +213,40 @@ class CommentarySession:
         )
         return f"{self._system.strip()}\n\n{schema_hint}".strip()
 
-    def _create_cursor_agent(self) -> Any:
+    def _create_cursor_agent(self, effort: str | None = None) -> Any:
         # CursorProvider imports lazily and keeps these handles in the provider
         # module so tests and existing provider wiring can patch them.
         from app.core.commentary import llm_providers as providers
         if providers._Agent is None:
             raise RuntimeError("Cursor SDK is not initialized")
-        options = self.provider._agent_options(str(self._model))
+        options = self.provider._agent_options(str(self._model), effort)
         return providers._Agent.create(options)
 
-    async def _cursor_call(self, user: str) -> tuple[str, int]:
+    async def _cursor_call(self, user: str, *, effort: str | None = None) -> tuple[str, int]:
+        """Retry one failed Cursor run on a fresh agent rebuilt from committed records.
+
+        A failed run may have left a draft in the agent's history, so the agent is
+        closed first; the retry never sees anything but accepted annotations.
+        """
+        failed: list[str] = []
+        for attempt in range(2):
+            try:
+                raw, usage = await self._cursor_attempt(user, effort=effort)
+            except CursorRunFailed as exc:
+                failed.append(exc.run_id)
+                logger.warning("Cursor run %s failed (attempt %d/2)", exc.run_id, attempt + 1)
+                await self._reset_native()
+                if attempt == 1:
+                    raise
+                continue
+            self.last_request["failed_runs"] = failed
+            return raw, usage
+        raise AssertionError("unreachable")
+
+    async def _cursor_attempt(self, user: str, *, effort: str | None = None) -> tuple[str, int]:
         created_now = self._cursor_agent is None
         if created_now:
-            create_task = asyncio.create_task(asyncio.to_thread(self._create_cursor_agent))
+            create_task = asyncio.create_task(asyncio.to_thread(self._create_cursor_agent, effort))
             try:
                 self._cursor_agent = await asyncio.shield(create_task)
             except asyncio.CancelledError:
@@ -272,6 +267,7 @@ class CommentarySession:
         prompt = f"{prefix}\n\n{turn}".strip() if prefix else turn.strip()
         self.last_request = {
             "provider": self.name,
+            "model_selection": cursor_model_selection(str(self._model), effort),
             "prompt": prompt,
             "agent_id": getattr(self._cursor_agent, "agent_id",
                                  getattr(self._cursor_agent, "id", None)),
@@ -292,7 +288,7 @@ class CommentarySession:
             await self._reset_native()
             raise
         if getattr(result, "status", None) == "error":
-            raise RuntimeError(f"Cursor commentary run failed: {getattr(result, 'id', '?')}")
+            raise CursorRunFailed(str(getattr(result, "id", "?")))
         raw = getattr(result, "result", None) or ""
         return strip_json_fence(str(raw)), _usage_total_cursor(result)
 

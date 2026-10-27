@@ -1,12 +1,16 @@
 # Automatic chess annotator (backend)
 
-FastAPI service that analyzes a PGN with Stockfish, detects key moments, runs **BM25 (Tantivy)** retrieval over a local positional index, and generates concise LLM commentary. Results stream over the **jobs** WebSocket.
+FastAPI service that analyzes PGNs with Stockfish, detects key moments, computes Guid-style feature differences and rule claims, and renders grounded annotations. Results stream over the **jobs** WebSocket.
+
+**Current commentary contract:** the LLM selects the order and change/state wording of approved claims; the application renders their supporting variations and evaluations. It cannot add arbitrary chess prose. See [the benchmark protocol](docs/annotation-benchmark.md) for reproducible API evaluation, regression cases, human-rating sheets and limitations. The older RAG/digest pipeline descriptions below describe earlier experiments; the current default per-move path is `FactsComposeStage` and does not retrieve RAG examples or generate a free-text game narrative.
+
+**Game commentary now uses one conversation session per game.** Key moments are processed in reverse order. Accepted, rendered annotations are supplied to subsequent turns for continuity, with current-move evidence and claim IDs explicitly scoped to that move. OpenAI uses response chaining; Cursor-hosted models (Composer 2.5, Grok 4.6) reuse one Cursor agent per game. See [session lifecycle and verification](docs/commentary-sessions.md). Standalone research calls retain their explicitly defined protocols; historical experiments are not converted in place.
 
 ## Requirements
 
 - Python 3.10+
 - `stockfish.exe` in the project root (Windows) or `STOCKFISH_PATH` pointing at the binary
-- OpenAI and/or Anthropic API key for commentary (choose provider per job; see env vars)
+- OpenAI and/or Cursor API key for commentary (choose the model per job; see env vars)
 
 ## Setup
 
@@ -21,9 +25,9 @@ pip install -r requirements.txt
 | Variable | Purpose |
 | -------- | ------- |
 | `OPENAI_API_KEY` | Required when using provider `openai` |
-| `ANTHROPIC_API_KEY` | Required when using provider `anthropic` |
-| `LLM_DEFAULT_PROVIDER` | `openai`, `anthropic`, or `cursor` (default `openai`) when a job omits `llm_provider` |
-| `CURSOR_API_KEY` | Required when `LLM_DEFAULT_PROVIDER=cursor` (Cursor Dashboard → Integrations) |
+| `LLM_DEFAULT_PROVIDER` | `openai` (GPT-6 Luna), `grok` (Grok 4.6 via Cursor) or `cursor` (Composer 2.5) when a job omits `llm_provider`; default `openai` |
+| `CURSOR_API_KEY` | Required for `grok` and `cursor` (Cursor Dashboard → Integrations) |
+| `CURSOR_AGENT_WORKSPACE` | Optional empty working directory for Cursor agents (default: `<temp>/aca-cursor-agent`); keep it outside the repository |
 | `RAG_BM25_PATH` | Directory of the Tantivy BM25 index. **v2** phase-aware index default build: `data/bm25_positions_v2` (see below). Legacy: `data/bm25_positions`. If unset or invalid, commentary runs without reference examples |
 | `RAG_BM25_STOCKFISH_DEPTH` | Depth for runtime PV used in BM25 queries (default `14`) |
 | `RAG_MIN_SCORE_OPENING` | Minimum combined BM25+board score to inject opening examples (default `0.45`; below → no RAG) |

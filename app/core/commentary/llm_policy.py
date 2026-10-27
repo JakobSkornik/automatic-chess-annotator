@@ -5,8 +5,8 @@ import os
 
 _POLICY: dict[str, dict[str, str]] = {
     "openai": {"composer": "gpt-6-luna"},
-    "anthropic": {"composer": "claude-haiku-5-5"},
     "cursor": {"composer": "composer-2.5"},
+    "grok": {"composer": "grok-4.6"},
 }
 
 def resolve_model(provider: str, stage: str, pass_label: str | None = None) -> str:
@@ -22,7 +22,7 @@ def resolve_model(provider: str, stage: str, pass_label: str | None = None) -> s
         override = os.environ.get(f"COMMENTARY_{p.upper()}_MODEL", "").strip()
         if override:
             prefixes = {"openai": ("gpt-", "o1", "o3", "o4"),
-                        "anthropic": ("claude-",), "cursor": ("composer-", "gpt-", "claude-")}
+                        "cursor": ("composer-", "gpt-"), "grok": ("grok-",)}
             if not override.startswith(prefixes[p]):
                 raise ValueError(f"COMMENTARY_{p.upper()}_MODEL does not match provider {p}")
             return override

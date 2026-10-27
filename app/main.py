@@ -9,6 +9,7 @@ from app.core.cleanup import cleanup_old_files
 from app.core.worker import analysis_worker
 from app.routes import jobs, surveys, survey_grid
 from app.survey_bundle import install_bundled_surveys
+from app.drive_backup import backup_quietly
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     install_bundled_surveys()
+    # Catch up responses whose Drive upload failed before the last restart.
+    asyncio.get_running_loop().run_in_executor(None, backup_quietly)
     # Startup: Start worker and cleanup tasks
     worker_task = asyncio.create_task(analysis_worker())
     # Legacy files remain subject to the existing retention policy. New

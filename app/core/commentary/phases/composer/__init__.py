@@ -113,7 +113,7 @@ COMPOSER_MAX_OUTPUT_TOKENS = 500
 def commentary_output_limit() -> int | None:
     """Optional operator cap; otherwise provider policy budgets reasoning separately.
 
-    The narrative validator still limits the displayed prose to 140 words.
+    The narrative validator still limits the displayed prose to narrative.MAX_WORDS words.
     """
     value = os.environ.get("COMMENTARY_MAX_OUTPUT_TOKENS", "").strip()
     if not value:
@@ -240,7 +240,7 @@ async def compose_facts_comment(
         text = render_editor_response(raw, audience_facts, lvl, archetype)
         return _result(text, "llm", True, lvl)
     except Exception as exc:
-        logger.warning("Grounded composer rejected at ply %s: %s", facts.ply, type(exc).__name__)
+        logger.warning("Grounded composer rejected at ply %s: %s: %s", facts.ply, type(exc).__name__, exc)
     return _result(template, "template", False, lvl)
 
 
@@ -292,7 +292,8 @@ async def _compose_rewrite(service, facts, level, archetype, template, *, model,
                       rendering="llm", semantic_review="accepted", review_decisions=decisions,
                       commentary_status="llm_approved")
     except Exception as exc:
-        logger.warning("Grounded rewrite rejected at ply %s: %s", facts.ply, type(exc).__name__)
+        logger.warning("Grounded rewrite rejected at ply %s (%s stage): %s: %s",
+                       facts.ply, stage, type(exc).__name__, exc)
         result.update(contract_ok=False,
                       semantic_review="rejected_or_unavailable" if stage == "review"
                       else "not_run" if review_enabled else "disabled",

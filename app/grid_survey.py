@@ -1,4 +1,4 @@
-"""Blinded model comparisons with balanced level assignment and best/worst reasons."""
+"""Blinded model comparisons with balanced level assignment and 1-5 ratings per comment."""
 from __future__ import annotations
 
 import json
@@ -8,21 +8,47 @@ import uuid
 from contextlib import contextmanager
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, StrictInt
 
 from app import survey
 from app.models.GameJson import GameJson
 from app.research.survey_grid import LEVELS, grid_cells
 
 
+# Each comment is rated on every criterion, 1 = strongly disagree ... 5 = strongly agree.
+CRITERIA = [
+    {'id': 'understandable', 'label': 'Understandable', 'statement': 'I can follow this explanation.'},
+    {'id': 'correct', 'label': 'Correct', 'statement': 'The chess statements seem right to me.'},
+    {'id': 'useful', 'label': 'Useful', 'statement': 'It helps me understand the move.'},
+]
+SCALE = {'min': 1, 'max': 5, 'low': 'Strongly disagree', 'high': 'Strongly agree'}
+QUESTIONNAIRE_VERSION = 3
+
+
 class ComparisonReview(survey.StrictModel):
     game_id: str = Field(pattern=r'^game-\d{2}$')
-    decision: Literal['ranked', 'similar', 'cannot_judge', 'skipped']
-    best: str | None = None
-    worst: str | None = None
-    best_reason: str = Field(default='', max_length=1500)
-    worst_reason: str = Field(default='', max_length=1500)
+    decision: Literal['rated', 'skipped']
+    # candidate id -> criterion id -> score
+    scores: dict[str, dict[str, survey.Score]] = Field(default_factory=dict)
     feedback: str = Field(default='', max_length=1500)
+
+
+RATING_SYSTEMS = ['FIDE', 'Lichess', 'Chess.com', 'National federation', 'Estimate (unrated)']
+
+
+class GridStartRequest(survey.StrictModel):
+    consent: Literal[True]
+    elo: StrictInt = Field(ge=100, le=3500)
+    rating_system: Literal[tuple(RATING_SYSTEMS)]
+
+
+def rating_band(elo):
+    """Map a participant rating onto the game bands so older summaries keep working."""
+    if elo < 800:
+        return survey.BRACKETS[0]
+    if elo >= 2400:
+        return survey.BRACKETS[-1]
+    return survey.BRACKETS[1 + (elo - 800) // 200]
 
 
 class ComparisonSave(survey.StrictModel):
@@ -47,9 +73,14 @@ def database():
                 token_hash TEXT UNIQUE NOT NULL, rating TEXT NOT NULL, assignment TEXT NOT NULL,
                 reviews TEXT NOT NULL DEFAULT '[]', feedback TEXT NOT NULL DEFAULT '',
                 version INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL, completed_at TEXT
+                updated_at TEXT NOT NULL, completed_at TEXT,
+                elo INTEGER, rating_system TEXT
             );
         ''')
+        columns = {r[1] for r in db.execute('PRAGMA table_info(comparison_responses)')}
+        for column, kind in (('elo', 'INTEGER'), ('rating_system', 'TEXT')):
+            if column not in columns:
+                db.execute(f'ALTER TABLE comparison_responses ADD COLUMN {column} {kind}')
         yield db
 
 
@@ -63,7 +94,8 @@ def _study(db, token, *, admin=False):
 def freeze_grid(manifest, variants):
     games = manifest.get('games', [])
     models = manifest.get('models', [])
-    if (manifest.get('kind') != 'comparison_grid' or manifest.get('questionnaire_version') != 2
+    # Version 2 (best/worst choices) studies stay importable; new studies use version 3.
+    if (manifest.get('kind') != 'comparison_grid' or manifest.get('questionnaire_version') not in (2, 3)
             or len(games) != 10 or [g['bracket'] for g in games] != survey.BRACKETS
             or len({g['id'] for g in games}) != 10 or manifest.get('levels') != LEVELS
             or not 2 <= len(models) <= 7 or len({m['id'] for m in models}) != len(models)):
@@ -103,7 +135,7 @@ def freeze_grid(manifest, variants):
 
 
 def publish_grid(manifest, variants):
-    manifest = {**manifest, 'kind': 'comparison_grid', 'questionnaire_version': 2,
+    manifest = {**manifest, 'kind': 'comparison_grid', 'questionnaire_version': QUESTIONNAIRE_VERSION,
                 'title': manifest.get('title', 'Chess commentary comparison')}
     frozen = freeze_grid(manifest, variants)
     public, admin = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
@@ -148,12 +180,14 @@ def public_manifest(token):
         manifest = json.loads(_study(db, token)['manifest'])
     return {'title': 'Chess commentary comparison', 'round_count': 10,
             'candidate_count': len(manifest['models']), 'rating_brackets': survey.BRACKETS,
+            'rating_systems': RATING_SYSTEMS, 'criteria': CRITERIA, 'scale': SCALE,
             'levels': LEVELS, 'review_scope': manifest.get('review_scope', 'position')}
 
 
 def _response(row):
     assignment = json.loads(row['assignment'])
-    return {'id': row['id'], 'rating': row['rating'], 'version': row['version'],
+    return {'id': row['id'], 'rating': row['rating'], 'elo': row['elo'],
+            'rating_system': row['rating_system'], 'version': row['version'],
             'completed': row['completed_at'] is not None, 'reviews': json.loads(row['reviews']),
             'feedback': row['feedback'], 'rounds': [
                 {'game_id': r['game_id'], 'level': r['level'],
@@ -161,9 +195,7 @@ def _response(row):
                 for r in assignment]}
 
 
-def start_response(token, request: survey.StartRequest):
-    if request.rating not in survey.BRACKETS + ['Unrated / prefer not to say']:
-        raise survey.SurveyError('Choose a listed rating band.')
+def start_response(token, request: GridStartRequest):
     response_token = secrets.token_urlsafe(32)
     response_id, now = str(uuid.uuid4()), survey._now()
     rng = random.SystemRandom()
@@ -183,8 +215,9 @@ def start_response(token, request: survey.StartRequest):
             assignment.append({'game_id': game['id'], 'level': level, 'candidates': candidates})
         rng.shuffle(assignment)
         db.execute('''INSERT INTO comparison_responses
-            (id,survey_id,token_hash,rating,assignment,created_at,updated_at) VALUES (?,?,?,?,?,?,?)''',
-                   (response_id, study['id'], survey._digest(response_token), request.rating, json.dumps(assignment), now, now))
+            (id,survey_id,token_hash,rating,elo,rating_system,assignment,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)''',
+                   (response_id, study['id'], survey._digest(response_token), rating_band(request.elo), request.elo,
+                    request.rating_system, json.dumps(assignment), now, now))
         row = db.execute('SELECT * FROM comparison_responses WHERE id=?', (response_id,)).fetchone()
         return {**_response(row), 'token': response_token}
 
@@ -234,6 +267,28 @@ def get_candidate_game(token, response_token, candidate_id):
         return json.loads(variant['game'])
 
 
+def get_round_board(token, response_token, game_id):
+    """The round's game with engine lines and evidence but no comment prose.
+
+    Variations and rule facts are identical for every candidate of a round (same
+    engine evidence and level), so participants explore them without seeing any
+    model's commentary on other moves.
+    """
+    with database() as db:
+        study = _study(db, token)
+        row = _participant(db, study, response_token)
+        assigned = next((r for r in json.loads(row['assignment']) if r['game_id'] == game_id), None)
+        if not assigned:
+            raise survey.SurveyError('Round not found.', 404)
+        variant = db.execute('SELECT game FROM comparison_variants WHERE survey_id=? AND variant_id=?',
+                             (study['id'], assigned['candidates'][0]['variant_id'])).fetchone()
+    game = json.loads(variant['game'])
+    for move in game['moves']:
+        move.update(comment='', resolved_tokens=[], has_comment=False, final_comment=False,
+                    comment_kind='none', commentary_status=None, commentary_reason=None)
+    return game
+
+
 def save_response(token, response_token, request: ComparisonSave):
     with database() as db, db:
         db.execute('BEGIN IMMEDIATE')
@@ -244,15 +299,14 @@ def save_response(token, response_token, request: ComparisonSave):
             raise survey.SurveyError('Unknown or duplicate comparison round.')
         if request.completed and set(ids) != set(assignments):
             raise survey.SurveyError('Complete or skip all ten rounds before submitting.')
+        criteria = {c['id'] for c in CRITERIA}
         for review in request.reviews:
             candidates = {c['id'] for c in assignments[review.game_id]['candidates']}
-            if review.decision == 'ranked':
-                if review.best not in candidates or review.worst not in candidates or review.best == review.worst:
-                    raise survey.SurveyError('Choose different best and worst comments from this round.')
-                if not review.best_reason.strip() or not review.worst_reason.strip():
-                    raise survey.SurveyError('Explain both your best and worst choices.')
-            elif review.best is not None or review.worst is not None:
-                raise survey.SurveyError('Unranked rounds cannot contain best/worst choices.')
+            if review.decision == 'rated':
+                if set(review.scores) != candidates or any(set(s) != criteria for s in review.scores.values()):
+                    raise survey.SurveyError('Rate every comment on every question in this round.')
+            elif review.scores:
+                raise survey.SurveyError('Skipped rounds cannot contain ratings.')
         serialized = json.dumps([r.model_dump() for r in request.reviews])
         if row['completed_at']:
             if request.completed and row['reviews'] == serialized and row['feedback'] == request.feedback:
@@ -270,37 +324,45 @@ def results(token):
     with database() as db:
         study = _study(db, token, admin=True)
         manifest = json.loads(study['manifest'])
-        rows = db.execute('SELECT * FROM comparison_responses WHERE survey_id=? ORDER BY created_at', (study['id'],)).fetchall()
-    cells = {c['id']: {**c, 'ranked': 0, 'best': 0, 'worst': 0, 'similar': 0, 'cannot_judge': 0, 'skipped': 0}
+        rows = db.execute('SELECT * FROM comparison_responses WHERE survey_id=? ORDER BY elo IS NULL, elo, created_at',
+                          (study['id'],)).fetchall()
+    criteria = [c['id'] for c in CRITERIA]
+    cells = {c['id']: {**c, 'rated': 0, 'skipped': 0, 'scores': {k: [] for k in criteria}}
              for c in grid_cells(manifest)}
     completed = [r for r in rows if r['completed_at']]
-    reasons, exports = [], []
+    notes, exports, legacy = [], [], 0
     for row in completed:
         assignment = {r['game_id']: r for r in json.loads(row['assignment'])}
         order = list(assignment)
         for review in json.loads(row['reviews']):
+            if review.get('decision') not in ('rated', 'skipped'):
+                legacy += 1  # Best/worst answers from questionnaire version 2.
+                continue
             assigned = assignment[review['game_id']]
+            if review['feedback']:
+                notes.append({'game_id': review['game_id'], 'level': assigned['level'], 'text': review['feedback']})
             for position, candidate in enumerate(assigned['candidates']):
                 cell = cells[candidate['variant_id']]
                 cell[review['decision']] += 1
-                best, worst = candidate['id'] == review['best'], candidate['id'] == review['worst']
-                cell['best'] += best
-                cell['worst'] += worst
-                reason = review['best_reason'] if best else review['worst_reason'] if worst else ''
-                if reason:
-                    reasons.append({'model': cell['model'], 'game_id': cell['game_id'], 'level': cell['level'],
-                                    'choice': 'best' if best else 'worst', 'text': reason})
-                exports.append({'response_id': row['id'], 'participant_rating': row['rating'],
+                scores = review['scores'].get(candidate['id'], {})
+                for key in criteria:
+                    if key in scores:
+                        cell['scores'][key].append(scores[key])
+                exports.append({'response_id': row['id'], 'participant_elo': row['elo'],
+                                'participant_rating_system': row['rating_system'], 'participant_rating': row['rating'],
                                 'game_id': cell['game_id'], 'model': cell['model'], 'level': cell['level'],
                                 'round_order': order.index(cell['game_id']) + 1, 'candidate_order': position + 1,
-                                'decision': review['decision'], 'best': best, 'worst': worst, 'reason': reason,
+                                'decision': review['decision'], **{key: scores.get(key) for key in criteria},
                                 'round_feedback': review['feedback'], 'overall_feedback': row['feedback'],
                                 'submitted_at': row['completed_at']})
     for cell in cells.values():
-        cell['best_rate'] = cell['best'] / cell['ranked'] if cell['ranked'] else None
-        cell['worst_rate'] = cell['worst'] / cell['ranked'] if cell['ranked'] else None
+        values = cell.pop('scores')
+        cell['criteria'] = {key: {'n': len(v), 'mean': sum(v) / len(v) if v else None,
+                                  'distribution': [v.count(score) for score in range(1, 6)]}
+                            for key, v in values.items()}
     return {'title': manifest['title'], 'started': len(rows), 'completed': len(completed),
             'in_progress': len(rows) - len(completed), 'models': manifest['models'], 'levels': LEVELS,
+            'criteria': CRITERIA, 'scale': SCALE,
             'games': [{'id': g['id'], 'bracket': g['bracket']} for g in manifest['games']],
-            'cells': list(cells.values()), 'reasons': reasons, 'responses': exports,
+            'cells': list(cells.values()), 'notes': notes, 'responses': exports, 'legacy_reviews': legacy,
             'feedback': [r['feedback'] for r in completed if r['feedback']], 'provenance': manifest}

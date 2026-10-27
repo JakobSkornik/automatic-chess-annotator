@@ -59,12 +59,10 @@ def package_version(name: str) -> str | None:
 
 def _provider_controls(provider: str, model: str, effort: str, max_output_tokens: int) -> dict:
     import os
-    if provider == "cursor":
-        effort_effective, token_effective = "ignored_by_provider", "ignored_by_provider"
-    elif provider == "anthropic":
-        from app.core.commentary.llm_runtime import anthropic_native_model
-        effort_effective = "passed" if anthropic_native_model(model) else "not_exposed_by_provider"
-        token_effective = "passed_as_max_tokens"
+    if provider in ("cursor", "grok"):
+        from app.core.commentary.llm_providers import CURSOR_EFFORT_PARAMS
+        effort_effective = "passed" if model in CURSOR_EFFORT_PARAMS else "not_exposed_by_model"
+        token_effective = "ignored_by_provider"
     else:
         # This provider applies effort only to models that use the reasoning API.
         from app.core.commentary.llm_providers import _openai_model_uses_reasoning_api
@@ -119,8 +117,8 @@ def prepare(parent: Path, folder: Path, *, provider: str, model: str, effort: st
     parent, folder = Path(parent).resolve(), Path(folder).resolve()
     if folder.exists():
         raise FileExistsError(f"Experiment directory already exists: {folder}")
-    if provider not in {"openai", "anthropic", "cursor"}:
-        raise ValueError("provider must be openai, anthropic, or cursor")
+    if provider not in {"openai", "cursor", "grok"}:
+        raise ValueError("provider must be openai, cursor, or grok")
     if not model or replicates < 1 or max_output_tokens < 1:
         raise ValueError("model, positive replicates and positive output limit are required")
     parent_manifest = runner.verify_manifest(parent)
@@ -141,7 +139,7 @@ def prepare(parent: Path, folder: Path, *, provider: str, model: str, effort: st
     random.Random(seed).shuffle(schedule)
     environment = {"python": sys.version, "platform": platform.platform(),
                    "packages": {p: package_version(p) for p in
-                                ("openai", "anthropic", "cursor-sdk", "python-chess", "pydantic")}}
+                                ("openai", "cursor-sdk", "python-chess", "pydantic")}}
     effective_model = model
     manifest = {"protocol": PROTOCOL, "experiment_id": folder.name,
         "dataset_status": "diagnostic_not_held_out", "track": "prompt_ablation",
@@ -159,7 +157,7 @@ def prepare(parent: Path, folder: Path, *, provider: str, model: str, effort: st
         "evidence_version": EVIDENCE_VERSION,
         "schedule_hash": digest(schedule),
         "scope": "Same freshly recomputed B11 facts and editor contract; context profile is the only prompt treatment. Diagnostic comparison; no human quality claim.",
-        "provider_call_semantics": "One logical call per C/E cell. OpenAI/Anthropic provider_trace records output caps, usage and token-truncation retries; SDK transport retries and Cursor internal retries are not enumerated. Logical calls are not HTTP-attempt counts.",
+        "provider_call_semantics": "One logical call per C/E cell. OpenAI provider_trace records output caps, usage and token-truncation retries; SDK transport retries and Cursor internal retries are not enumerated. Logical calls are not HTTP-attempt counts.",
         "environment": environment, "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     folder.mkdir(parents=True, exist_ok=False)
     _write_new(folder / "source.json", source)

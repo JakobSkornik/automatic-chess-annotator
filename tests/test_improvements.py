@@ -108,7 +108,7 @@ def test_state_form_follows_realization_tag():
 def test_envisioned_concessions_use_state_form_and_hedge():
     facts = _facts()
     text = render_facts_template(facts)
-    assert "Down the line," in text
+    assert "In the analysed continuation," in text
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +123,8 @@ def test_audience_view_beginner_trims_claims_and_pv():
     concessions = [c for c in view.claims if c.is_concession]
     assert len(merits) <= 2
     assert len(concessions) <= 1
-    # PV trimmed to the beginner cap
-    cap = LEVEL_BASE_PLIES["beginner"]
-    assert len(view.display_line.line_san) == min(cap, len(facts.display_line.line_san))
+    # Audience adaptation must preserve the endpoint supporting the claims.
+    assert view.display_line == facts.display_line
     # Original untouched (stored CommentFacts stay complete for the FE reasons view)
     assert len(facts.claims) == 4
     assert len(facts.display_line.line_san) == 5
@@ -184,7 +183,8 @@ def test_probe_trim_drops_contradicting_tail():
 
     trimmed = trim_envisioned_line_by_probe(controlled, prober)
     assert trimmed is not controlled
-    assert len(trimmed.fens) < len(controlled.fens)
+    # No legal quiet agreeing prefix exists: retain the line and abstain.
+    assert not trimmed.evidence_valid
 
 
 def test_probe_trim_noop_when_story_agrees():
@@ -318,7 +318,8 @@ def test_pin_allowed_when_a_claim_names_it():
         ]
     )
     text = f"{_contract_prefix(facts)} White pins a minor piece."
-    assert validate_facts_comment(text, facts) is True
+    assert validate_facts_comment(text, facts) is False  # arbitrary prose is not certified
+    assert validate_facts_comment(render_facts_template(facts), facts) is True
 
 
 def test_alternative_claims_also_ground_a_tactic():

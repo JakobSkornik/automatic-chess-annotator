@@ -12,11 +12,9 @@ import uuid
 from pathlib import Path
 
 # USD per million tokens, verified against provider docs on 2026-10-24.
-# Tuple: input, output, OpenAI cached input (None uses input price conservatively).
+# Tuple: input, output, cached input. Cursor-hosted models are billed by Cursor and not priced here.
 PRICES = {
     'gpt-6-astra': (10, 50, 1), 'gpt-6.1-sol': (2, 10, .1), 'gpt-6-luna': (.1, .5, .01),
-    'claude-fable-5-1': (10, 50, None), 'claude-opus-5-5': (4, 20, None),
-    'claude-sonnet-5-5': (2, 10, None), 'claude-haiku-5-5': (.1, .5, None),
 }
 
 
@@ -26,24 +24,19 @@ class BudgetExhausted(BaseException):
 
 def charge_bound(model, usage):
     inp, out, cached_rate = PRICES[model]
-    if model.startswith('gpt-'):
-        tokens = usage['input_tokens']
-        cached = min(tokens, usage.get('cached_tokens', 0))
-        long = tokens > 272000
-        return ((tokens-cached)*inp*1.25*(2 if long else 1)
-                + cached*cached_rate*(2 if long else 1)
-                + usage['output_tokens']*out*(1.5 if long else 1))/1e6
-    return (usage['input_tokens']*inp + usage.get('cache_read_input_tokens',0)*inp
-            + usage.get('cache_creation_input_tokens',0)*inp*2 + usage['output_tokens']*out)/1e6
+    tokens = usage['input_tokens']
+    cached = min(tokens, usage.get('cached_tokens', 0))
+    long = tokens > 272000
+    return ((tokens-cached)*inp*1.25*(2 if long else 1)
+            + cached*cached_rate*(2 if long else 1)
+            + usage['output_tokens']*out*(1.5 if long else 1))/1e6
 
 
 def reservation_bound(model, max_output_tokens):
     inp, out, _ = PRICES[model]
-    # Reserve the model's whole possible input window and maximum cache-write
-    # rate before sending. This deliberately leaves headroom near the ceiling.
-    if model.startswith('gpt-'):
-        return (1050000*inp*2.5 + max_output_tokens*out*1.5)/1e6
-    return (1000000*inp*2 + max_output_tokens*out)/1e6
+    # Reserve the model's whole possible input window at the long-context rate
+    # before sending. This deliberately leaves headroom near the ceiling.
+    return (1050000*inp*2.5 + max_output_tokens*out*1.5)/1e6
 
 
 class SpendLedger:

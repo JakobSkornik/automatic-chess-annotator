@@ -165,10 +165,10 @@ def test_envisioned_merit_is_hedged():
         ]
     )
     text = render_facts_template(facts)
-    assert "This sets up the following deeper in the line" in text
+    assert "In the analysed continuation" in text
     # The un-hedged fact form must NOT appear as a bare sentence.
     assert "White pins a black piece." not in text.replace(
-        "This sets up the following deeper in the line: White pins a black piece.", ""
+        "In the analysed continuation, White pins a black piece.", ""
     )
 
 

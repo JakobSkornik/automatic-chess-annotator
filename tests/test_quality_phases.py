@@ -26,9 +26,11 @@ START = chess.STARTING_FEN
 
 
 def _move(depth: int, uci: str, score: int | None = None, hidden=None) -> Move:
+    board = chess.Board()
+    board.turn = chess.BLACK if depth % 2 else chess.WHITE
     return Move(
         id=depth,
-        position=START,
+        position=board.fen(),
         move=uci,
         context="mainline",
         isAnalyzed=True,
@@ -67,23 +69,18 @@ def test_newly_attacked_ignores_already_attacked():
         assert chess.square_name(got[0]) != "d5"
 
 
-def test_pawn_break_prepared_supported_phalanx():
-    # White plays d4: phalanx c3-d4 facing d5 enemy pawn? Use a clean setup:
-    # white pawns c3+e4? Simplest true break: white pawns on b2,c2? Actually a
-    # supported single pawn advance facing an enemy pawn: white d3-d4 with c3
-    # support vs black d5.
+def test_pawn_break_prepared_rejects_blocked_pawn():
     start = chess.Board("rn1qkbnr/ppp1pppp/8/3p4/8/2PP4/PP2PPPP/RNBQKB1R w - - 0 1")
     leaf = start.copy(stack=False)
-    leaf.push(chess.Move.from_uci("d3d4"))
-    got = pawn_break_prepared(start, leaf, chess.WHITE)
-    assert got == "d"
+    leaf.push_uci("d3d4")
+    assert pawn_break_prepared(start, leaf, chess.WHITE) is None
 
 
-def test_file_opened_for_rook():
+def test_file_not_opened_by_pawn_advance():
     start = chess.Board("4k3/8/8/8/8/P7/8/R3K3 w - - 0 1")
     leaf = start.copy(stack=False)
-    leaf.push(chess.Move.from_uci("a3a4"))  # pawn leaves the a-file
-    assert file_opened_for_rook(start, leaf, chess.WHITE) == 0
+    leaf.push_uci("a3a4")
+    assert file_opened_for_rook(start, leaf, chess.WHITE) is None
 
 
 def test_rule_intent_fires_in_rules_pass():

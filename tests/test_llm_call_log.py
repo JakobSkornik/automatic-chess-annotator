@@ -10,10 +10,18 @@ import pytest
 from app.core.commentary import llm_call_log
 
 
+def _configure_dated_logs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    root = tmp_path / "output"
+    monkeypatch.setenv("ACA_OUTPUT_DIR", str(root))
+    monkeypatch.setattr(llm_call_log, "utc_date", lambda: "2026-10-24")
+    return root
+
+
 def test_log_call_disabled_by_default(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    root = _configure_dated_logs(monkeypatch, tmp_path)
     monkeypatch.delenv("LOG_LLM_TO_FILE", raising=False)
     tok = llm_call_log.set_game_context("should-not-write")
     try:
@@ -31,13 +39,14 @@ def test_log_call_disabled_by_default(
         )
     finally:
         llm_call_log.reset_game_context(tok)
-    assert not (tmp_path / "logs" / "llm").exists()
+    assert not (root / "logs").exists()
 
 
 def test_enabled_without_game_context_writes_nothing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    root = _configure_dated_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("LOG_LLM_TO_FILE", "1")
     llm_call_log.log_call(
         pass_name="x",
@@ -51,13 +60,14 @@ def test_enabled_without_game_context_writes_nothing(
         elapsed_ms=1.0,
         ok=True,
     )
-    assert not (tmp_path / "logs").exists()
+    assert not (root / "logs").exists()
 
 
 def test_enabled_with_game_two_calls_ordered_seq(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    root = _configure_dated_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("LOG_LLM_TO_FILE", "true")
     gid = "game-seq-test-unique"
     tok = llm_call_log.set_game_context(gid)
@@ -90,7 +100,7 @@ def test_enabled_with_game_two_calls_ordered_seq(
     finally:
         llm_call_log.reset_game_context(tok)
 
-    path = tmp_path / "logs" / "llm" / f"{gid}.jsonl"
+    path = root / "logs" / "2026-10-24" / f"{gid}.jsonl"
     lines = path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2
     r1 = json.loads(lines[0])
@@ -106,6 +116,7 @@ def test_enabled_with_game_two_calls_ordered_seq(
 
 def test_ply_propagates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
+    root = _configure_dated_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("LOG_LLM_TO_FILE", "1")
     gid = "game-ply-test-unique"
     gtok = llm_call_log.set_game_context(gid)
@@ -128,7 +139,7 @@ def test_ply_propagates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
         llm_call_log.reset_game_context(gtok)
 
     line = json.loads(
-        (tmp_path / "logs" / "llm" / f"{gid}.jsonl").read_text(encoding="utf-8")
+        (root / "logs" / "2026-10-24" / f"{gid}.jsonl").read_text(encoding="utf-8")
     )
     assert line["ply"] == 15
 
@@ -137,6 +148,7 @@ def test_file_isolation_per_cwd(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    root = _configure_dated_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("LOG_LLM_TO_FILE", "1")
     gid = "isolation-game"
     tok = llm_call_log.set_game_context(gid)
@@ -157,4 +169,8 @@ def test_file_isolation_per_cwd(
         llm_call_log.reset_game_context(tok)
 
     assert Path.cwd().resolve() == tmp_path.resolve()
-    assert (tmp_path / "logs" / "llm" / f"{gid}.jsonl").is_file()
+    assert (root / "logs" / "2026-10-24" / f"{gid}.jsonl").is_file()
+def test_explicit_log_directory_does_not_require_chdir(tmp_path, monkeypatch):
+    from app.core.commentary.llm_call_log import _path_for_game
+    monkeypatch.setenv("LOG_LLM_DIR", str(tmp_path / "artifact-logs"))
+    assert _path_for_game("example") == tmp_path / "artifact-logs" / "example.jsonl"
