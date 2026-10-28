@@ -1,4 +1,4 @@
-"""Writer evidence added in grounded_narrative_v4: severity, uniqueness, material trade, stop point."""
+"""Writer evidence added in grounded_narrative_v4/v5: severity, uniqueness, material trade, stop point."""
 import asyncio
 import json
 from contextlib import asynccontextmanager
@@ -77,8 +77,8 @@ def test_quiet_move_holds():
     assert writer_view(facts)["assessment"]["change_for_mover"] == {"direction": "holds", "size": "none"}
 
 
-def test_prompt_asks_for_about_150_words_and_gates_uniqueness():
-    assert "about 150 words" in narrative.SYSTEM and "never more than 250" in narrative.SYSTEM
+def test_prompt_asks_for_fewer_than_150_words_and_gates_uniqueness():
+    assert "fewer than 150" in narrative.SYSTEM and "do not pad" in narrative.SYSTEM
     assert "unique_best" in narrative.SYSTEM and "unique_best" in narrative.REVIEW_SYSTEM
     assert narrative.MAX_WORDS == 250
 
@@ -117,3 +117,66 @@ def test_stop_at_move_index_ends_reverse_sweep(monkeypatch):
     asyncio.run(game_pipeline.GameAnnotationPipeline().run_llm_phases(state, Service(), stop_at_move_index=3))
     assert commented == [7, 5, 3]
     assert state.llm_done
+
+
+def test_pin_is_not_reported_when_the_pinned_piece_takes_the_pinner():
+    from app.core.commentary.rules.tactical_evidence import absolute_pins, tactical_claims
+    # game-05 of the survey, 34.Qd4 Qxd4 cxd4: the c3 pawn "pinned" by the queen recaptures it.
+    start = "5r1r/ppk2pQp/3b4/3q4/8/2PP4/PK2pNPP/1R5R w - - 0 34"
+    board = chess.Board(start)
+    for san in ("Qd4", "Qxd4"):
+        board.push_san(san)
+    assert not absolute_pins(board, chess.BLACK)  # the pawn attacks d4
+    assert not [c for c in tactical_claims(line(start, ["Qd4", "Qxd4", "cxd4"])) if c.rule_id == "absolute_pin"]
+
+
+def test_real_pin_is_still_reported():
+    from app.core.commentary.rules.tactical_evidence import absolute_pins
+    board = chess.Board("6k1/6b1/8/8/8/2P5/8/K7 w - - 0 1")  # bishop g7, pawn c3, king a1
+    assert absolute_pins(board, chess.BLACK) == {(chess.G7, chess.C3, chess.A1)}
+
+
+def test_queen_pinned_by_a_defended_bishop_is_still_pinned():
+    from app.core.commentary.rules.tactical_evidence import absolute_pins
+    # Bb5 pins the queen on d7 to the king on e8; Qxb5 would lose the queen to axb5.
+    board = chess.Board("4k3/3q4/8/1B6/P7/8/8/4K3 b - - 0 1")
+    assert absolute_pins(board, chess.WHITE) == {(chess.B5, chess.D7, chess.E8)}
+
+
+def test_attacked_queen_that_can_take_the_attacker_is_not_hanging():
+    from app.core.commentary.features.guid_features.features.threats.hanging import is_concretely_hanging
+    board = chess.Board("5r1r/ppk2pQp/3b4/3q4/8/2PP4/PK2pNPP/1R5R w - - 0 34")
+    board.push_san("Qd4")  # game-05: the d5 queen is attacked but simply takes on d4
+    assert not is_concretely_hanging(board, chess.D5, chess.WHITE)
+    # Taking the attacker would lose material (knight defended by b2): still hanging.
+    defended_knight = chess.Board("4k3/8/8/3q4/8/2N5/1P6/4K3 b - - 0 1")
+    assert is_concretely_hanging(defended_knight, chess.D5, chess.WHITE)
+    # The queen takes the undefended rook attacking it: not hanging.
+    loose_rook = chess.Board("4k3/8/8/3q4/8/8/8/3R3K b - - 0 1")
+    assert not is_concretely_hanging(loose_rook, chess.D5, chess.WHITE)
+
+
+def test_back_rank_needs_an_enemy_heavy_piece_and_no_guard():
+    from app.core.commentary.rules.piece_rules import _back_rank_exposed
+    assert _back_rank_exposed(chess.Board("4r1k1/8/8/8/8/8/5PPP/6K1 w - - 0 1"), chess.WHITE)
+    assert not _back_rank_exposed(chess.Board("4b1k1/8/8/8/8/8/5PPP/6K1 w - - 0 1"), chess.WHITE)  # no rook/queen
+    assert not _back_rank_exposed(chess.Board("4r1k1/8/8/8/8/8/5PPP/R5K1 w - - 0 1"), chess.WHITE)  # rook guards
+
+
+def test_feature_comparison_uses_plain_group_names():
+    from app.models.comment_facts import FeatureAdvantage
+    facts = qxb5_facts()
+    advantages = [FeatureAdvantage(name="W_BISHOP_PLUS_PAWNS_ON_COLOR", alt_delta_cp=1, played_delta_cp=16, advantage_cp=-15),
+                  FeatureAdvantage(name="BLACK_KING_DANGER", alt_delta_cp=0, played_delta_cp=264, advantage_cp=-264),
+                  FeatureAdvantage(name="UNMAPPED_TERM", alt_delta_cp=0, played_delta_cp=50, advantage_cp=50)]
+    facts = facts.model_copy(update={"better_alternative": facts.better_alternative.model_copy(
+        update={"feature_advantages": advantages})})
+    comparison = writer_view(facts)["assessment"]["feature_comparison"]
+    # Black moves, so White-POV negative advantages favour the alternative for Black.
+    assert comparison == {"favours_played_move": [], "favours_alternative": ["pawn structure", "king safety"]}
+
+
+def test_prompt_guides_levels_quiet_moves_and_net_material():
+    assert "beginner: one main idea" in narrative.SYSTEM
+    assert "For a quiet move without a tactic" in narrative.SYSTEM
+    assert "net result" in narrative.SYSTEM

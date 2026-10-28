@@ -8,10 +8,37 @@ from app.models.comment_facts import Claim, EnvisionedLine
 
 
 CONCRETE_IDS = {"legal_capture", "absolute_pin", "exchange_sequence"}
+_VALUE = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 100}
+
+
+def takes_attacker_safely(board: chess.Board, square: int, attacker_squares) -> bool:
+    """Whether the piece on ``square`` can legally capture one of these attackers
+    without losing material on that capture: the attacker is undefended or worth
+    at least as much. Such a piece is not really threatened, pinned or targeted
+    (a pawn on c3 "pinned" by a queen on d4 simply takes the queen)."""
+    piece = board.piece_at(square)
+    if piece is None:
+        return False
+    view = board.copy(stack=False)
+    if view.turn != piece.color:
+        view.ep_square = None
+    view.turn = piece.color
+    targets = set(attacker_squares)
+    for move in view.generate_legal_captures():
+        if move.from_square != square or move.to_square not in targets:
+            continue
+        taken = board.piece_at(move.to_square)
+        defended = board.is_attacked_by(taken.color, move.to_square)
+        if not defended or _VALUE[taken.piece_type] >= _VALUE[piece.piece_type]:
+            return True
+    return False
 
 
 def absolute_pins(board: chess.Board, color: chess.Color) -> set[tuple[int, int, int]]:
-    """Attacker, victim and king squares for absolute sliding-piece pins."""
+    """Attacker, victim and king squares for absolute sliding-piece pins.
+
+    A pinned piece that can safely capture its pinner (a pawn on c3 against a
+    queen on d4) is not restrained, so that geometry is not reported as a pin."""
     king = board.king(not color)
     if king is None:
         return set()
@@ -24,7 +51,7 @@ def absolute_pins(board: chess.Board, color: chess.Color) -> set[tuple[int, int,
             slider = board.piece_type_at(attacker)
             if slider not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
                 continue
-            if victim in chess.SquareSet(chess.between(attacker, king)):
+            if victim in chess.SquareSet(chess.between(attacker, king)) and not takes_attacker_safely(board, victim, [attacker]):
                 result.add((attacker, victim, king))
     return result
 

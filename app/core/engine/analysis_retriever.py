@@ -707,6 +707,25 @@ async def run_engine_analysis_to_json(
     return assemble_game_json(state), state
 
 
+def rebuild_comment_facts(state: EnginePipelineState, engine_connector: EngineConnector) -> None:
+    """Re-run event extraction and fact building on saved engine rows (no new engine search).
+
+    Lets a study apply changed rules to identical engine evidence. Refutation
+    scan results are kept from the saved events; the leaf probe uses the engine.
+    """
+    eco_book = ECOBook()
+    detector = AnalysisRetriever(engine_connector, state.game, eco_book).key_moment_detector
+    refutations = {event.ply: event.refutations for event in state.move_events}
+    move_events = ChessEventExtractor(eco_book=eco_book, key_moment_detector=detector).extract_events(
+        state.game, state.analyzed_rows)
+    move_events = [event.model_copy(update={"refutations": refutations.get(event.ply) or []})
+                   for event in move_events]
+    _attach_comment_facts(move_events, state.analyzed_rows, engine_connector)
+    state.move_events = move_events
+    state.context = state.context.model_copy(
+        update={"move_events": move_events, "critical_moments": [e for e in move_events if e.is_critical]})
+
+
 def _pv_line_for_ai_payload(row: AnalyzedMoveData | None) -> list[dict[str, str]]:
     """SAN + FEN after each ply of PV1 for interactive commentary hover boards."""
     if not row or not row.pvs or not row.pvs[0]:

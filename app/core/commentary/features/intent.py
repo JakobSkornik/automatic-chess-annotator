@@ -60,6 +60,9 @@ def newly_attacked_enemy_piece(
             continue
         if start.piece_at(sq) == piece and _can_capture(start, mover, sq):
             continue  # already attacked before the move — nothing new
+        from app.core.commentary.rules.tactical_evidence import takes_attacker_safely
+        if takes_attacker_safely(leaf, sq, leaf.attackers(mover, sq)):
+            continue  # it can simply take the attacker: an offer, not a target
         value = -piece.piece_type  # QUEEN=5 sorts first
         if best is None or value < best[0]:
             best = (value, sq, _piece_label(piece))

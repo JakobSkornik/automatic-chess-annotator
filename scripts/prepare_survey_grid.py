@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
 from app.research.survey_grid import MODELS, LEVELS, ROOT, source_record, run_settings
-from app.core.engine.analysis_retriever import run_engine_analysis_to_json, assemble_game_json
+from app.core.engine.analysis_retriever import run_engine_analysis_to_json, assemble_game_json, rebuild_comment_facts
 from app.core.engine.engine_connector import get_global_engine_connector, _shutdown_global_engine
 from app.core.commentary.pipeline.game_pipeline import _promote_turning_points, _key_moment_order
 from app.core.engine.analysis_retriever import _apply_back_to_back_key_moment_suppression
@@ -46,11 +46,16 @@ async def prepare(args):
     # Optional fixed positions: {game_id: {"move_index": int | "rule": "earliest_key_moment",
 # "type": str}, "_description": str}.
     fixed = json.loads(args.positions.read_text(encoding='utf-8')) if args.positions else None
+    reused = json.loads((args.reuse_engine_from / 'grid.json').read_text(encoding='utf-8')) if args.reuse_engine_from else None
     definition = {**selection, 'kind': 'comparison_grid', 'models': chosen, 'levels': LEVELS,
                   'settings': run_settings(args.effort), 'architecture': source,
                   'prompt_version': VERSION, 'prepared_at': datetime.now(timezone.utc).isoformat(),
                   'position_selection': fixed['_description'] if fixed else 'Highest absolute engine evaluation swing among eligible key moments; ties use earliest ply. Chosen before model generation.',
                   'stop_at_comparison': args.stop_at_comparison,
+                  **({'engine_evidence_from': {'folder': args.reuse_engine_from.name,
+                      'engine_sha256': {g['id']: g['engine_sha256'] for g in reused['games']},
+                      'note': 'Engine search reused; move events and comment facts rebuilt with this study code.'}}
+                     if reused else {}),
                   'generation_scope': ('Reverse-order conversation from the last key moment down to the comparison position; earlier moves are not commented. '
                                        if args.stop_at_comparison else 'Complete game conversations; ')
                                       + 'identical frozen engine evidence across all model/level variants.'}
@@ -81,8 +86,18 @@ async def prepare(args):
                 raise ValueError('Engine cache changed')
             print(f"Reusing verified engine evidence for {entry['id']}", flush=True)
             continue
-        print(f"Fresh engine analysis: {entry['id']} ({entry['bracket']})", flush=True)
-        _, state = await run_engine_analysis_to_json(pgn, get_global_engine_connector(), progress, metadata_id=entry['id'])
+        if reused:
+            # Identical engine evidence from another study; only events and facts are rebuilt.
+            source_entry = next(g for g in reused['games'] if g['id'] == entry['id'])
+            raw = (args.reuse_engine_from / 'engine' / f"{entry['id']}.private.pkl").read_bytes()
+            if hashlib.sha256(raw).hexdigest() != source_entry['engine_sha256']:
+                raise ValueError(f"{entry['id']}: reused engine cache does not match its study")
+            print(f"Reused engine analysis, facts rebuilt: {entry['id']} ({entry['bracket']})", flush=True)
+            state = pickle.loads(raw)  # locally created cache, hash-verified against its grid.json
+            rebuild_comment_facts(state, get_global_engine_connector())
+        else:
+            print(f"Fresh engine analysis: {entry['id']} ({entry['bracket']})", flush=True)
+            _, state = await run_engine_analysis_to_json(pgn, get_global_engine_connector(), progress, metadata_id=entry['id'])
         # Identify the displayed comparison position before any model sees it.
         candidate_state = copy.copy(state)
         candidate_state.move_events = copy.deepcopy(state.move_events)
@@ -130,6 +145,8 @@ if __name__ == '__main__':
     parser.add_argument('--models', nargs='+')
     parser.add_argument('--effort', choices=['low', 'medium', 'high'], default='medium')
     parser.add_argument('--positions', type=Path, help='JSON file fixing the comparison position of each game')
+    parser.add_argument('--reuse-engine-from', type=Path,
+                        help='Study folder whose verified engine caches are reused (facts are rebuilt)')
     parser.add_argument('--stop-at-comparison', action='store_true',
                         help='Comment only from the last key moment down to the comparison position')
     args = parser.parse_args()

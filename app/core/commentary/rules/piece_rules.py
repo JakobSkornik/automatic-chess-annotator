@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+import chess
+
 from app.core.commentary.features.guid_features import (
     bad_bishop_squares,
     outpost_squares,
@@ -258,12 +260,24 @@ def rule_king_safety(ctx: _Ctx) -> list[Claim]:
     return out
 
 
+def _back_rank_exposed(board: chess.Board | None, color: chess.Color) -> bool:
+    """A king without luft is only vulnerable when the enemy has a rook or queen
+    and no own rook or queen guards that rank."""
+    if board is None:
+        return True  # no board to check: keep the feature's verdict
+    enemy_heavy = board.pieces(chess.ROOK, not color) | board.pieces(chess.QUEEN, not color)
+    rank = 0 if color == chess.WHITE else 7
+    own_heavy = board.pieces(chess.ROOK, color) | board.pieces(chess.QUEEN, color)
+    return bool(enemy_heavy) and not any(chess.square_rank(sq) == rank for sq in own_heavy)
+
+
 def rule_back_rank(ctx: _Ctx) -> list[Claim]:
     out: list[Claim] = []
     for side in SIDES:
         name = f"{side}_BACK_RANK"
         pair = ctx.flag_pair(name)
-        if pair and pair[0] == 0 and pair[1] == 1:
+        if (pair and pair[0] == 0 and pair[1] == 1
+                and _back_rank_exposed(ctx.leaf_board, chess.WHITE if side == "WHITE" else chess.BLACK)):
             out.append(
                 Claim(
                     rule_id="back_rank_weakness",

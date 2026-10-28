@@ -37,6 +37,10 @@ def is_concretely_hanging(
     enemy = not attacker
     if attacker_count(board, enemy, square) != 0:
         return False
+    # A target that can safely take its attacker (queen against queen) is not hanging.
+    from app.core.commentary.rules.tactical_evidence import takes_attacker_safely
+    if takes_attacker_safely(board, square, board.attackers(attacker, square)):
+        return False
 
     # board.attackers() is geometric, so a pinned piece can appear to attack
     # the target even though moving it would expose its own king. Test capture
