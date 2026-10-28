@@ -12,6 +12,7 @@ from app.models.chess_events import (
     GameAnalysisContext,
     MoveEvent,
 )
+from app.core.commentary.rendering_contracts import WHOLE_ANNOTATION_CONTRACTS
 
 if TYPE_CHECKING:
     from app.core.commentary.advanced_comment_service import AdvancedCommentService
@@ -84,7 +85,7 @@ class FactsComposeStage:
             key_moment_type=ctx.move_event.key_moment_type,
         )
         text = str(result.get("text") or "")
-        if result.get("rendering_contract") == "grounded_narrative_v3" and result.get("semantic_review") in {"accepted", "disabled"}:
+        if result.get("rendering_contract") in WHOLE_ANNOTATION_CONTRACTS and result.get("semantic_review") in {"accepted", "disabled"}:
             # Do not alter screened prose (including spaces before ...SAN).
             # Historical phrase flags remain observable, without deleting words.
             forbidden_hits = forbidden_hit_strings(text)

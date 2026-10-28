@@ -146,6 +146,12 @@ class CommentFacts(BaseModel):
     # ("In return, ..."), "consequence" for inaccuracies/mistakes/blunders
     # (the concessions ARE the explanation of the eval swing).
     concession_mode: str = "tradeoff"
+    # Engine grade of the played move (best/excellent/good/inaccuracy/mistake/blunder).
+    move_quality: str | None = None
+    # Mover-POV gap between the engine's first and second choice in the pre-move
+    # search (MultiPV ordered, so it bounds every other move). None when unknown;
+    # ONLY_WIN_MARGIN_CP when only the first choice keeps a forced mate.
+    best_margin_cp: int | None = None
     selection_metadata: dict = Field(default_factory=dict)
 
     def feature_refs(self) -> list[str]:

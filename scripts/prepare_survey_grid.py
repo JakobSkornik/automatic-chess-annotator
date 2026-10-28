@@ -43,11 +43,17 @@ async def prepare(args):
         raise ValueError('Unknown model in requested grid')
     args.folder.mkdir(parents=True, exist_ok=True)
     source = source_record()
+    # Optional fixed positions: {game_id: {"move_index": int | "rule": "earliest_key_moment",
+# "type": str}, "_description": str}.
+    fixed = json.loads(args.positions.read_text(encoding='utf-8')) if args.positions else None
     definition = {**selection, 'kind': 'comparison_grid', 'models': chosen, 'levels': LEVELS,
                   'settings': run_settings(args.effort), 'architecture': source,
                   'prompt_version': VERSION, 'prepared_at': datetime.now(timezone.utc).isoformat(),
-                  'position_selection': 'Highest absolute engine evaluation swing among eligible key moments; ties use earliest ply. Chosen before model generation.',
-                  'generation_scope': 'Complete game conversations; identical frozen engine evidence across all model/level variants.'}
+                  'position_selection': fixed['_description'] if fixed else 'Highest absolute engine evaluation swing among eligible key moments; ties use earliest ply. Chosen before model generation.',
+                  'stop_at_comparison': args.stop_at_comparison,
+                  'generation_scope': ('Reverse-order conversation from the last key moment down to the comparison position; earlier moves are not commented. '
+                                       if args.stop_at_comparison else 'Complete game conversations; ')
+                                      + 'identical frozen engine evidence across all model/level variants.'}
     manifest_path = args.folder / 'grid.json'
     if manifest_path.exists():
         previous = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -87,10 +93,21 @@ async def prepare(args):
         candidates = _key_moment_order(candidate_state.move_events, 'both')
         if not candidates:
             raise ValueError(f"No eligible comparison position for {entry['id']}")
-        index = max(candidates, key=lambda i: (abs(candidate_state.move_events[i].eval_swing_cp or 0), -candidate_state.move_events[i].ply))
+        if fixed:
+            chosen_position = fixed[entry['id']]
+            if chosen_position.get('rule') == 'earliest_key_moment':
+                # First commentable key moment after the opening book.
+                index = min(candidates, key=lambda i: candidate_state.move_events[i].ply)
+            else:
+                index = next((i for i in candidates if candidate_state.move_events[i].move_index == chosen_position['move_index']), None)
+            if index is None:
+                raise ValueError(f"{entry['id']}: fixed position {chosen_position['move_index']} is not an eligible key moment")
+        else:
+            index = max(candidates, key=lambda i: (abs(candidate_state.move_events[i].eval_swing_cp or 0), -candidate_state.move_events[i].ply))
         event = candidate_state.move_events[index]
         entry['comparison_position'] = {'move_index': event.move_index, 'ply': event.ply,
-                                        'san': event.san, 'fen_before': event.fen_before, 'fen_after': event.fen_after}
+                                        'san': event.san, 'fen_before': event.fen_before, 'fen_after': event.fen_after,
+                                        **({'type': chosen_position['type']} if fixed else {})}
         baseline = assemble_game_json(state).model_dump(mode='json')
         save_json(engines / f"{entry['id']}.json", baseline)
         # The commentary phase does not use the retriever. Omit its live engine
@@ -112,6 +129,9 @@ if __name__ == '__main__':
     parser.add_argument('--folder', required=True, type=Path)
     parser.add_argument('--models', nargs='+')
     parser.add_argument('--effort', choices=['low', 'medium', 'high'], default='medium')
+    parser.add_argument('--positions', type=Path, help='JSON file fixing the comparison position of each game')
+    parser.add_argument('--stop-at-comparison', action='store_true',
+                        help='Comment only from the last key moment down to the comparison position')
     args = parser.parse_args()
     args.folder.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=args.folder / 'engine-preparation.log', level=logging.INFO,

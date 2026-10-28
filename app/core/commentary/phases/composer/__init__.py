@@ -213,7 +213,8 @@ async def compose_facts_comment(
         # evidence. A pre-LLM two-merit cap could remove the decisive pin/reply.
         return await _compose_rewrite(service, facts, lvl, archetype,
                                       template, model=model, effort=effort,
-                                      legacy=mode == "grounded_rewrite_v2")
+                                      legacy=mode == "grounded_rewrite_v2",
+                                      key_moment_type=key_moment_type)
     if mode != "bounded":
         raise ValueError(f"Unknown COMMENTARY_RENDER_MODE: {mode}")
 
@@ -244,7 +245,8 @@ async def compose_facts_comment(
     return _result(template, "template", False, lvl)
 
 
-async def _compose_rewrite(service, facts, level, archetype, template, *, model, effort, legacy=False):
+async def _compose_rewrite(service, facts, level, archetype, template, *, model, effort, legacy=False,
+                           key_moment_type=None):
     if legacy:
         from . import rewrite
     else:
@@ -262,7 +264,8 @@ async def _compose_rewrite(service, facts, level, archetype, template, *, model,
                               else "deterministic_validation_only")
     stage = "validation"
     try:
-        user, evidence = rewrite.prompt(facts, level)
+        user, evidence = (rewrite.prompt(facts, level) if legacy
+                          else rewrite.prompt(facts, level, key_moment_type=key_moment_type))
         result["claim_catalog"] = evidence
         stage = "provider"
         raw = await service._llm_call_json_schema(

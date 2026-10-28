@@ -16,6 +16,7 @@ from app.models.Move import Move
 
 from .board_utils import _board_before_mainline_move, _score_to_move_score
 from .constants import DEFAULT_ANALYSIS_DEPTH
+from app.core.commentary.rendering_contracts import WHOLE_ANNOTATION_CONTRACTS
 
 
 @dataclass
@@ -155,7 +156,7 @@ def _resolve_move_comment(
     elif move_event and move_event.brief_commentary and side_ok:
         mc.comment = _fallback_comment(move_event, key_moment)
     llm = (analyzed_move.hiddenFeatures or {}).get("_llm", {})
-    whole_annotation = (isinstance(llm, dict) and llm.get("rendering_contract") == "grounded_narrative_v3"
+    whole_annotation = (isinstance(llm, dict) and llm.get("rendering_contract") in WHOLE_ANNOTATION_CONTRACTS
                         and llm.get("semantic_review") in {"accepted", "disabled"})
     if not whole_annotation:
         _append_transition_sentence(mc, move_event, side_ok, seen_transitions)

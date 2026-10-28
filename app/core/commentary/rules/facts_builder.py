@@ -549,6 +549,27 @@ def _refutation_san(played_line: EnvisionedLine, move_quality: str) -> str | Non
 _DUBIOUS = ("inaccuracy", "mistake", "blunder")
 
 
+ONLY_WIN_MARGIN_CP = 10_000  # first choice keeps a forced mate, the second does not
+
+
+def _best_margin_cp(pvs: list, mover: str) -> int | None:
+    """Mover-POV gap between the engine's first and second choice (same search).
+
+    MultiPV lines are ordered, so this bounds the gap to every other move."""
+    if len(pvs or []) < 2 or not pvs[0] or not pvs[1]:
+        return None
+    first, second = pvs[0][0], pvs[1][0]
+    if first.score is None or second.score is None:
+        return None
+    sign = 1 if mover == "White" else -1
+    (best_cp, best_mate), (second_cp, second_mate) = _decode_eval(first.score), _decode_eval(second.score)
+    if best_mate is not None or second_mate is not None:
+        best_wins = best_mate is not None and best_mate * sign > 0
+        second_wins = second_mate is not None and second_mate * sign > 0
+        return ONLY_WIN_MARGIN_CP if best_wins and not second_wins else None
+    return sign * (best_cp - second_cp)
+
+
 def _concession_mode(move_quality: str) -> str:
     """For dubious moves opponent-favoring claims explain the error, not trade-offs."""
     return "consequence" if move_quality in _DUBIOUS else "tradeoff"
@@ -745,6 +766,8 @@ def build_comment_facts(
         feature_diff=diff,
         better_alternative=better,
         concession_mode=_concession_mode(move_quality),
+        move_quality=move_quality or None,
+        best_margin_cp=_best_margin_cp(ctx.row.pvs, mover),
         selection_metadata={
             "horizon_policy": horizon_policy,
             "claim_policy": claim_policy,

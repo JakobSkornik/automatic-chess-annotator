@@ -17,6 +17,7 @@ import chess
 import chess.pgn
 
 from app.models.GameJson import GameJson, GameMove
+from app.core.commentary.rendering_contracts import WHOLE_ANNOTATION_CONTRACTS
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +307,7 @@ def _annotate_move_node(
 
     if move.comment:
         plain, pv_lines = _flatten_tokens(move.comment)
-        if (move.final_comment and (move.debug or {}).get("rendering_contract") == "grounded_narrative_v3"):
+        if (move.final_comment and (move.debug or {}).get("rendering_contract") in WHOLE_ANNOTATION_CONTRACTS):
             # Narrative text deliberately contains no fixed PV/eval scaffolding.
             # Preserve both analysis branches from the canonical fact record.
             facts = move.comment_facts or {}

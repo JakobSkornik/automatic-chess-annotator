@@ -12,7 +12,12 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import sys
+
 import chess.pgn
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app.core.commentary.rendering_contracts import WHOLE_ANNOTATION_CONTRACTS
 
 
 def summarize(game):
@@ -69,7 +74,7 @@ def validate(folder, data):
             replay, pv_node = chess.Board(origin), node
             assert line["start_fen"] == origin
             assert len(line["san"]) == len(line["fens"])
-            check_export = move.get("final_comment") and debug.get("rendering_contract") == "grounded_narrative_v3"
+            check_export = move.get("final_comment") and debug.get("rendering_contract") in WHOLE_ANNOTATION_CONTRACTS
             tail_in_comment = False
             for offset, (san, fen) in enumerate(zip(line["san"], line["fens"])):
                 played = replay.parse_san(san)
@@ -95,7 +100,7 @@ def validate(folder, data):
                 assert claim["support_fen"] == line["fens"][anchor - 1]
                 assert claim["realization"] == ("immediate" if anchor == 1 else "envisioned")
                 counts["consistent_claim_anchors"] += 1
-        if debug.get("rendering_contract") == "grounded_narrative_v3" and validation.get("semantic_review") == "accepted":
+        if debug.get("rendering_contract") in WHOLE_ANNOTATION_CONTRACTS and validation.get("semantic_review") == "accepted":
             catalog, selected = validation["claim_catalog"], validation["selected_claims"]
             approved = selected["text"]
             for key, value in catalog["substitutions"].items():

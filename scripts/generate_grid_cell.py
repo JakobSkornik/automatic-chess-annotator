@@ -73,7 +73,9 @@ async def generate(args):
     record_path.write_text(json.dumps(record,indent=2),encoding='utf-8')
     try:
         await GameAnnotationPipeline().run_llm_phases(state,service,llm_effort=settings['reasoning_effort'],
-                                                     commentary_level=cell['level'],comment_side='both')
+                                                     commentary_level=cell['level'],comment_side='both',
+                                                     stop_at_move_index=entry['comparison_position']['move_index']
+                                                     if definition.get('stop_at_comparison') else None)
         game=assemble_game_json(state).model_dump(mode='json')
         if not game['commentary_complete']:
             raise RuntimeError('Commentary did not complete')
