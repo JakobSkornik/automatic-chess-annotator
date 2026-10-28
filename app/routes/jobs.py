@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, status
 from pydantic import BaseModel
 from starlette.websockets import WebSocketDisconnect
 
+from app.core.commentary import provider_alerts
 from app.core.io.pgn_reader import PGNReader
 from app.core.queue_manager import queue_manager
 from app.core.output_paths import find_game_path, iter_game_paths
@@ -25,6 +26,12 @@ class SubmitPgnRequest(BaseModel):
 @router.get("", response_model=list[JobResponse])
 async def list_jobs(limit: int = Query(20, ge=1, le=100)):
     return queue_manager.list_jobs(limit)
+
+
+@router.get("/provider-alerts")
+async def get_provider_alerts():
+    """Providers whose last LLM call failed for lack of credits (cleared by the next success)."""
+    return provider_alerts.current()
 
 
 @router.post("/submit", response_model=JobResponse)

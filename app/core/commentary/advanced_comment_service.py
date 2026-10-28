@@ -6,6 +6,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
+from app.core.commentary import provider_alerts
 from app.core.commentary.llm_call_log import log_call as log_llm_call
 from app.core.commentary.llm_policy import resolve_model
 from app.core.commentary.llm_providers import (
@@ -113,11 +114,13 @@ class AdvancedCommentService:
             self._last_token_usage = usage
             logger.info("LLM JSON pass %s token_usage≈%s", schema_name, usage)
             ok = True
+            provider_alerts.record_success(self.provider_name)
             return (raw or "").strip()
         except Exception as e:
             usage = getattr(e, "token_usage", usage)
             self._last_token_usage = usage
             err = repr(e)
+            provider_alerts.record_failure(self.provider_name, e)
             raise
         finally:
             self._log_completed_call(
