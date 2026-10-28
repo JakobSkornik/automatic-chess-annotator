@@ -196,6 +196,31 @@ def _sharpen_immediate_diff(
     return FeatureDiff(positive=_sharpen(diff.positive), negative=_sharpen(diff.negative))
 
 
+THREAT_IDS = {"hanging_piece", "intent_targets_piece"}
+
+
+def _threat_resolved(claim: Claim, boards: list[chess.Board], line: EnvisionedLine, support: int) -> str | None:
+    """A threat that the displayed line makes irrelevant: the target is never taken,
+    never moves away, and is no longer attacked at the end (its attacker was traded
+    off or blocked). A target that is captured or retreats keeps the claim."""
+    import re
+    anchor = re.search(r"\b([a-h][1-8])\b", claim.text)
+    if not anchor or claim.beneficiary not in ("white", "black"):
+        return None
+    square = chess.parse_square(anchor.group(1))
+    piece = boards[support].piece_at(square)
+    if piece is None:
+        return None
+    for index in range(support + 1, len(boards)):
+        move = chess.Move.from_uci(line.line_uci[index - 1])
+        if move.from_square == square or move.to_square == square:
+            return None
+    attacker = chess.WHITE if claim.beneficiary == "white" else chess.BLACK
+    if boards[-1].is_attacked_by(attacker, square):
+        return None
+    return "threat_resolved_in_displayed_continuation"
+
+
 def _two_horizon_claims(
     ctx: _FactsCtx, line: EnvisionedLine, eval_cp: int | None
 ) -> tuple[list[Claim], dict]:
@@ -295,6 +320,8 @@ def _two_horizon_claims(
                         if boards[index].piece_at(square) != piece:
                             reason = "passed_pawn_anchor_removed_in_displayed_continuation"
                             break
+            elif claim.rule_id in THREAT_IDS:
+                reason = _threat_resolved(claim, boards, line, support)
         if reason:
             ctx.evidence_suppressions.append({"rule_id": claim.rule_id, "reason": reason,
                                               "support_ply": support, "branch": line.line_uci[:1]})

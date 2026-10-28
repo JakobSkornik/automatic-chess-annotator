@@ -16,15 +16,17 @@ from .framing import alternative_comparison, alt_gap_cp
 from .evidence import _board_summary
 from app.core.commentary.rules.material import _MAT_ORDER, _enumerate_extra, describe_material
 
-VERSION = "grounded_narrative_v6"
+VERSION = "grounded_narrative_v7"
 SYSTEM = (
     "Write the COMPLETE chess annotation, as a human annotator explaining the decision. "
     "Return JSON {text, main, alternative}; main and alternative are arrays of the claim IDs "
     "you use from those branches. Cite only IDs listed in evidence.citable_ids for that same "
     "branch, each at most once; when its list is empty, return [] for that branch. Cite IDs only "
-    "in those arrays, never inside the text, and do not use square brackets in the text. The text is one coherent paragraph of fewer than 150 "
-    "words. Use as few words as the move needs: a simple move deserves a short comment; do not "
-    "pad the text to reach a length. You own the assessment, explanation and comparison: the application will "
+    "in those arrays, never inside the text, and do not use square brackets in the text. The text is one coherent paragraph, usually 60-120 "
+    "words and never more than 200. Every comment says why: the concrete cause of an error, the "
+    "purpose of a quiet move, and what the alternative offers when it is mentioned. Do not pad "
+    "the text with closing summaries or repeated verdicts. Whenever you mention a piece or pawn on "
+    "a square, name its side ('Black's pawn on a7', 'White's knight on f3'). You own the assessment, explanation and comparison: the application will "
     "NOT prepend a verdict, repeat a critical reply, add timing phrases or append alternative prose. "
     "Lead with what matters about the move. Explain a concrete consequence and, when the "
     "comparison says better, how the alternative offers better prospects. assessment.classification "
@@ -78,8 +80,11 @@ SYSTEM = (
     "is essential, write ONLY a placeholder listed in evidence.placeholders, such as {{MAIN_EVAL}}, "
     "{{ALT_EVAL}} or {{GAP}}; the application fills in the value (scores are White POV and GAP "
     "is mover-POV improvement in pawn units). "
-    "Example of style (not chess evidence): 'The queen move overlooks a reply against the knight. "
-    "The alternative keeps that piece defended, although White still has the worse position.' "
+    "Example of style (not chess evidence): 'The queen move overlooks a reply against White's "
+    "knight on f3: Black's bishop takes it, and after the recapture White has lost a piece. The "
+    "move was meant to bring the queen closer to the kingside, but it leaves the knight with no "
+    "defender. The alternative keeps the knight defended and still prepares the attack, although "
+    "White remains slightly worse.' "
     "Adapt vocabulary and depth to the audience, not facts. beginner: one main idea in plain "
     "words, naming pieces and squares instead of move lists, and no more than one short line of "
     "moves. intermediate: the main idea plus the key reply or alternative. expert: concrete lines "
@@ -131,7 +136,7 @@ validate_review = rewrite.validate_review
 _PLACEHOLDER = re.compile(r"\{\{([A-Z_]+)\}\}")
 _SQUARE = re.compile(r"(?<![a-zA-Z0-9_])([a-h][1-8])(?![a-zA-Z0-9_])")
 _RAW_SCORE = re.compile(r"(?<![\d.])[-+]?\d+\.\d+(?!\d)")
-# Hard cap only; the prompt asks for fewer than 150 words. Wording such as "must"
+# Hard cap only; the prompt asks for usually 60-120 words, never more than 200. Wording such as "must"
 # is guided by the prompt but no longer grounds for rejection.
 MAX_WORDS = 250
 # The engine's first choice beats every other move by at least this much (mover POV).

@@ -77,8 +77,9 @@ def test_quiet_move_holds():
     assert writer_view(facts)["assessment"]["change_for_mover"] == {"direction": "holds", "size": "none"}
 
 
-def test_prompt_asks_for_fewer_than_150_words_and_gates_uniqueness():
-    assert "fewer than 150" in narrative.SYSTEM and "do not pad" in narrative.SYSTEM
+def test_prompt_asks_for_60_to_120_words_and_gates_uniqueness():
+    assert "usually 60-120" in narrative.SYSTEM and "never more than 200" in narrative.SYSTEM
+    assert "Every comment says why" in narrative.SYSTEM and "name its side" in narrative.SYSTEM
     assert "unique_best" in narrative.SYSTEM and "unique_best" in narrative.REVIEW_SYSTEM
     assert narrative.MAX_WORDS == 250
 
@@ -180,3 +181,17 @@ def test_prompt_guides_levels_quiet_moves_and_net_material():
     assert "beginner: one main idea" in narrative.SYSTEM
     assert "For a quiet move without a tactic" in narrative.SYSTEM
     assert "net result" in narrative.SYSTEM
+
+
+def test_threat_removed_by_the_line_is_dropped_but_a_retreat_keeps_it():
+    from app.core.commentary.rules.facts_builder import _threat_resolved
+    from app.core.commentary.rules.tactical_evidence import replay
+    from app.models.comment_facts import Claim
+    # game-05: after 34.Qd4 the a7 pawn is attacked, but the queens are traded at once.
+    start = "5r1r/ppk2pQp/3b4/3q4/8/2PP4/PK2pNPP/1R5R w - - 0 34"
+    traded = line(start, ["Qd4", "Qxd4", "cxd4", "Bb4", "Ne4"])
+    a7 = Claim(rule_id="hanging_piece", text="Black's pawn on a7 is undefended and attacked.", beneficiary="white")
+    assert _threat_resolved(a7, replay(traded), traded, 1) == "threat_resolved_in_displayed_continuation"
+    # A target that moves away keeps the claim: the threat caused the retreat.
+    retreat = line(start, ["Qd4", "a6"])
+    assert _threat_resolved(a7, replay(retreat), retreat, 1) is None
