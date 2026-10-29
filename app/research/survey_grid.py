@@ -42,9 +42,14 @@ def variant_id(game_id, model_id, level):
     return f'{game_id}__{model_id}__{level}'
 
 
+def game_levels(definition, game):
+    """A game with a fixed ``level`` is written at that level only; otherwise at every level."""
+    return [game['level']] if game.get('level') else definition['levels']
+
+
 def grid_cells(definition):
     return [
         {'id': variant_id(g['id'], m['id'], level), 'game_id': g['id'], 'model': m['id'],
          'provider': m['provider'], 'level': level}
-        for g in definition['games'] for m in definition['models'] for level in definition['levels']
+        for g in definition['games'] for m in definition['models'] for level in game_levels(definition, g)
     ]

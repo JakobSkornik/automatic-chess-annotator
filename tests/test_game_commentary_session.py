@@ -13,6 +13,9 @@ from app.models.GameJson import GameMetadata
 from app.models.chess_events import GameAnalysisContext, MoveEvent, MoveEventType, MoveQuality
 from app.models.comment_facts import Claim, CommentFacts, EnvisionedLine
 
+# The fixtures are quiet critical decisions, which the expert level comments.
+LEVEL = "expert"
+
 
 def state(game_id):
     board = chess.Board()
@@ -85,7 +88,7 @@ def test_game_pass_uses_reverse_order_and_keeps_sessions_isolated(monkeypatch):
         for game_id in ("game-A", "game-B"):
             game = state(game_id)
             await pipeline.GameAnnotationPipeline().run_llm_phases(
-                game, service, commentary_callback=callback,
+                game, service, commentary_callback=callback, commentary_level=LEVEL,
             )
             assert game.llm_done
 
@@ -108,7 +111,7 @@ def test_rejected_output_is_not_carried_to_next_move(monkeypatch):
                         '{"main":[{"id":0,"form":"state"}],"alternative":[]}'])
     service = AdvancedCommentService(provider=backend)
     game = state("rejected")
-    asyncio.run(pipeline.GameAnnotationPipeline().run_llm_phases(game, service))
+    asyncio.run(pipeline.GameAnnotationPipeline().run_llm_phases(game, service, commentary_level=LEVEL))
     calls = backend._client.responses.create.call_args_list
     assert len(calls) == 2
     assert "previous_response_id" not in calls[1].kwargs
@@ -126,7 +129,7 @@ def test_cancellation_closes_game_session(monkeypatch):
 
     monkeypatch.setattr(pipeline.GameAnnotationPipeline, "_comment_one_key_moment", interrupt)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(pipeline.GameAnnotationPipeline().run_llm_phases(state("cancelled"), service))
+        asyncio.run(pipeline.GameAnnotationPipeline().run_llm_phases(state("cancelled"), service, commentary_level=LEVEL))
     assert seen[0]._closed
 
 
@@ -135,7 +138,7 @@ def test_session_request_chain_is_present_in_opt_in_logs(monkeypatch, tmp_path):
     monkeypatch.setenv("LOG_LLM_TO_FILE", "1")
     monkeypatch.setenv("LOG_LLM_DIR", str(tmp_path))
     service = AdvancedCommentService(provider=provider())
-    asyncio.run(pipeline.GameAnnotationPipeline().run_llm_phases(state("logged"), service))
+    asyncio.run(pipeline.GameAnnotationPipeline().run_llm_phases(state("logged"), service, commentary_level=LEVEL))
     records = [json.loads(line) for line in (tmp_path / "logged.jsonl").read_text().splitlines()]
     assert len(records) == 2
     assert records[1]["session_context"]["request"]["request"]["previous_response_id"] == "response-1"

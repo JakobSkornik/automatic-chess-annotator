@@ -33,6 +33,7 @@ from .piece_rules import (
     rule_strong_knight,
 )
 from .threat_rules import rule_pin, rule_threats
+from .board_rules import BOARD_RULES
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ def order_claims_for_mover(claims: list[Claim], mover: str) -> list[Claim]:
 
 
 ALL_RULES: list[Rule] = [
+    *BOARD_RULES,
     rule_material,
     rule_threats,
     rule_pin,

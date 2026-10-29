@@ -23,6 +23,7 @@ from app.research.survey_grid import MODELS, LEVELS, ROOT, source_record, run_se
 from app.core.engine.analysis_retriever import run_engine_analysis_to_json, assemble_game_json, rebuild_comment_facts
 from app.core.engine.engine_connector import get_global_engine_connector, _shutdown_global_engine
 from app.core.commentary.pipeline.game_pipeline import _promote_turning_points, _key_moment_order
+from app.core.engine.analysis.moment_kinds import moment_kind, promote_concrete_moments
 from app.core.engine.analysis_retriever import _apply_back_to_back_key_moment_suppression
 from app.core.commentary.phases.composer.narrative import VERSION
 
@@ -105,18 +106,35 @@ async def prepare(args):
         candidate_state.context.move_events = candidate_state.move_events
         _promote_turning_points(candidate_state.move_events, candidate_state.context)
         _apply_back_to_back_key_moment_suppression(candidate_state.move_events, candidate_state.context)
-        candidates = _key_moment_order(candidate_state.move_events, 'both')
+        promote_concrete_moments(candidate_state.move_events)
+        level = fixed.get(entry['id'], {}).get('level') if fixed else None
+        if level:
+            entry['level'] = level  # this game is written and surveyed at this level only
+        candidates = _key_moment_order(candidate_state.move_events, 'both', level)
         if not candidates:
             raise ValueError(f"No eligible comparison position for {entry['id']}")
         if fixed:
             chosen_position = fixed[entry['id']]
-            if chosen_position.get('rule') == 'earliest_key_moment':
+            if chosen_position.get('rule') == 'by_kind':
+                # The level's preferred kind of moment first, then the largest verified loss.
+                kinds = {i: moment_kind(candidate_state.move_events, i) for i in candidates}
+                order = chosen_position['prefer']
+                preferred = [i for i in candidates if kinds[i] in order]
+                if not preferred:
+                    raise ValueError(f"{entry['id']}: no {order} moment for level {level}")
+                def rank(i):
+                    event = candidate_state.move_events[i]
+                    loss = (event.comment_facts.selection_metadata.get('comment_selection') or {}).get('verified_loss_cp') or 0
+                    return (order.index(kinds[i]), -max(loss, abs(event.eval_swing_cp or 0)), event.ply)
+                index = min(preferred, key=rank)
+                chosen_position = {**chosen_position, 'type': kinds[index]}
+            elif chosen_position.get('rule') == 'earliest_key_moment':
                 # First commentable key moment after the opening book.
                 index = min(candidates, key=lambda i: candidate_state.move_events[i].ply)
             else:
                 index = next((i for i in candidates if candidate_state.move_events[i].move_index == chosen_position['move_index']), None)
             if index is None:
-                raise ValueError(f"{entry['id']}: fixed position {chosen_position['move_index']} is not an eligible key moment")
+                raise ValueError(f"{entry['id']}: fixed position {chosen_position.get('move_index')} is not an eligible key moment")
         else:
             index = max(candidates, key=lambda i: (abs(candidate_state.move_events[i].eval_swing_cp or 0), -candidate_state.move_events[i].ply))
         event = candidate_state.move_events[index]

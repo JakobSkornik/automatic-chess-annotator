@@ -24,6 +24,7 @@ from app.core.engine.analysis_retriever import (
     _pv_line_for_ai_payload,
 )
 from app.core.engine.analysis.key_moments import _comment_selection
+from app.core.engine.analysis.moment_kinds import attach_sequences, promote_concrete_moments
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +117,12 @@ def _promote_turning_points(move_events: list[Any], context: Any) -> None:
         context.move_events[mi] = promoted
 
 
-def _key_moment_order(move_events: list[Any], side: str) -> list[int]:
-    """Indices of side-relevant key moments, latest ply first (reverse-order pass)."""
+def _key_moment_order(move_events: list[Any], side: str, level: str | None = None) -> list[int]:
+    """Indices of side-relevant key moments, latest ply first (reverse-order pass).
+
+    With ``level``, only the kinds of moments that level comments are kept
+    (see ``moment_kinds``); without it, every key moment."""
+    from app.core.engine.analysis.moment_kinds import level_allows, moment_kind
 
     def mover_matches(event: Any) -> bool:
         import chess
@@ -128,6 +133,9 @@ def _key_moment_order(move_events: list[Any], side: str) -> list[int]:
         selection = _comment_selection(event)
         if event.comment_facts:
             event.comment_facts.selection_metadata["comment_selection"] = selection
+    for mi, event in enumerate(move_events):
+        if event.comment_facts and event.key_moment_type:
+            event.comment_facts.selection_metadata["moment_kind"] = moment_kind(move_events, mi)
 
     return sorted(
         [
@@ -135,6 +143,7 @@ def _key_moment_order(move_events: list[Any], side: str) -> list[int]:
             for mi, move_event in enumerate(move_events)
             if move_event.key_moment_type and mover_matches(move_event)
             and _comment_selection(move_event)["allowed"]
+            and level_allows(move_events, mi, level)
         ],
         key=lambda i: -move_events[i].ply,
     )
@@ -234,6 +243,7 @@ class GameAnnotationPipeline:
         try:
             _promote_turning_points(state.move_events, state.context)
             _apply_back_to_back_key_moment_suppression(state.move_events, state.context)
+            promote_concrete_moments(state.move_events)
 
             run = _LlmRun(
                 state=state,
@@ -245,7 +255,13 @@ class GameAnnotationPipeline:
                 commentary_callback=commentary_callback,
             )
             # Reverse order: each comment can see what happens later (foreshadowing).
-            ordered_mis = _key_moment_order(state.move_events, side)
+            ordered_mis = _key_moment_order(state.move_events, side, level)
+            # Intermediate and expert get one comment on each long uncommented sequence.
+            anchors = attach_sequences(state.move_events, ordered_mis, level)
+            ordered_mis = sorted(set(ordered_mis) | set(anchors), key=lambda i: -state.move_events[i].ply)
+            context_events = getattr(state.context, "move_events", None)
+            if context_events is not None and len(context_events) == len(state.move_events):
+                context_events[:] = state.move_events
             if stop_at_move_index is not None:
                 ordered_mis = [mi for mi in ordered_mis
                                if state.move_events[mi].move_index >= stop_at_move_index]

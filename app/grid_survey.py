@@ -42,6 +42,17 @@ class GridStartRequest(survey.StrictModel):
     rating_system: Literal[tuple(RATING_SYSTEMS)]
 
 
+# Participants grouped by their reported rating, matching the commentary levels.
+PARTICIPANT_GROUPS = [('beginner', 0, 1200), ('intermediate', 1200, 2000), ('expert', 2000, 10000)]
+
+
+def participant_group(elo):
+    """The commentary level a participant's reported rating corresponds to (None: no rating)."""
+    if elo is None:
+        return None
+    return next(name for name, low, high in PARTICIPANT_GROUPS if low <= elo < high)
+
+
 def rating_band(elo):
     """Map a participant rating onto the game bands so older summaries keep working."""
     if elo < 800:
@@ -203,12 +214,13 @@ def start_response(token, request: GridStartRequest):
         db.execute('BEGIN IMMEDIATE')
         study = _study(db, token)
         manifest = json.loads(study['manifest'])
-        # Every consecutive three sessions cover each game's three levels once.
+        # A game with a fixed level is always shown at that level. Otherwise every
+        # consecutive three sessions cover each game's three levels once.
         slot = db.execute('SELECT COUNT(*) FROM comparison_responses WHERE survey_id=?', (study['id'],)).fetchone()[0] % 3
         assignment = []
         cells = grid_cells(manifest)
         for i, game in enumerate(manifest['games']):
-            level = LEVELS[(i + slot) % 3]
+            level = game.get('level') or LEVELS[(i + slot) % 3]
             candidates = [{'id': secrets.token_urlsafe(18), 'variant_id': c['id']}
                           for c in cells if c['game_id'] == game['id'] and c['level'] == level]
             rng.shuffle(candidates)
@@ -331,6 +343,8 @@ def results(token):
              for c in grid_cells(manifest)}
     completed = [r for r in rows if r['completed_at']]
     notes, exports, legacy = [], [], 0
+    # Ratings by participant group, per model and per comment level.
+    grouped = {}
     for row in completed:
         assignment = {r['game_id']: r for r in json.loads(row['assignment'])}
         order = list(assignment)
@@ -345,9 +359,13 @@ def results(token):
                 cell = cells[candidate['variant_id']]
                 cell[review['decision']] += 1
                 scores = review['scores'].get(candidate['id'], {})
+                group = participant_group(row['elo'])
                 for key in criteria:
                     if key in scores:
                         cell['scores'][key].append(scores[key])
+                        if group:
+                            for axis, value in (('model', cell['model']), ('level', cell['level'])):
+                                grouped.setdefault((axis, value, group), {k: [] for k in criteria})[key].append(scores[key])
                 exports.append({'response_id': row['id'], 'participant_elo': row['elo'],
                                 'participant_rating_system': row['rating_system'], 'participant_rating': row['rating'],
                                 'game_id': cell['game_id'], 'model': cell['model'], 'level': cell['level'],
@@ -355,14 +373,22 @@ def results(token):
                                 'decision': review['decision'], **{key: scores.get(key) for key in criteria},
                                 'round_feedback': review['feedback'], 'overall_feedback': row['feedback'],
                                 'submitted_at': row['completed_at']})
+    def summary(values):
+        return {key: {'n': len(v), 'mean': sum(v) / len(v) if v else None,
+                      'distribution': [v.count(score) for score in range(1, 6)]}
+                for key, v in values.items()}
+
     for cell in cells.values():
-        values = cell.pop('scores')
-        cell['criteria'] = {key: {'n': len(v), 'mean': sum(v) / len(v) if v else None,
-                                  'distribution': [v.count(score) for score in range(1, 6)]}
-                            for key, v in values.items()}
+        cell['criteria'] = summary(cell.pop('scores'))
+    by_group = [{'axis': axis, 'value': value, 'group': group, 'criteria': summary(values)}
+                for (axis, value, group), values in sorted(grouped.items())]
     return {'title': manifest['title'], 'started': len(rows), 'completed': len(completed),
             'in_progress': len(rows) - len(completed), 'models': manifest['models'], 'levels': LEVELS,
             'criteria': CRITERIA, 'scale': SCALE,
             'games': [{'id': g['id'], 'bracket': g['bracket']} for g in manifest['games']],
-            'cells': list(cells.values()), 'notes': notes, 'responses': exports, 'legacy_reviews': legacy,
+            'cells': list(cells.values()), 'by_group': by_group,
+            'participant_groups': [{'id': name, 'min_elo': low, 'max_elo_exclusive': high} for name, low, high in PARTICIPANT_GROUPS],
+            'participants_by_group': {name: sum(1 for r in completed if participant_group(r['elo']) == name)
+                                      for name, _, _ in PARTICIPANT_GROUPS},
+            'notes': notes, 'responses': exports, 'legacy_reviews': legacy,
             'feedback': [r['feedback'] for r in completed if r['feedback']], 'provenance': manifest}

@@ -7,7 +7,9 @@ from collections import Counter
 from app.models.comment_facts import Claim, EnvisionedLine
 
 
-CONCRETE_IDS = {"legal_capture", "absolute_pin", "exchange_sequence"}
+CONCRETE_IDS = {"legal_capture", "absolute_pin", "exchange_sequence",
+                "exchange_loses_material", "piece_left_en_prise", "fork", "discovered_attack",
+                "discovered_check", "double_check", "mate_threat"}
 _VALUE = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 100}
 
 
@@ -103,6 +105,13 @@ def tactical_claims(line: EnvisionedLine) -> list[Claim]:
                     f"{chess.piece_name(victim.piece_type)} on {chess.square_name(square)}.")
             claims.append(Claim(rule_id="legal_capture", text=text, text_state=text,
                                 features_involved=["TACTICAL_CAPTURE"], **common))
+        if ply == 1:
+            # Why the move itself loses material (static exchange), at the move only.
+            from .exchange import material_loss_claims
+            from .move_tactics import move_tactic_claims
+            root = {k: v for k, v in common.items() if k != "beneficiary"}
+            claims.extend(material_loss_claims(before, move, after, root))
+            claims.extend(move_tactic_claims(before, move, after, root))
         for attacker, victim, king in sorted(absolute_pins(after, color) - absolute_pins(before, color)):
             text = (f"{side}'s {chess.piece_name(after.piece_type_at(attacker))} "
                     f"on {chess.square_name(attacker)} pins the "

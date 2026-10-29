@@ -270,3 +270,20 @@ def test_drive_backup_is_off_without_credentials_and_triggered_on_submit(setup, 
     assert calls == []
     client.put(url, headers=headers, json={'version':1,'reviews':reviews(session),'completed':True})
     assert calls == [1]
+
+
+def test_participant_groups_follow_reported_rating():
+    from app.grid_survey import participant_group
+    assert [participant_group(e) for e in (None, 650, 1199, 1200, 1999, 2000, 2700)] == \
+        [None, 'beginner', 'beginner', 'intermediate', 'intermediate', 'expert', 'expert']
+
+
+def test_a_game_with_a_fixed_level_has_one_cell_per_model():
+    from app.research.survey_grid import grid_cells
+    definition = {'levels': ['beginner', 'intermediate', 'expert'],
+                  'models': [{'id': 'a', 'provider': 'openai'}, {'id': 'b', 'provider': 'grok'}],
+                  'games': [{'id': 'game-01', 'level': 'expert'}, {'id': 'game-02'}]}
+    cells = grid_cells(definition)
+    assert {(c['game_id'], c['level']) for c in cells} == {
+        ('game-01', 'expert'), ('game-02', 'beginner'), ('game-02', 'intermediate'), ('game-02', 'expert')}
+    assert len(cells) == 2 + 6

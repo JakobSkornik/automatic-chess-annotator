@@ -97,7 +97,7 @@ def test_best_margin_is_mover_pov_and_handles_mates():
 
 
 def test_stop_at_move_index_ends_reverse_sweep(monkeypatch):
-    events = [SimpleNamespace(move_index=i, key_moment_type="blunder", is_critical=False) for i in range(8)]
+    events = [SimpleNamespace(move_index=i, ply=i + 1, key_moment_type="blunder", is_critical=False) for i in range(8)]
     metadata = SimpleNamespace(id="game")
     metadata.model_copy = lambda update: metadata
     state = SimpleNamespace(metadata=metadata, move_events=events, context=SimpleNamespace())
@@ -178,7 +178,7 @@ def test_feature_comparison_uses_plain_group_names():
 
 
 def test_prompt_guides_levels_quiet_moves_and_net_material():
-    assert "beginner: one main idea" in narrative.SYSTEM
+    assert "one practical lesson" in narrative.SYSTEM and "simple_error" in narrative.SYSTEM
     assert "For a quiet move without a tactic" in narrative.SYSTEM
     assert "net result" in narrative.SYSTEM
 
@@ -195,3 +195,12 @@ def test_threat_removed_by_the_line_is_dropped_but_a_retreat_keeps_it():
     # A target that moves away keeps the claim: the threat caused the retreat.
     retreat = line(start, ["Qd4", "a6"])
     assert _threat_resolved(a7, replay(retreat), retreat, 1) is None
+
+
+def test_clearly_worse_runner_up_stands_for_the_other_moves():
+    worse = qxb5_facts()
+    worse = worse.model_copy(update={"better_alternative": worse.better_alternative.model_copy(
+        update={"is_inferior": True, "eval_cp": 800})})  # runner-up 3 pawns worse for Black
+    assert writer_view(worse)["assessment"]["alternative"]["role"] == "runner_up_clearly_worse"
+    assert writer_view(qxb5_facts())["assessment"]["alternative"]["role"] == "better_move"
+    assert "runner_up_clearly_worse" in narrative.SYSTEM
