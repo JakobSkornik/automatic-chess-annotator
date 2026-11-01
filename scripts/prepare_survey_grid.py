@@ -22,8 +22,8 @@ load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 from app.research.survey_grid import MODELS, LEVELS, ROOT, source_record, run_settings
 from app.core.engine.analysis_retriever import run_engine_analysis_to_json, assemble_game_json, rebuild_comment_facts
 from app.core.engine.engine_connector import get_global_engine_connector, _shutdown_global_engine
-from app.core.commentary.pipeline.game_pipeline import _promote_turning_points, _key_moment_order
-from app.core.engine.analysis.moment_kinds import moment_kind, promote_concrete_moments
+from app.core.commentary.pipeline.game_pipeline import _promote_turning_points, _key_moment_order, _coverage_order
+from app.core.engine.analysis.moment_kinds import complexity, moment_kind
 from app.core.engine.analysis_retriever import _apply_back_to_back_key_moment_suppression
 from app.core.commentary.phases.composer.narrative import VERSION
 
@@ -106,16 +106,28 @@ async def prepare(args):
         candidate_state.context.move_events = candidate_state.move_events
         _promote_turning_points(candidate_state.move_events, candidate_state.context)
         _apply_back_to_back_key_moment_suppression(candidate_state.move_events, candidate_state.context)
-        promote_concrete_moments(candidate_state.move_events)
         level = fixed.get(entry['id'], {}).get('level') if fixed else None
         if level:
             entry['level'] = level  # this game is written and surveyed at this level only
-        candidates = _key_moment_order(candidate_state.move_events, 'both', level)
+        if level:
+            candidates, _covered = _coverage_order(candidate_state.move_events, 'both', level)
+        else:
+            candidates = _key_moment_order(candidate_state.move_events, 'both')
         if not candidates:
             raise ValueError(f"No eligible comparison position for {entry['id']}")
         if fixed:
             chosen_position = fixed[entry['id']]
-            if chosen_position.get('rule') == 'by_kind':
+            if chosen_position.get('rule') == 'most_complex':
+                # The most demanding open position among the moves this level comments
+                # (moment_kinds.complexity); ties go to the earlier move.
+                scored = [(complexity(candidate_state.move_events, i), i) for i in candidates]
+                scored = [(s, i) for s, i in scored if s is not None]
+                if not scored:
+                    raise ValueError(f"{entry['id']}: no open, non-trivial position for level {level}")
+                score, index = max(scored, key=lambda x: (x[0], -candidate_state.move_events[x[1]].ply))
+                chosen_position = {**chosen_position, 'type': moment_kind(candidate_state.move_events, index),
+                                   'complexity': score}
+            elif chosen_position.get('rule') == 'by_kind':
                 # The level's preferred kind of moment first, then the largest verified loss.
                 kinds = {i: moment_kind(candidate_state.move_events, i) for i in candidates}
                 order = chosen_position['prefer']
@@ -140,7 +152,8 @@ async def prepare(args):
         event = candidate_state.move_events[index]
         entry['comparison_position'] = {'move_index': event.move_index, 'ply': event.ply,
                                         'san': event.san, 'fen_before': event.fen_before, 'fen_after': event.fen_after,
-                                        **({'type': chosen_position['type']} if fixed else {})}
+                                        **({'type': chosen_position['type']} if fixed else {}),
+                                        **({'complexity': chosen_position['complexity']} if fixed and 'complexity' in chosen_position else {})}
         baseline = assemble_game_json(state).model_dump(mode='json')
         save_json(engines / f"{entry['id']}.json", baseline)
         # The commentary phase does not use the retriever. Omit its live engine

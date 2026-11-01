@@ -1,30 +1,26 @@
 """Tunable thresholds and limits for the rule-based Expert Module (centipawns).
 
-Hand-tuned per Guid §5.4.2."""
+Originally hand-tuned per Guid §5.4.2. The feature thresholds marked "1 Nov 2026" were
+set from the distribution of feature changes on the ten survey games, so that each
+rule fires in roughly 5-10% of positions (see THRESHOLD-ANALYSIS-20261101.md)."""
 
 THRESHOLDS: dict[str, int] = {
-    "pawn_structure_evaluate": 8,  # net EVALUATE_PAWNS (cp) shift for the structure rule
+    "pawn_structure_evaluate": 25,  # 1 Nov 2026 (was 8: fired on 49% of positions)  # net EVALUATE_PAWNS (cp) shift for the structure rule
     "doubled_pawns": 12,
     "strong_knight": 1,  # count: a knight reaching/leaving an outpost
     "rook_activity": 1,  # count: a rook reaching an open/semi-open file
-    "king_safety": 60,  # king-danger swing (Stockfish scale) marking a real shift
-    # Corroborating king-tropism swing required alongside `king_safety` before
-    # rule_king_safety fires (piece_rules.py). Both conditions independently
-    # look reasonable, but stacked as an AND they rarely co-occur in ordinary
-    # middlegame play, silently dropping real king-safety claims; loosened from
-    # 8 to 5 (audit: catalog.py step-1 finding) so a genuine 60cp king-danger
-    # swing is not routinely thrown out for want of a large matching tropism
-    # swing in the same move.
-    "king_tropism_corroborate": 5,
-    "piece_activity": 7,  # mobility-square count (not cp): a 7-square swing
-    "center_control": 16,
-    "space": 10,
-    "bishop_color_complex": 12,
-    "king_activity_endgame": 10,
-    "passer_escort": 8,
-    "bad_bishop": 25,  # min |delta| before a bad-bishop change is worth stating
-    "connected_rooks": 10,
-    "passer_advance": 15,
+    "king_safety": 400,  # 1 Nov 2026 (was 60 with a tropism condition): king-danger swing
+    "piece_activity": 10,  # 1 Nov 2026 (was 7): mobility-square count (not cp)
+    "center_control": 12,  # 1 Nov 2026 (was 16)
+    "space": 6,  # 1 Nov 2026 (was 10: never reached)
+    "bishop_color_complex": 8,  # 1 Nov 2026 (was 12, read by no rule until then)
+    "king_activity_endgame": 5,  # 1 Nov 2026 (was 10)
+    "passer_escort": 4,  # 1 Nov 2026 (was 8)
+    "bad_bishop": 20,  # 1 Nov 2026 (was 25; the change is always 20)
+    "connected_rooks": 8,  # 1 Nov 2026 (was 10; the change is always 8)
+    "passer_advance": 5,  # 1 Nov 2026 (was 15)
+    "king_zone_attacks": 2,  # 1 Nov 2026: extra attackers on the enemy king zone
+    "pawn_advances": 4,  # 1 Nov 2026: pawn-advance score (75th percentile)
     "min_claim_cp": 8,  # ignore fired rules weaker than this
     "material_standing": 200,  # min standing edge (cp) to restate when unchanged
 }

@@ -75,7 +75,7 @@ def test_activity_state_keeps_the_comparative_meaning(side, sign, before, after,
 def test_increased_king_pressure_is_comparative_in_both_wordings(side, sign):
     opponent = "BLACK" if side == "WHITE" else "WHITE"
     claim = rule_king_safety(_ctx(
-        _delta(f"{side}_KING_DANGER", -10 * sign, -90 * sign),
+        _delta(f"{side}_KING_DANGER", -10 * sign, -510 * sign),  # a 500 cp swing (threshold 400)
         _delta(f"{opponent}_KING_TROPISM", -10 * sign, -20 * sign),
     ))[0]
     assert "more pressure" in claim.text

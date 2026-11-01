@@ -24,7 +24,7 @@ from app.core.engine.analysis_retriever import (
     _pv_line_for_ai_payload,
 )
 from app.core.engine.analysis.key_moments import _comment_selection
-from app.core.engine.analysis.moment_kinds import attach_sequences, promote_concrete_moments
+from app.core.engine.analysis.moment_kinds import attach_sequences, mark_selected, select_by_coverage
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +115,25 @@ def _promote_turning_points(move_events: list[Any], context: Any) -> None:
         )
         move_events[mi] = promoted
         context.move_events[mi] = promoted
+
+
+def _coverage_order(move_events: list[Any], side: str, level: str | None) -> tuple[list[int], set[int]]:
+    """Moves to comment (latest first) and moves covered by an earlier comment's line.
+
+    Any move of the requested side that passes the comment gate may be chosen, not only
+    the key moments the detector flagged."""
+    import chess
+
+    _key_moment_order(move_events, side)  # records the comment gate on every move
+    candidates = [
+        mi for mi, event in enumerate(move_events)
+        if event.comment_facts is not None
+        and (side == "both" or (side == "white") == (chess.Board(event.fen_before).turn == chess.WHITE))
+        and (event.comment_facts.selection_metadata.get("comment_selection") or {}).get("allowed")
+    ]
+    selected, covered = select_by_coverage(move_events, candidates, level)
+    mark_selected(move_events, selected)
+    return selected, covered
 
 
 def _key_moment_order(move_events: list[Any], side: str, level: str | None = None) -> list[int]:
@@ -243,7 +262,6 @@ class GameAnnotationPipeline:
         try:
             _promote_turning_points(state.move_events, state.context)
             _apply_back_to_back_key_moment_suppression(state.move_events, state.context)
-            promote_concrete_moments(state.move_events)
 
             run = _LlmRun(
                 state=state,
@@ -255,9 +273,11 @@ class GameAnnotationPipeline:
                 commentary_callback=commentary_callback,
             )
             # Reverse order: each comment can see what happens later (foreshadowing).
-            ordered_mis = _key_moment_order(state.move_events, side, level)
+            # Comment where something new happens; moves following the last comment's line
+            # are covered (moment_kinds.select_by_coverage).
+            ordered_mis, covered = _coverage_order(state.move_events, side, level)
             # Intermediate and expert get one comment on each long uncommented sequence.
-            anchors = attach_sequences(state.move_events, ordered_mis, level)
+            anchors = attach_sequences(state.move_events, sorted(set(ordered_mis) | covered), level)
             ordered_mis = sorted(set(ordered_mis) | set(anchors), key=lambda i: -state.move_events[i].ply)
             context_events = getattr(state.context, "move_events", None)
             if context_events is not None and len(context_events) == len(state.move_events):

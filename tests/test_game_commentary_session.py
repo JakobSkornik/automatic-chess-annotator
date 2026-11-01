@@ -36,8 +36,10 @@ def state(game_id):
                           beneficiary=mover.lower(), support_ply=1,
                           support_fen=after, baseline_fen=before)],
         )
+        # Plies two apart: the coverage selection keeps a minimum distance between
+        # comments on positional events, and these tests are about the session.
         events.append(MoveEvent(
-            move_index=ply - 1, ply=ply, san=san, uci=uci,
+            move_index=ply - 1, ply=2 * ply - 1, san=san, uci=uci,
             fen_before=before, fen_after=after, phase="opening",
             move_quality=MoveQuality.GOOD, event_type=MoveEventType.QUIET,
             key_moment_type="critical_decision", comment_facts=facts,

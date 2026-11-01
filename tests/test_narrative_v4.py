@@ -42,7 +42,7 @@ def writer_view(facts, key_moment_type=None):
     return json.loads(user)["evidence"]
 
 
-def test_blunder_carries_grade_size_and_line_trade():
+def test_blunder_carries_grade_and_size_without_material_standing():
     evidence = writer_view(qxb5_facts(), key_moment_type="blunder")
     assessment = evidence["assessment"]
     assert assessment["classification"] == "blunder"
@@ -50,11 +50,7 @@ def test_blunder_carries_grade_size_and_line_trade():
     assert assessment["change_for_mover"] == {"direction": "loses", "size": "very large"}
     assert assessment["alternative"]["loss_by_played_move"] == "very large"
     assert "eval_cp_white" not in assessment  # numbers stay hidden from the writer
-    trade = evidence["material"]["main"]
-    assert trade["black_gives_up"] == "a queen" and trade["white_gives_up"] == "a knight"
-    assert trade["balance_before"] == "Black has a rook and a pawn for a knight."
-    assert trade["balance_after"] == "White has a queen for a rook and a pawn."
-    assert evidence["material"]["alternative"]["white_gives_up"] == "nothing"
+    assert "material" not in evidence
 
 
 @pytest.mark.parametrize("margin, inferior, played_unique, alternative_unique", [
@@ -103,7 +99,7 @@ def test_stop_at_move_index_ends_reverse_sweep(monkeypatch):
     state = SimpleNamespace(metadata=metadata, move_events=events, context=SimpleNamespace())
     monkeypatch.setattr(game_pipeline, "_promote_turning_points", lambda *a: None)
     monkeypatch.setattr(game_pipeline, "_apply_back_to_back_key_moment_suppression", lambda *a: None)
-    monkeypatch.setattr(game_pipeline, "_key_moment_order", lambda *a: [7, 5, 3, 1])
+    monkeypatch.setattr(game_pipeline, "_coverage_order", lambda *a: ([7, 5, 3, 1], set()))
     commented = []
 
     async def comment(self, run, mi, pos, n_total):
@@ -177,10 +173,10 @@ def test_feature_comparison_uses_plain_group_names():
     assert comparison == {"favours_played_move": [], "favours_alternative": ["pawn structure", "king safety"]}
 
 
-def test_prompt_guides_levels_quiet_moves_and_net_material():
+def test_prompt_focuses_on_features_not_lines_or_material_standing():
     assert "one practical lesson" in narrative.SYSTEM and "simple_error" in narrative.SYSTEM
-    assert "For a quiet move without a tactic" in narrative.SYSTEM
-    assert "net result" in narrative.SYSTEM
+    assert "Explain the move through its features" in narrative.SYSTEM
+    assert "never describe the material standing" in narrative.SYSTEM and "never retell the line" in narrative.SYSTEM
 
 
 def test_threat_removed_by_the_line_is_dropped_but_a_retreat_keeps_it():

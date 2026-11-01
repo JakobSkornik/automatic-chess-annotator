@@ -151,3 +151,58 @@ def test_sequences_fill_long_uncommented_stretches_per_level():
     assert sequence_segments(events, selected, "intermediate") == [(9, 20), (21, 32), (33, 38)]
     shorter = [0, 8, 34]  # a 25-ply gap: 12 + 12 + a 1-ply tail folded into the last sequence
     assert sequence_segments(events[:35], shorter, "expert")[-1] == (21, 33)
+
+
+# ---------------------------------------------------------------- rules added with the threshold analysis
+
+def _rule_ctx(start, node, mover="WHITE"):
+    from app.core.commentary.features.envisioned import diff_vectors
+    from app.core.commentary.features.guid_features import compute_feature_vector_fen
+    from app.core.commentary.rules.context import _Ctx
+    a, b = chess.Board(start), chess.Board(node)
+    diff = diff_vectors(compute_feature_vector_fen(start), compute_feature_vector_fen(node))
+    return _Ctx(diff, "mid", mover, 0, start_board=a, leaf_board=b)
+
+
+def test_castling_rights_lost_but_not_by_castling():
+    from app.core.commentary.rules.feature_rules import rule_castling_rights
+    start = "r3k2r/pppqpppp/8/8/8/8/PPPQPPPP/R3K2R w KQkq - 0 1"
+    moved_king = "r3k2r/pppqpppp/8/8/8/8/PPPQPPPP/R4K1R b kq - 1 1"
+    castled = "r3k2r/pppqpppp/8/8/8/8/PPPQPPPP/R4RK1 b kq - 1 1"
+    assert [c.text for c in rule_castling_rights(_rule_ctx(start, moved_king))] == ["White can no longer castle."]
+    assert rule_castling_rights(_rule_ctx(start, castled)) == []
+
+
+def test_new_rule_thresholds_reach_the_data():
+    from app.core.commentary.rules.constants import THRESHOLDS
+    # Single-size feature changes (connected rooks 8, bad bishop 20) can now reach their thresholds.
+    assert THRESHOLDS["connected_rooks"] <= 8 and THRESHOLDS["bad_bishop"] <= 20
+    assert "king_tropism_corroborate" not in THRESHOLDS
+
+
+def test_complexity_excludes_decided_games_and_simple_errors():
+    from app.core.engine.analysis.moment_kinds import complexity
+    def event(km, quality, loss, rules=(), eval_before=0):
+        e = _event(km, quality, loss, rules)
+        e.eval_before_cp, e.fen_before, e.uci = eval_before, chess.STARTING_FEN, "e2e4"
+        e.comment_facts.better_alternative = None
+        return e
+    quiet = event("critical_decision", "best", 0, ["pawn_structure_weakened", "space_gained"])
+    blunder = event("blunder", "blunder", 600, ["exchange_loses_material"])
+    decided = event("blunder", "blunder", 300, eval_before=900)
+    events = [event("best_move", "best", 0), quiet, blunder, decided]
+    assert complexity(events, 3) is None          # the game is already decided
+    assert complexity(events, 2) is None          # a one-move capture loss is too simple
+    assert complexity(events, 1) == 2 + 1         # two feature events, quiet start
+
+
+def test_concession_cap_keeps_material_and_the_strongest_concessions():
+    from app.core.commentary.rules.catalog import order_claims_for_mover
+    from app.models.comment_facts import Claim
+    def claim(rule, cp, side="black"):
+        return Claim(rule_id=rule, text=rule, beneficiary=side, delta_cp=cp)
+    # game-05 15.Bxd7+: the decisive loss came last and was dropped by the old first-two cap.
+    claims = [claim("fork", 0, "white"), claim("bishop_pair_eliminated", 25), claim("rooks_connected", 8),
+              claim("material_won", 300), claim("pawn_structure_weakened", 30), claim("castling_rights_lost", 12)]
+    ordered = [c.rule_id for c in order_claims_for_mover(claims, "White")]
+    assert ordered == ["fork", "material_won", "pawn_structure_weakened", "bishop_pair_eliminated"]

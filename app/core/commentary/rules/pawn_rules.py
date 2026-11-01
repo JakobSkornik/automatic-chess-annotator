@@ -60,9 +60,9 @@ def rule_material(ctx: _Ctx) -> list[Claim]:
     if described is None:
         return []
     text, benef, delta_cp = described
-    # A change is always worth stating; an unchanged edge only when it is at
-    # least the exchange, to avoid repeating "up a pawn" on every quiet move.
-    if not changed and delta_cp < THRESHOLDS["material_standing"]:
+    # Only a change is stated. The standing itself is shown by every chess interface,
+    # so an unchanged edge ("White is a rook up") is not a fact worth a sentence.
+    if not changed:
         return []
     return [
         Claim(
@@ -231,7 +231,7 @@ def rule_passed_pawn(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)}'s passed pawn advances.",
                     text_state=f"{_side_label(side)}'s passed pawn is further advanced.",
                     features_involved=[name],
-                    delta_cp=d,
+                    delta_cp=max(d, THRESHOLDS["min_claim_cp"]),
                 )
             )
     return out
@@ -274,7 +274,7 @@ def rule_passer_escort(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)} has a passed pawn close to its king.",
                     text_state=f"{_side_label(side)} has a passed pawn close to its king.",
                     features_involved=[name, f"{side}_KING_ACTIVITY"],
-                    delta_cp=d,
+                    delta_cp=max(d, THRESHOLDS["min_claim_cp"]),
                 )
             )
     return out

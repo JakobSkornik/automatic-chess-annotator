@@ -213,49 +213,29 @@ def rule_king_safety(ctx: _Ctx) -> list[Claim]:
         # KING_DANGER is stored negative for the attacked side, so a positive
         # mover-POV delta means that side's king got safer; negative = pressured.
         d = _toward(side, ctx.delta(name))
-        opp = "BLACK" if side == "WHITE" else "WHITE"
-        opp_tropism = _toward(opp, ctx.delta(f"{opp}_KING_TROPISM"))
-        if (
-            -d >= THRESHOLDS["king_safety"]
-            and opp_tropism >= THRESHOLDS["king_tropism_corroborate"]
-        ):
+        # One king-danger threshold (1 Nov 2026); the former tropism condition
+        # filtered out most real shifts.
+        if -d >= THRESHOLDS["king_safety"]:
             out.append(
                 Claim(
                     rule_id="king_under_pressure",
                     beneficiary=_benef_opp(side),
                     text=f"{_side_label(side)}'s king comes under more pressure.",
                     text_state=f"{_side_label(side)}'s king is under more pressure.",
-                    features_involved=[name, f"{opp}_KING_TROPISM"],
+                    features_involved=[name],
                     delta_cp=-d,
                 )
             )
-        elif (
-            d >= THRESHOLDS["king_safety"]
-            and -opp_tropism >= THRESHOLDS["king_tropism_corroborate"]
-        ):
+        elif d >= THRESHOLDS["king_safety"]:
             out.append(
                 Claim(
                     rule_id="king_safer",
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)}'s king is now safer.",
                     text_state=f"{_side_label(side)}'s king is under less pressure.",
-                    features_involved=[name, f"{opp}_KING_TROPISM"],
+                    features_involved=[name],
                     delta_cp=d,
                 )
-            )
-        elif -d >= THRESHOLDS["king_safety"] or d >= THRESHOLDS["king_safety"]:
-            # The king-danger swing alone cleared the threshold but the
-            # corroborating tropism swing did not — the stacked AND condition
-            # silently drops what would otherwise be a claim.
-            logger.debug(
-                "rule_king_safety: corroboration gate blocked a claim for %s "
-                "(king_danger_swing=%d, threshold=%d, opp_tropism_swing=%d, "
-                "corroborate_threshold=%d)",
-                side,
-                d if d >= THRESHOLDS["king_safety"] else -d,
-                THRESHOLDS["king_safety"],
-                opp_tropism,
-                THRESHOLDS["king_tropism_corroborate"],
             )
     return out
 
@@ -360,7 +340,7 @@ def rule_center_and_space(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)} gains space.",
                     text_state=f"{_side_label(side)} attacks more squares in the enemy half.",
                     features_involved=[f"{side}_SPACE"],
-                    delta_cp=s,
+                    delta_cp=max(s, THRESHOLDS["min_claim_cp"]),
                 )
             )
     return out
@@ -384,7 +364,7 @@ def rule_king_activity(ctx: _Ctx) -> list[Claim]:
                     text=f"{_side_label(side)}'s king moves closer to the center.",
                     text_state=f"{_side_label(side)}'s king is closer to the center.",
                     features_involved=[name],
-                    delta_cp=d,
+                    delta_cp=max(d, THRESHOLDS["min_claim_cp"]),
                 )
             )
     return out

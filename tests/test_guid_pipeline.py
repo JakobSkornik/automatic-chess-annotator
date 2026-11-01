@@ -1067,21 +1067,21 @@ def test_sf_king_danger():
     assert compute_feature_vector(b)["WHITE_KING_DANGER"].value_cp < 0
 
 
-def test_material_standing_restated_when_unchanged():
+def test_material_standing_is_not_restated_when_unchanged():
     import chess
 
     from app.core.commentary.features.envisioned import diff_vectors
     from app.core.commentary.features.guid_features import compute_feature_vector
     from app.core.commentary.rules.engine import run_rules
 
-    # White a rook up; the position is quiet (no change) -> the standing edge is
-    # still stated, so a best move that holds it is not left silent.
+    # White a rook up, nothing changes: the standing is shown by every chess
+    # interface, so it is no longer restated as a fact.
     b = chess.Board("4k3/8/8/8/8/8/8/R3K3 w - - 0 1")
     v = compute_feature_vector(b)
     claims = run_rules(
         diff_vectors(v, v), phase="mid", mover="WHITE", start_board=b, leaf_board=b
     )
-    assert any("rook" in c.text for c in claims)
+    assert not any(c.rule_id == "material_standing" for c in claims)
 
     # Only a pawn up: not restated (would be noise every quiet move).
     b2 = chess.Board("4k3/8/8/8/8/8/P7/4K3 w - - 0 1")

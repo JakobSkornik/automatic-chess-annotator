@@ -34,17 +34,31 @@ from .piece_rules import (
 )
 from .threat_rules import rule_pin, rule_threats
 from .board_rules import BOARD_RULES
+from .feature_rules import FEATURE_RULES
 
 logger = logging.getLogger(__name__)
+
+
+MATERIAL_IDS = {"material_won", "material_standing", "tactical_material_loss"}
 
 
 def order_claims_for_mover(claims: list[Claim], mover: str) -> list[Claim]:
     """Mover-perspective ordering: the mover's merits first; claims favoring
     the opponent become explicitly tagged concessions, capped at
-    ``MAX_CONCESSIONS`` (strongest kept)."""
+    ``MAX_CONCESSIONS`` (strongest kept).
+
+    Material losses are exempt from the cap (the most important fact about a bad
+    move); the other concessions are ranked concrete facts first, then by weight.
+    Before 1 Nov 2026 the first concessions in list order were kept, which could
+    drop the decisive material loss of the line."""
+    from .tactical_evidence import CONCRETE_IDS
+
     mover_key = mover.lower()
     merits = [c for c in claims if c.beneficiary in (mover_key, None)]
-    concessions = [c for c in claims if c.beneficiary not in (mover_key, None)]
+    against = [c for c in claims if c.beneficiary not in (mover_key, None)]
+    material = [c for c in against if c.rule_id in MATERIAL_IDS]
+    concessions = sorted((c for c in against if c.rule_id not in MATERIAL_IDS),
+                         key=lambda c: (c.rule_id not in CONCRETE_IDS, -c.delta_cp))
     if len(concessions) > MAX_CONCESSIONS:
         logger.debug(
             "order_claims_for_mover: MAX_CONCESSIONS cap dropped %d concession(s) "
@@ -56,13 +70,14 @@ def order_claims_for_mover(claims: list[Claim], mover: str) -> list[Claim]:
         )
     concessions = [
         c.model_copy(update={"is_concession": True})
-        for c in concessions[:MAX_CONCESSIONS]
+        for c in material + concessions[:MAX_CONCESSIONS]
     ]
     return merits + concessions
 
 
 ALL_RULES: list[Rule] = [
     *BOARD_RULES,
+    *FEATURE_RULES,
     rule_material,
     rule_threats,
     rule_pin,

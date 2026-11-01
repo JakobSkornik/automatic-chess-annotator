@@ -34,7 +34,7 @@ TACTIC_FACTS = {"fork", "discovered_attack", "discovered_check", "double_check",
 LEVEL_KINDS = {"beginner": {"S", "T", "M", "G"}, "intermediate": {"S", "T", "M", "G"}, "expert": {"T", "M", "Q"}}
 ALWAYS = {"checkmate", "game_end"}
 DECISIONS = {"critical_decision", "hidden_inflection", "structural_transformation", "king_safety_crisis",
-             "initiative_shift", "kingside_attack", "good_defense"}
+             "initiative_shift", "kingside_attack", "good_defense", "feature_event"}
 
 
 def _loss(event: Any) -> int | None:
@@ -198,3 +198,127 @@ def attach_sequences(events: list[Any], selected: list[int], level: str | None) 
         events[last] = event.model_copy(update=update)
         anchors.append(last)
     return anchors
+
+
+# ---------------------------------------------------------------- coverage selection (1 Nov 2026)
+#
+# A move is commented when it brings something new. Walking the game forward:
+#   error         loses >= 100 cp (every level, always);
+#   only move     the engine's first choice is >= 100 cp ahead of its second (intermediate, expert);
+#   feature event a rule fires on the move itself (immediate facts), by level:
+#                 beginner a concrete gain or tactic, intermediate a concrete event or two
+#                 positional ones, expert any.
+# After a comment, game moves that follow that comment's engine line are covered: the
+# comment already explained them, so feature events there are not commented again (an
+# error never is covered). Feature events also keep a minimum distance from the last comment.
+
+FEATURE_EVENT = "feature_event"
+ONLY_MOVE = "only_move"
+MIN_SPACING = {"beginner": 4, "intermediate": 3, "expert": 2}
+# Concrete facts: what a beginner learns from (gains, tactics, losses on the board).
+CONCRETE_FACTS = CONCRETE_GAIN_FACTS | SIMPLE_FACTS | {"hanging_piece", "absolute_pin", "piece_pinned",
+                                                       "back_rank_weakness", "castling_rights_lost"}
+# Facts that are bookkeeping rather than a change worth a comment of its own.
+NOT_EVENTS = {"legal_capture", "exchange_sequence", "material_standing", "eval_concession",
+              "tactical_material_loss"}
+
+
+def feature_events(event: Any) -> tuple[list[str], list[str]]:
+    """(concrete, positional) rule ids that fire on the move itself (immediate facts)."""
+    facts = getattr(event, "comment_facts", None)
+    if facts is None:
+        return [], []
+    immediate = [c.rule_id for c in facts.claims if c.realization == "immediate" and c.rule_id not in NOT_EVENTS]
+    return ([r for r in immediate if r in CONCRETE_FACTS], [r for r in immediate if r not in CONCRETE_FACTS])
+
+
+def _event_trigger(event: Any, level: str) -> bool:
+    concrete, positional = feature_events(event)
+    if level == "beginner":
+        return bool(concrete)
+    if level == "intermediate":
+        return bool(concrete) or len(positional) >= 2
+    return bool(concrete or positional)
+
+
+def select_by_coverage(events: list[Any], candidates: list[int], level: str | None) -> tuple[list[int], set[int]]:
+    """(indices to comment, latest first; indices covered by an earlier comment's line).
+
+    ``candidates`` are the moves that may be commented: the requested side's moves that
+    passed the comment gate (quiet positions, or a verified error)."""
+    level = level if level in MIN_SPACING else "intermediate"
+    allowed = set(candidates)
+    selected, covered, last_ply = [], set(), None
+    expected: list[str] = []  # the engine line of the last comment, still followed by the game
+    for i, event in enumerate(events):
+        facts = getattr(event, "comment_facts", None)
+        follows = bool(expected) and expected[0] == event.uci
+        expected = expected[1:] if follows else []
+        if follows:
+            covered.add(i)
+        if i not in allowed or facts is None:
+            continue
+        loss = _loss(event) or 0
+        margin = getattr(facts, "best_margin_cp", None)
+        error = loss >= ERROR_CP or event.key_moment_type in ALWAYS
+        only = level != "beginner" and loss < GOOD_MOVE_LOSS_CP and margin is not None and margin >= UNIQUE_MARGIN_CP
+        spaced = last_ply is None or event.ply - last_ply >= MIN_SPACING[level]
+        trigger = error or (only and not follows) or (not follows and spaced and _event_trigger(event, level))
+        if not trigger:
+            continue
+        selected.append(i)
+        last_ply = event.ply
+        line = facts.display_line.line_uci if facts.display_line else []
+        expected = list(line[1:])
+    return sorted(selected, key=lambda i: -events[i].ply), covered - set(selected)
+
+
+def mark_selected(events: list[Any], selected: list[int]) -> None:
+    """Give selected moves without a key-moment type one, so the commentary gate admits them."""
+    for i in selected:
+        event = events[i]
+        if event.key_moment_type:
+            continue
+        margin = getattr(event.comment_facts, "best_margin_cp", None)
+        kind = ONLY_MOVE if margin is not None and margin >= UNIQUE_MARGIN_CP else FEATURE_EVENT
+        events[i] = event.model_copy(update={"key_moment_type": kind, "brief_commentary": False,
+                                             "commentary_stub_ref_ply": None})
+
+
+# ---------------------------------------------------------------- complexity for survey positions (1 Nov 2026)
+
+DECIDED_CP = 300  # a game beyond +-3 pawns before the move is no longer open
+NARROW_MARGIN_CP = 50
+TACTIC_IN_LINE = TACTIC_FACTS | {"exchange_loses_material", "piece_left_en_prise", "piece_trapped"}
+
+
+def complexity(events: list[Any], index: int) -> int | None:
+    """How demanding a position is for a 1500-2000 player (higher: more complex); None
+    when unsuitable: the game is decided, or the move is a simple one-move capture loss.
+
+    Points: a narrow choice (only a few good moves, or an error that is not a simple
+    capture loss) 3; a tactic in the better line the player missed or had to find 3;
+    each distinct feature event at the move, up to 4; a quiet start position 1."""
+    from app.core.commentary.features.envisioned import is_quiescent
+
+    event = events[index]
+    facts = getattr(event, "comment_facts", None)
+    if facts is None or event.eval_before_cp is None or abs(event.eval_before_cp) > DECIDED_CP:
+        return None
+    kind = moment_kind(events, index)
+    if kind == "S":
+        return None
+    loss = _loss(event) or 0
+    margin = getattr(facts, "best_margin_cp", None)
+    score = 0
+    if loss >= ERROR_CP or (margin is not None and margin >= NARROW_MARGIN_CP):
+        score += 3
+    alternative = facts.better_alternative
+    lines = [facts] + ([alternative] if alternative is not None else [])
+    if any(c.rule_id in TACTIC_IN_LINE for record in lines for c in record.claims):
+        score += 3
+    concrete, positional = feature_events(event)
+    score += min(4, len(set(concrete) | set(positional)))
+    if is_quiescent(chess.Board(event.fen_before)):
+        score += 1
+    return score
