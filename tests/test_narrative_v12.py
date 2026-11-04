@@ -68,9 +68,12 @@ def test_claims_are_tagged_by_when_they_hold():
     assert timings == [("discovered_attack", "after_move", "13.Bg5", None),
                        ("material_won", "after_forced_sequence", "14...Qxg5+", None),
                        ("king_safer", "in_line", "15...Nc6", "15...Nc6")]
-    assert view["lines"]["main"] == {"forced_moves": ["13...h5", "14.Qxd4", "14...Qxg5+"],
-                                     "forced_until": "14...Qxg5+", "settles_at": "15...Nc6",
-                                     "horizon_reason": "settled", "length_plies": 6}
+    main_line = dict(view["lines"]["main"])
+    resulting = main_line.pop("resulting_position")
+    assert main_line == {"forced_moves": ["13...h5", "14.Qxd4", "14...Qxg5+"],
+                         "forced_until": "14...Qxg5+", "settles_at": "15...Nc6",
+                         "horizon_reason": "settled", "length_plies": 6}
+    assert resulting == {"after": "15...Nc6", "material": "White is a pawn up", "described_by_claims": [2]}
     assert view["lines"]["alternative"]["forced_until"] == "14...Kd7"
     assert view["main"][0]["evidence_pieces"] == ["target: Black's knight on d4", "subject: White's queen on g4",
                                                   "subject: White's bishop on g5"]

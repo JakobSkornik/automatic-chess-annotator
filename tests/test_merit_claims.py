@@ -124,3 +124,30 @@ def test_positions_without_facts_or_mover_merits_are_not_survey_positions():
     assert complexity([sound], 0) is None
     sound.comment_facts.claims = [concession, merit]
     assert complexity([sound], 0) is not None
+
+
+def test_material_words_and_resulting_position_summary():
+    from app.core.commentary.phases.composer.sentence_plan import material_words, line_summary
+    assert material_words(chess.Board()) == "material is level"
+    assert material_words(chess.Board("4k3/8/8/8/8/8/P7/4K3 w - - 0 1")) == "White is a pawn up"
+    assert material_words(chess.Board("4k3/8/8/8/8/2n5/P7/4K3 w - - 0 1")) == "White has a pawn for a knight"
+    played = line(H5, ["h5", "Rxf2", "h6"], horizon=3)
+    summary = line_summary(played, ["32.h5", "32...Rxf2", "33.h6"], [{"id": 0, "support_ply": 3}, {"id": 1, "support_ply": 1}])
+    assert summary["resulting_position"] == {"after": "33.h6", "material": "Black is a rook up",
+                                             "described_by_claims": [0]}
+
+
+def test_lines_diverge_claim_names_the_first_different_move():
+    from app.core.commentary.rules.facts_builder import lines_diverge_claim
+    fen = "1k5r/pp1q1ppp/8/8/8/8/PPP2PPP/1K1Q3R w - - 0 38"
+    played = line(fen, ["Qd4", "Qe6"])
+    alt = line(fen, ["Qd5", "Qe6", "Rd1", "Rd8"])
+    c = ctx(fen, "Qd4", "d1d4", quality="inaccuracy")
+    claim = lines_diverge_claim(c, "Qd5", alt, played)
+    assert claim is not None and claim.rule_id == "lines_diverge"
+    assert claim.text == "The lines part after the shared reply: Qd5 allows White to continue with Rd1 Rd8, which Qd4 does not."
+    assert claim.support_ply == 3 and claim.evidence.squares == ["d1", "h1"]  # the diverging move, from and to
+    # Same length lines that differ at the reply.
+    other = line(fen, ["Qd5", "Qd6", "Rd1", "Rd8"])
+    claim = lines_diverge_claim(c, "Qd5", other, played)
+    assert claim.text == "The lines part at Black's next move: after Qd5 it continues Qd6 Rd1, after Qd4 it is Qe6."

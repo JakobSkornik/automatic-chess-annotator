@@ -416,6 +416,7 @@ def _played_line_claims(
         played_line = _trim_line(played_line, ctx.prober)
         selection = {"version": "trajectory_settlement_v1", "selected_ply": len(played_line.fens),
                      "reason": played_line.horizon_reason, "settled_ply": played_line.settled_ply,
+                     "stable_ply": played_line.stable_ply,
                      "immediate_horizon_ply": played_line.immediate_horizon_ply}
     claims, leaf_vec = _trajectory_claims(ctx, played_line, move_event.eval_after_cp)
     line_diff = diff_vectors(ctx.start_vec, leaf_vec)
@@ -551,6 +552,36 @@ def alternative_edge_claim(ctx: _FactsCtx, alt_san: str, alt_line: EnvisionedLin
                           alt_line, matched_ply)
 
 
+def lines_diverge_claim(ctx: _FactsCtx, alt_san: str, alt_line: EnvisionedLine,
+                        played_line: EnvisionedLine) -> Claim | None:
+    """When no feature separates the two moves: the first point where the lines part, i.e. the
+    first reply or follow-up that is different, named for both moves. Grounded in the traces only."""
+    played, alt = played_line.line_san, alt_line.line_san
+    if len(alt) < 2:
+        return None
+    i = 1
+    while i < len(played) and i < len(alt) and played[i] == alt[i]:
+        i += 1
+    if i >= len(alt):
+        return None
+    side = ctx.mover if i % 2 == 0 else ("Black" if ctx.mover == "White" else "White")
+    alt_part = " ".join(alt[i:i + 2])
+    played_part = " ".join(played[i:i + 2]) if i < len(played) else None
+    if played_part:
+        text = (f"The lines part at {side}'s next move: after {alt_san} it continues {alt_part}, "
+                f"after {ctx.move_event.san} it is {played_part}.")
+    else:
+        text = (f"The lines part after the shared reply: {alt_san} allows {side} to continue with "
+                f"{alt_part}, which {ctx.move_event.san} does not.")
+    ply = min(i + 1, len(alt_line.fens))
+    board = chess.Board(alt_line.fens[ply - 1])
+    move = chess.Move.from_uci(alt_line.line_uci[ply - 1])
+    claim = Claim(rule_id="lines_diverge", text=text, text_state=text, beneficiary=ctx.mover.lower(),
+                  delta_cp=EDGE_MIN_CP, entity="lines_diverge",
+                  evidence=evidence_for(board, [move.from_square, move.to_square], roles={move.to_square: "subject"}))
+    return _tag(claim, alt_line, ply, len(alt_line.fens), alt_line.immediate_horizon_ply)
+
+
 def _cap_positional(claims: list[Claim], other: set[tuple], mover: str, limit: int) -> list[Claim]:
     """Contrast-first cap: concrete and material claims are exempt; among the
     rest, claims about entities the other line does not share rank first,
@@ -657,7 +688,8 @@ def _build_better_alternative(
     main_ids = {claim_identity(c) for c in main_claims}
     fresh = [c for c in merits if c.beneficiary == ctx.mover.lower() and claim_identity(c) not in main_ids]
     if played_line and not distinguishing and not fresh:
-        edge = alternative_edge_claim(ctx, alt_san, best_line, matched_ply, played_line)
+        edge = (alternative_edge_claim(ctx, alt_san, best_line, matched_ply, played_line)
+                or lines_diverge_claim(ctx, alt_san, best_line, played_line))
         if edge is not None:
             merits = merits + [edge]
     return BestAlternative(

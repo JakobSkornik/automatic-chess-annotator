@@ -27,6 +27,7 @@ def _facts_to_json(facts: Any) -> dict[str, Any]:
             "trimmed_plies": getattr(dl, "trimmed_plies", 0),
             "immediate_horizon_ply": getattr(dl, "immediate_horizon_ply", 1),
             "settled_ply": getattr(dl, "settled_ply", None),
+            "stable_ply": getattr(dl, "stable_ply", None),
             "horizon_reason": getattr(dl, "horizon_reason", None),
         }
 

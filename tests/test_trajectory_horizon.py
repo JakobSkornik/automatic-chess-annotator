@@ -63,7 +63,8 @@ def test_settled_ply_prefers_the_earliest_ply_whose_story_holds():
 def test_envisioned_line_records_horizons():
     env = build_envisioned_line(chess.STARTING_FEN, ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4"])
     assert env.immediate_horizon_ply == 1
-    assert env.horizon_reason in ("settled", "persistence", "fixed_window")
+    assert env.horizon_reason in ("stable", "settled", "persistence", "fixed_window")
+    assert env.stable_ply == 2 and env.settled_ply == 5  # material and major groups hold from ply 2; features settle later
     assert 2 <= len(env.fens) <= 5
     # The immediate horizon skips a forcing exchange: 1.e4 d5 2.exd5 Qxd5 settles at ply 4.
     env = build_envisioned_line("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",

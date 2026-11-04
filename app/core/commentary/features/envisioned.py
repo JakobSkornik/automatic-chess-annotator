@@ -136,6 +136,46 @@ def _persistence(groups: list[dict[str, int]], k: int) -> float:
                if all(name in g and g[name] * value > 0 for g in later)) / len(at_k)
 
 
+# The primary endpoint (4 Nov 2026): the first quiet, non-forcing ply after which the
+# material balance and the major feature groups (material, king safety) stay put for
+# STABLE_LOOKAHEAD plies. Minor features may still drift; they are the secondary anchor
+# (``settled_ply``). A ply at the very end of the walked line has no look-ahead and is
+# not accepted as stable unless the game is over there.
+STABLE_LOOKAHEAD = 2
+MAJOR_DRIFT_CP = 25
+
+
+def _is_major(group: str) -> bool:
+    return "MATERIAL" in group or "KING" in group
+
+
+def material_cp(board: chess.Board) -> int:
+    """White-minus-Black material in centipawns (static piece values)."""
+    from .see import VALUE
+    total = 0
+    for piece_type, value in VALUE.items():
+        total += value * (len(board.pieces(piece_type, chess.WHITE)) - len(board.pieces(piece_type, chess.BLACK)))
+    return total
+
+
+def stable_ply(fens: list[str], vectors: list[FeatureVector], candidates: list[int]) -> int | None:
+    """The earliest candidate ply whose material and major feature groups hold for the look-ahead."""
+    n = len(fens)
+    materials = [material_cp(chess.Board(fen)) for fen in fens]
+    for k in candidates:
+        ahead = list(range(k + 1, min(n, k + STABLE_LOOKAHEAD) + 1))
+        if not ahead and not chess.Board(fens[k - 1]).is_game_over():
+            continue  # no look-ahead left: cannot call it stable
+        if any(materials[j - 1] != materials[k - 1] for j in ahead):
+            continue
+        if any(abs(delta) >= MAJOR_DRIFT_CP
+               for j in ahead for name, delta in group_deltas(vectors[k - 1], vectors[j - 1]).items()
+               if _is_major(name)):
+            continue
+        return k
+    return None
+
+
 def settled_ply(groups: list[dict[str, int]], candidates: list[int]) -> tuple[int | None, str]:
     """The earliest candidate ply whose feature story is stable.
 
@@ -223,15 +263,20 @@ def build_envisioned_line(
 
     reason = "fixed_window"
     settled: int | None = None
+    stable: int | None = None
     if walked and chess.Board(fens[-1]).is_game_over():
         keep, reason = walked, "terminal"
     else:
         candidates = [k for k in range(min(MIN_SETTLE_PLIES, walked), walked + 1) if k and not _unsettled(k)]
         if candidates:
             start_vec = compute_feature_vector_fen(start_fen)
-            groups = [group_deltas(start_vec, compute_feature_vector_fen(fen)) for fen in fens]
+            vectors = [compute_feature_vector_fen(fen) for fen in fens]
+            groups = [group_deltas(start_vec, vec) for vec in vectors]
             settled, reason = settled_ply(groups, candidates)
-        if settled is not None:
+            stable = stable_ply(fens, vectors, candidates)
+        if stable is not None:
+            keep, reason = stable, "stable"
+        elif settled is not None:
             keep = settled
         else:
             # Last resort: the fixed window, extended to finish forcing play.
@@ -265,6 +310,7 @@ def build_envisioned_line(
         evidence_valid=bool(keep) and not _unsettled(keep),
         immediate_horizon_ply=immediate,
         settled_ply=settled,
+        stable_ply=stable,
         horizon_reason=reason,
     )
 
@@ -322,6 +368,7 @@ def trim_envisioned_line_by_probe(
             "feature_series": {name: values[:keep + 1] for name, values in line.feature_series.items()},
             "immediate_horizon_ply": min(line.immediate_horizon_ply, keep),
             "settled_ply": min(line.settled_ply, keep) if line.settled_ply else None,
+            "stable_ply": min(line.stable_ply, keep) if line.stable_ply else None,
             "horizon_reason": f"{line.horizon_reason}+probe_trim",
         }
     )

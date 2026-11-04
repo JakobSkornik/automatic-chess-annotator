@@ -15,7 +15,7 @@ from . import rewrite
 from .framing import alternative_comparison, alt_gap_cp
 from .evidence import _board_summary
 
-VERSION = "grounded_narrative_v13"
+VERSION = "grounded_narrative_v14"
 SYSTEM = (
     "Write the COMPLETE chess annotation, as a human annotator explaining the decision. "
     "Return JSON {text, main, alternative}; main and alternative are arrays of the claim IDs "
@@ -91,6 +91,11 @@ SYSTEM = (
     "as already present. Treat alternatives as separate possibilities. "
     "evidence.lines gives, per branch, the forced moves, where the line settles and why "
     "(horizon_reason); use settles_at only to place end-of-line claims, never as a prediction. "
+    "RESULTING POSITION: evidence.lines.<branch>.resulting_position gives the material in words "
+    "and the claims that describe the end of the line (described_by_claims). Summarise those "
+    "claims as one outcome clause ('and White comes out with the better pawn structure and a "
+    "safer king') instead of narrating the moves that lead there; the material phrase may be "
+    "used only when the move itself changed the material. "
     "COMPARISON: assessment.feature_comparison lists the feature groups that favour each move "
     "and compared_at says at which depth the two lines were compared. When "
     "assessment.horizon_note is present the lines settle at different depths and the comparison "

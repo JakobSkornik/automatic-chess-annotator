@@ -88,6 +88,8 @@ class EnvisionedLine(BaseModel):
     # - ``horizon_reason``: how the endpoint was chosen.
     immediate_horizon_ply: int = 1
     settled_ply: int | None = None
+    # - ``stable_ply``: the first ply where material and the major groups hold (primary endpoint).
+    stable_ply: int | None = None
     horizon_reason: str = "fixed_window"
 
 

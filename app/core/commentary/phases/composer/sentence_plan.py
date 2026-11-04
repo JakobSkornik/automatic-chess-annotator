@@ -90,7 +90,7 @@ def catalog(facts: CommentFacts) -> dict:
                 "evidence_squares": list(claim.evidence.squares),
                 "evidence_pieces": [piece_label(p) for p in claim.evidence.pieces],
                 "rule_id": claim.rule_id, "features": claim.features_involved})
-        result.setdefault("lines", {})[name] = line_summary(line, labels)
+        result.setdefault("lines", {})[name] = line_summary(line, labels, result[name])
     return result
 
 
@@ -112,16 +112,52 @@ def piece_label(piece: dict) -> str:
     return f"{piece.get('role', 'subject')}: {side}'s {piece.get('piece')} on {piece.get('square')}"
 
 
-def line_summary(line, labels: list[str]) -> dict:
-    """What the writer needs to place claims in time: the forced opening of the line and its end."""
+_PIECE_WORDS = {chess.QUEEN: "queen", chess.ROOK: "rook", chess.BISHOP: "bishop", chess.KNIGHT: "knight", chess.PAWN: "pawn"}
+
+
+def _pieces_words(counts: list[tuple[int, int]]) -> str:
+    parts = []
+    for piece_type, n in counts:
+        word = _PIECE_WORDS[piece_type]
+        parts.append(("a " if n == 1 else f"{n} ") + word + ("" if n == 1 else "s"))
+    return " and ".join(parts)
+
+
+def material_words(board: chess.Board) -> str:
+    """The material balance in words, from the piece counts of both armies."""
+    extra = {chess.WHITE: [], chess.BLACK: []}
+    for piece_type in (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN):
+        diff = len(board.pieces(piece_type, chess.WHITE)) - len(board.pieces(piece_type, chess.BLACK))
+        if diff > 0:
+            extra[chess.WHITE].append((piece_type, diff))
+        elif diff < 0:
+            extra[chess.BLACK].append((piece_type, -diff))
+    white, black = _pieces_words(extra[chess.WHITE]), _pieces_words(extra[chess.BLACK])
+    if not white and not black:
+        return "material is level"
+    if white and black:
+        return f"White has {white} for {black}"
+    return f"White is {white} up" if white else f"Black is {black} up"
+
+
+def line_summary(line, labels: list[str], claims: list[dict] | None = None) -> dict:
+    """What the writer needs to place claims in time: the forced opening of the line, its end,
+    and the resulting position (material in words plus the claims that describe the end)."""
     horizon = getattr(line, "immediate_horizon_ply", 1) or 0
     horizon = min(max(horizon, 0), len(labels))
+    end = len(labels)
+    at_end = [c["id"] for c in (claims or []) if c["support_ply"] == end and end > 1]
+    resulting = None
+    if labels:
+        resulting = {"after": labels[-1], "material": material_words(chess.Board(line.leaf_fen)),
+                     "described_by_claims": at_end}
     return {
         "forced_moves": labels[1:horizon],
         "forced_until": labels[horizon - 1] if horizon >= 2 else None,
         "settles_at": labels[-1] if labels else None,
         "horizon_reason": getattr(line, "horizon_reason", None),
-        "length_plies": len(labels),
+        "length_plies": end,
+        "resulting_position": resulting,
     }
 
 
