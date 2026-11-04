@@ -170,7 +170,8 @@ def test_feature_comparison_uses_plain_group_names():
         update={"feature_advantages": advantages})})
     comparison = writer_view(facts)["assessment"]["feature_comparison"]
     # Black moves, so White-POV negative advantages favour the alternative for Black.
-    assert comparison == {"favours_played_move": [], "favours_alternative": ["pawn structure", "king safety"]}
+    assert comparison == {"favours_played_move": [], "favours_alternative": ["pawn structure", "king safety"],
+                          "compared_at": "the settled end of each line"}
 
 
 def test_prompt_focuses_on_features_not_lines_or_material_standing():
@@ -179,18 +180,39 @@ def test_prompt_focuses_on_features_not_lines_or_material_standing():
     assert "never describe the material standing" in narrative.SYSTEM and "never retell the line" in narrative.SYSTEM
 
 
-def test_threat_removed_by_the_line_is_dropped_but_a_retreat_keeps_it():
-    from app.core.commentary.rules.facts_builder import _threat_resolved
+def test_static_threat_is_kept_only_when_the_line_realizes_it():
+    from app.core.commentary.rules.facts_builder import _FactsCtx, _gate_static_facts
     from app.core.commentary.rules.tactical_evidence import replay
+    from app.core.commentary.features.guid_features.evidence import evidence_for
     from app.models.comment_facts import Claim
+    from app.models.chess_events import MoveEvent
     # game-05: after 34.Qd4 the a7 pawn is attacked, but the queens are traded at once.
     start = "5r1r/ppk2pQp/3b4/3q4/8/2PP4/PK2pNPP/1R5R w - - 0 34"
     traded = line(start, ["Qd4", "Qxd4", "cxd4", "Bb4", "Ne4"])
-    a7 = Claim(rule_id="hanging_piece", text="Black's pawn on a7 is undefended and attacked.", beneficiary="white")
-    assert _threat_resolved(a7, replay(traded), traded, 1) == "threat_resolved_in_displayed_continuation"
-    # A target that moves away keeps the claim: the threat caused the retreat.
-    retreat = line(start, ["Qd4", "a6"])
-    assert _threat_resolved(a7, replay(retreat), retreat, 1) is None
+    board = chess.Board(start)
+
+    def claim(branch):
+        node = chess.Board(branch.fens[0])
+        return Claim(rule_id="hanging_piece", text="Black's pawn on a7 is undefended and attacked.",
+                     beneficiary="white", support_ply=1, support_fen=branch.fens[0], baseline_fen=start,
+                     entity="hanging:a7", evidence=evidence_for(node, [chess.A7, chess.D4], roles={chess.A7: "target"}))
+
+    def ctx(branch):
+        event = MoveEvent(move_index=0, ply=67, san="Qd4", uci="g7d4", fen_before=start, fen_after=branch.fens[0],
+                          phase="mid", move_quality="good", event_type="quiet")
+        return _FactsCtx(move_event=event, row=None, board_before=board, mover="White", phase_raw="mid",
+                         depth=16, start_vec={})
+
+    c = ctx(traded)
+    assert _gate_static_facts(c, [claim(traded)], traded, replay(traded)) == []
+    assert c.evidence_suppressions[0]["reason"] == "capture_not_realized_in_line"
+    # The same fact survives when the line takes the pawn.
+    cashed = line("8/pk6/8/8/3Q4/8/PK6/8 w - - 0 1", ["Qd7+", "Kb6", "Qxa7+"])
+    d7 = Claim(rule_id="hanging_piece", text="Black's pawn on a7 is undefended and attacked.",
+               beneficiary="white", support_ply=1, support_fen=cashed.fens[0], baseline_fen=cashed.start_fen,
+               entity="hanging:a7", evidence=evidence_for(chess.Board(cashed.fens[0]), [chess.A7], roles={chess.A7: "target"}))
+    c2 = ctx(cashed)
+    assert len(_gate_static_facts(c2, [d7], cashed, replay(cashed))) == 1
 
 
 def test_clearly_worse_runner_up_stands_for_the_other_moves():

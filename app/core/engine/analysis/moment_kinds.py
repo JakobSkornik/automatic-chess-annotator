@@ -34,7 +34,7 @@ TACTIC_FACTS = {"fork", "discovered_attack", "discovered_check", "double_check",
 LEVEL_KINDS = {"beginner": {"S", "T", "M", "G"}, "intermediate": {"S", "T", "M", "G"}, "expert": {"T", "M", "Q"}}
 ALWAYS = {"checkmate", "game_end"}
 DECISIONS = {"critical_decision", "hidden_inflection", "structural_transformation", "king_safety_crisis",
-             "initiative_shift", "kingside_attack", "good_defense", "feature_event"}
+             "initiative_shift", "kingside_attack", "good_defense", "feature_event", "decision_point"}
 
 
 def _loss(event: Any) -> int | None:
@@ -63,7 +63,7 @@ def moment_kind(events: list[Any], index: int) -> str:
     if loss < GOOD_MOVE_LOSS_CP and (opponent_erred or _wins_material(event) or event.key_moment_type == CONCRETE_GAIN
                                      or any(c.rule_id in TACTIC_FACTS and c.support_ply == 1 for c in claims)):
         return "G"
-    return "Q" if event.key_moment_type in DECISIONS else "R"
+    return "Q" if event.key_moment_type in DECISIONS or event.key_moment_type == DECISION_POINT else "R"
 
 
 def _wins_material(event: Any) -> bool:
@@ -87,7 +87,31 @@ def level_allows(events: list[Any], index: int, level: str | None) -> bool:
     kind = moment_kind(events, index)
     if level == "expert" and kind == "G" and event.key_moment_type in DECISIONS:
         return True  # a good move that is also a decision point stays an expert moment
+    if level == "expert" and kind in ("T", "S") and already_lost(event):
+        return False  # losing more in a lost position teaches an expert nothing
     return kind in LEVEL_KINDS[level]
+
+
+LOST_FOR_MOVER_CP = 200  # the mover was already this far behind before the move
+
+
+def has_mover_merit(event: Any) -> bool:
+    """At least one kept claim benefits the side that moved and is not a concession."""
+    facts = getattr(event, "comment_facts", None)
+    if facts is None:
+        return False
+    mover = "white" if chess.Board(event.fen_before).turn == chess.WHITE else "black"
+    return any(getattr(c, "beneficiary", None) == mover and not getattr(c, "is_concession", False)
+               for c in facts.claims)
+
+
+def already_lost(event: Any) -> bool:
+    """The mover was clearly lost before the move (mover POV), so an error here only cashes in."""
+    before = getattr(event, "eval_before_cp", None)
+    if before is None:
+        return False
+    mover_white = chess.Board(event.fen_before).turn == chess.WHITE
+    return (before if mover_white else -before) <= -LOST_FOR_MOVER_CP
 
 
 # ---------------------------------------------------------------- moments from facts (A)
@@ -200,21 +224,29 @@ def attach_sequences(events: list[Any], selected: list[int], level: str | None) 
     return anchors
 
 
-# ---------------------------------------------------------------- coverage selection (1 Nov 2026)
+# ---------------------------------------------------------------- coverage selection (1 Nov 2026, revised 2 Nov 2026)
 #
 # A move is commented when it brings something new. Walking the game forward:
-#   error         loses >= 100 cp (every level, always);
-#   only move     the engine's first choice is >= 100 cp ahead of its second (intermediate, expert);
-#   feature event a rule fires on the move itself (immediate facts), by level:
-#                 beginner a concrete gain or tactic, intermediate a concrete event or two
-#                 positional ones, expert any.
+#   error          loses >= 100 cp (every level, always);
+#   only move      the engine's first choice is >= 100 cp ahead of its second (intermediate, expert);
+#   decision point the choice mattered: the first choice is >= DECISION_MARGIN_CP ahead of the
+#                  second, or the top two are close but lead to different feature stories
+#                  (feature divergence), or the detector flagged a decision (intermediate, expert);
+#   feature event  a rule fires on the move itself (immediate facts): beginner a concrete gain
+#                  or tactic; intermediate a concrete tactic or material gain. Expert never
+#                  comments a move only because a feature changed (2 Nov 2026).
 # After a comment, game moves that follow that comment's engine line are covered: the
 # comment already explained them, so feature events there are not commented again (an
 # error never is covered). Feature events also keep a minimum distance from the last comment.
 
 FEATURE_EVENT = "feature_event"
 ONLY_MOVE = "only_move"
+DECISION_POINT = "decision_point"
 MIN_SPACING = {"beginner": 4, "intermediate": 3, "expert": 2}
+DECISION_MARGIN_CP = 75  # first choice this far ahead of the second: the choice mattered
+CLOSE_MARGIN_CP = 20  # top two this close: a real choice between plans
+DIVERGENCE_CP = 30  # a feature group where the two lines differ by this much
+DIVERGENT_GROUPS = 2  # how many such groups make the lines different plans
 # Concrete facts: what a beginner learns from (gains, tactics, losses on the board).
 CONCRETE_FACTS = CONCRETE_GAIN_FACTS | SIMPLE_FACTS | {"hanging_piece", "absolute_pin", "piece_pinned",
                                                        "back_rank_weakness", "castling_rights_lost"}
@@ -232,13 +264,44 @@ def feature_events(event: Any) -> tuple[list[str], list[str]]:
     return ([r for r in immediate if r in CONCRETE_FACTS], [r for r in immediate if r not in CONCRETE_FACTS])
 
 
+def feature_divergence(event: Any) -> int:
+    """Feature groups where the played line and the alternative differ by DIVERGENCE_CP or more."""
+    facts = getattr(event, "comment_facts", None)
+    alt = getattr(facts, "better_alternative", None) if facts else None
+    if alt is None:
+        return 0
+    advantages = list(getattr(alt, "feature_advantages_matched", None) or []) or list(alt.feature_advantages or [])
+    groups = set()
+    for advantage in advantages:
+        if abs(advantage.advantage_cp) >= DIVERGENCE_CP:
+            name = advantage.name.removeprefix("WHITE_").removeprefix("BLACK_")
+            groups.add(name)
+    return len(groups)
+
+
+def is_decision_point(event: Any) -> bool:
+    """The move was a real choice: a clear margin, or close options leading to different plans."""
+    facts = getattr(event, "comment_facts", None)
+    if facts is None:
+        return False
+    loss = _loss(event) or 0
+    margin = getattr(facts, "best_margin_cp", None)
+    if loss < GOOD_MOVE_LOSS_CP and margin is not None and margin >= DECISION_MARGIN_CP:
+        return True
+    if margin is not None and margin <= CLOSE_MARGIN_CP and feature_divergence(event) >= DIVERGENT_GROUPS:
+        return True
+    # A detector-flagged decision counts; a bare feature event does not.
+    return event.key_moment_type in DECISIONS - {"feature_event"}
+
+
 def _event_trigger(event: Any, level: str) -> bool:
     concrete, positional = feature_events(event)
     if level == "beginner":
         return bool(concrete)
+    tactic = any(r in TACTIC_FACTS or r in ("material_won", "threat_parried", "mate_threat_parried") for r in concrete)
     if level == "intermediate":
-        return bool(concrete) or len(positional) >= 2
-    return bool(concrete or positional)
+        return tactic or is_decision_point(event)
+    return is_decision_point(event)
 
 
 def select_by_coverage(events: list[Any], candidates: list[int], level: str | None) -> tuple[list[int], set[int]]:
@@ -280,7 +343,8 @@ def mark_selected(events: list[Any], selected: list[int]) -> None:
         if event.key_moment_type:
             continue
         margin = getattr(event.comment_facts, "best_margin_cp", None)
-        kind = ONLY_MOVE if margin is not None and margin >= UNIQUE_MARGIN_CP else FEATURE_EVENT
+        kind = (ONLY_MOVE if margin is not None and margin >= UNIQUE_MARGIN_CP
+                else DECISION_POINT if is_decision_point(event) else FEATURE_EVENT)
         events[i] = event.model_copy(update={"key_moment_type": kind, "brief_commentary": False,
                                              "commentary_stub_ref_ply": None})
 
@@ -289,7 +353,10 @@ def mark_selected(events: list[Any], selected: list[int]) -> None:
 
 DECIDED_CP = 300  # a game beyond +-3 pawns before the move is no longer open
 NARROW_MARGIN_CP = 50
-TACTIC_IN_LINE = TACTIC_FACTS | {"exchange_loses_material", "piece_left_en_prise", "piece_trapped"}
+# A tactic the player had to see; a loose pawn is not one (en-prise facts removed 2 Nov 2026).
+TACTIC_IN_LINE = TACTIC_FACTS | {"piece_trapped", "threat_parried", "mate_threat_parried"}
+# Feature events that count toward complexity: not the bookkeeping of a loose piece.
+NOT_COMPLEX = {"hanging_piece", "piece_left_en_prise", "exchange_loses_material"}
 
 
 def complexity(events: list[Any], index: int) -> int | None:
@@ -306,8 +373,12 @@ def complexity(events: list[Any], index: int) -> int | None:
     if facts is None or event.eval_before_cp is None or abs(event.eval_before_cp) > DECIDED_CP:
         return None
     kind = moment_kind(events, index)
-    if kind == "S":
+    if kind == "S" or (kind == "T" and already_lost(event)):
         return None
+    if not facts.claims:
+        return None  # nothing to explain the move with
+    if kind in ("G", "R") and not has_mover_merit(event):
+        return None  # a sound move whose facts only describe the opponent's gains
     loss = _loss(event) or 0
     margin = getattr(facts, "best_margin_cp", None)
     score = 0
@@ -318,7 +389,7 @@ def complexity(events: list[Any], index: int) -> int | None:
     if any(c.rule_id in TACTIC_IN_LINE for record in lines for c in record.claims):
         score += 3
     concrete, positional = feature_events(event)
-    score += min(4, len(set(concrete) | set(positional)))
+    score += min(4, len((set(concrete) | set(positional)) - NOT_COMPLEX))
     if is_quiescent(chess.Board(event.fen_before)):
         score += 1
     return score

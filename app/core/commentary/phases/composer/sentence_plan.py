@@ -74,7 +74,8 @@ def catalog(facts: CommentFacts) -> dict:
                 raise ValueError(f"{name} claim {i}: missing supporting ply")
             if claim.support_fen != line.fens[ply - 1] or claim.baseline_fen != line.start_fen:
                 raise ValueError(f"{name} claim {i}: wrong supporting position")
-            if (claim.realization == "immediate") != (ply == 1):
+            horizon = max(1, getattr(line, "immediate_horizon_ply", 1) or 1)
+            if (claim.realization == "immediate") != (ply <= horizon):
                 raise ValueError(f"{name} claim {i}: inconsistent timing")
             if claim.realization not in ("immediate", "envisioned"):
                 raise ValueError(f"{name} claim {i}: unknown timing")
@@ -83,12 +84,49 @@ def catalog(facts: CommentFacts) -> dict:
                 "concession": claim.is_concession, "anchor": labels[ply - 1],
                 "support_ply": ply, "support_fen": claim.support_fen,
                 "baseline_fen": claim.baseline_fen, "realization": claim.realization,
+                "timing": claim_timing(claim.realization, ply),
+                "holds_from": labels[ply - 1],
+                "caused_by": labels[ply - 1] if claim.realization == "envisioned" else None,
+                "evidence_squares": list(claim.evidence.squares),
+                "evidence_pieces": [piece_label(p) for p in claim.evidence.pieces],
                 "rule_id": claim.rule_id, "features": claim.features_involved})
+        result.setdefault("lines", {})[name] = line_summary(line, labels)
     return result
 
 
+# Writer-facing timing of a claim. "after_move": true once the move is played.
+# "after_forced_sequence": true once the forced moves up to the immediate horizon
+# have been played (the claim is immediate, but its support ply is later than 1).
+# "in_line": true only after the line move named in caused_by.
+TIMINGS = ("after_move", "after_forced_sequence", "in_line")
+
+
+def claim_timing(realization: str, ply: int) -> str:
+    if realization == "envisioned":
+        return "in_line"
+    return "after_move" if ply <= 1 else "after_forced_sequence"
+
+
+def piece_label(piece: dict) -> str:
+    side = "White" if piece.get("color") == "white" else "Black"
+    return f"{piece.get('role', 'subject')}: {side}'s {piece.get('piece')} on {piece.get('square')}"
+
+
+def line_summary(line, labels: list[str]) -> dict:
+    """What the writer needs to place claims in time: the forced opening of the line and its end."""
+    horizon = getattr(line, "immediate_horizon_ply", 1) or 0
+    horizon = min(max(horizon, 0), len(labels))
+    return {
+        "forced_moves": labels[1:horizon],
+        "forced_until": labels[horizon - 1] if horizon >= 2 else None,
+        "settles_at": labels[-1] if labels else None,
+        "horizon_reason": getattr(line, "horizon_reason", None),
+        "length_plies": len(labels),
+    }
+
+
 def default_plan(evidence: dict) -> dict:
-    return {name: [{"ids": [c["id"]], "form": "state" if c["realization"] == "envisioned" else "change"}
+    return {name: [{"ids": [c["id"]], "form": "change" if c["timing"] == "after_move" else "state"}
                    for c in evidence[name]] for name in ("main", "alternative")}
 
 

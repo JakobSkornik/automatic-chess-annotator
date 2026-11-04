@@ -10,6 +10,7 @@ from __future__ import annotations
 import chess
 
 from app.models.comment_facts import Claim
+from app.core.commentary.features.guid_features.evidence import evidence_for
 
 # Intent claims rank above routine positional swings but below material and
 # concrete defects; tuned to clear min_claim_cp (8) reliably.
@@ -163,6 +164,7 @@ def build_intent_claim(
     target = newly_attacked_enemy_piece(start, leaf, color)
     if target is not None:
         sq, label = target
+        attackers = list(leaf.attackers(color, sq))
         return Claim(
             rule_id="intent_targets_piece",
             beneficiary=mover.lower(),
@@ -170,11 +172,14 @@ def build_intent_claim(
             text_state=f"{side} is targeting the {label} on {_square_name(sq)}.",
             features_involved=[],
             delta_cp=INTENT_CLAIM_CP,
+            entity=f"target:{_square_name(sq)}",
+            evidence=evidence_for(leaf, [sq, *attackers], roles={sq: "target", **{a: "attacker" for a in attackers}}),
         )
 
     break_move = _prepared_break_move(start, leaf, color)
     if break_move is not None:
         advance = chess.square_name(break_move.to_square)
+        contact = list(leaf.pieces(chess.PAWN, not color) & chess.SquareSet(chess.BB_PAWN_ATTACKS[color][break_move.to_square]))
         return Claim(
             rule_id="intent_pawn_break",
             beneficiary=mover.lower(),
@@ -182,11 +187,15 @@ def build_intent_claim(
             text_state=f"{side} can consider {advance} to challenge an enemy pawn.",
             features_involved=[],
             delta_cp=INTENT_CLAIM_CP,
+            entity=f"break:{advance}",
+            evidence=evidence_for(leaf, [break_move.from_square, *contact],
+                                  roles={break_move.from_square: "subject", **{c: "target" for c in contact}}),
         )
 
     opened = file_opened_for_rook(start, leaf, color)
     if opened is not None:
         fname = chess.FILE_NAMES[opened]
+        rooks = [sq for sq in leaf.pieces(chess.ROOK, color) if chess.square_file(sq) == opened]
         return Claim(
             rule_id="intent_opens_file",
             beneficiary=mover.lower(),
@@ -194,10 +203,13 @@ def build_intent_claim(
             text_state=f"The {fname}-file is open for {side.lower()}'s rook.",
             features_involved=[],
             delta_cp=INTENT_CLAIM_CP,
+            entity=f"file:{fname}",
+            evidence=evidence_for(leaf, rooks, files=[fname]),
         )
     semi_opened = file_semi_opened_for_rook(start, leaf, color)
     if semi_opened is not None:
         fname = chess.FILE_NAMES[semi_opened]
+        rooks = [sq for sq in leaf.pieces(chess.ROOK, color) if chess.square_file(sq) == semi_opened]
         return Claim(
             rule_id="intent_semi_opens_file",
             beneficiary=mover.lower(),
@@ -205,5 +217,7 @@ def build_intent_claim(
             text_state=f"The {fname}-file is semi-open for {side.lower()}'s rook.",
             features_involved=[],
             delta_cp=INTENT_CLAIM_CP,
+            entity=f"file:{fname}",
+            evidence=evidence_for(leaf, rooks, files=[fname]),
         )
     return None

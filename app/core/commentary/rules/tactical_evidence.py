@@ -5,6 +5,7 @@ import chess
 from collections import Counter
 
 from app.models.comment_facts import Claim, EnvisionedLine
+from app.core.commentary.features.guid_features.evidence import evidence_for
 
 
 CONCRETE_IDS = {"legal_capture", "absolute_pin", "exchange_sequence",
@@ -104,7 +105,12 @@ def tactical_claims(line: EnvisionedLine) -> list[Claim]:
                     f"from {chess.square_name(move.from_square)} captures the "
                     f"{chess.piece_name(victim.piece_type)} on {chess.square_name(square)}.")
             claims.append(Claim(rule_id="legal_capture", text=text, text_state=text,
-                                features_involved=["TACTICAL_CAPTURE"], **common))
+                                features_involved=["TACTICAL_CAPTURE"],
+                                entity=f"capture:{ply}:{chess.square_name(square)}",
+                                evidence=evidence_for(after, [move.to_square],
+                                                      baseline_squares=[move.from_square, square],
+                                                      roles={move.to_square: "attacker"}),
+                                **common))
         if ply == 1:
             # Why the move itself loses material (static exchange), at the move only.
             from .exchange import material_loss_claims
@@ -118,7 +124,11 @@ def tactical_claims(line: EnvisionedLine) -> list[Claim]:
                     f"{chess.piece_name(after.piece_type_at(victim))} on {chess.square_name(victim)} "
                     f"to the king on {chess.square_name(king)}.")
             claims.append(Claim(rule_id="absolute_pin", text=text, text_state=text,
-                                features_involved=["TACTICAL_ABSOLUTE_PIN"], **common))
+                                features_involved=["TACTICAL_ABSOLUTE_PIN"],
+                                entity=f"pin:{chess.square_name(victim)}",
+                                evidence=evidence_for(after, [attacker, victim, king],
+                                                      roles={attacker: "attacker", victim: "target", king: "king"}),
+                                **common))
     # Describe only the pieces actually removed in the displayed exchange.
     # This is deliberately not a statement about gain, force, or intention.
     end = 0
@@ -152,11 +162,15 @@ def tactical_claims(line: EnvisionedLine) -> list[Claim]:
         text = (f"In the displayed exchange on {chess.square_name(target)}, "
                 f"White loses {pieces(losses[chess.WHITE])}, while "
                 f"Black loses {pieces(losses[chess.BLACK])}.")
+        origins = [chess.Move.from_uci(u).from_square for u in line.line_uci[:end]]
         summary = Claim(rule_id="exchange_sequence", text=text, text_state=text,
                         features_involved=["TACTICAL_CAPTURE", "TACTICAL_EXCHANGE"],
                         beneficiary="white" if boards[0].turn else "black",
                         delta_cp=0, realization="envisioned", support_ply=end,
-                        support_fen=boards[end].fen(), baseline_fen=line.start_fen)
+                        support_fen=boards[end].fen(), baseline_fen=line.start_fen,
+                        entity=f"exchange:{chess.square_name(target)}",
+                        evidence=evidence_for(boards[end], [target], baseline_squares=[target, *origins],
+                                              roles={target: "target"}))
         claims = [summary] + [c for c in claims if not (
             c.rule_id == "legal_capture" and (c.support_ply or 0) <= end)]
     return claims

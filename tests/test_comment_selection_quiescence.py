@@ -30,8 +30,15 @@ def test_capture_evidence_cannot_promote_noisy_sequence():
 
 
 def test_capture_at_quiet_root_is_sequence_anchor():
-    move = event(fen="7k/8/8/3p4/4P3/8/8/K7 w - - 0 1")
+    # The d5 pawn is defended by c6, so exd5 cxd5 wins nothing: the root is quiet.
+    move = event(fen="7k/8/2p5/3p4/4P3/8/8/K7 w - - 0 1")
     assert _comment_selection(move)["allowed"]
+
+
+def test_en_prise_pawn_makes_the_root_noisy():
+    # An undefended pawn the mover can win counts as en prise (pawns included, 2 Nov 2026).
+    move = event(fen="7k/8/8/3p4/4P3/8/8/K7 w - - 0 1")
+    assert _comment_selection(move)["reason"] == "nonquiescent_start"
 
 
 @pytest.mark.parametrize("quality,key,loss", [("mistake", "mistake", 150),

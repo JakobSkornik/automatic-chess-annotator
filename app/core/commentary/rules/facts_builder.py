@@ -1,9 +1,19 @@
 """CommentFacts assembly: the played line, its claims, the better alternative,
-realization tagging, and the inviolable per-move fact record."""
+realization tagging, and the inviolable per-move fact record.
+
+Trajectory horizon (2 Nov 2026). The rules run at every ply of the displayed
+line, not at two fixed checkpoints. Each fired claim is tracked as a
+trajectory keyed by its entity (rule, side, square or file): the ply where it
+first fires is its support ply, and it is kept only if it still holds at the
+line's endpoint. A claim that fires at or before the line's immediate horizon
+(the first settled ply after the move, 1-3) is "immediate"; a later one is
+"envisioned" and names the line move that caused it.
+"""
 
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -15,16 +25,22 @@ from app.core.commentary.features.envisioned import (
     envisioned_for_best_move,
     envisioned_for_played_move,
     is_quiescent,
-    max_display_plies,
     probe_trim_enabled,
     trim_envisioned_line_by_probe,
 )
 from app.core.commentary.features.guid_features import compute_feature_vector_fen
+from app.core.commentary.features.guid_features.evidence import (
+    evidence_for,
+    feature_squares,
+    evidence_for,
+    evidence_from_features,
+)
 from app.core.commentary.features.experiment_selectors import (
     horizons_match,
     select_adaptive_horizon,
     select_contrastive_claims,
 )
+from app.core.commentary.features.see import best_capture_gain
 from app.models.chess_events import AnalyzedMoveData, MoveEvent
 from app.models.comment_facts import (
     BestAlternative,
@@ -32,7 +48,6 @@ from app.models.comment_facts import (
     CommentFacts,
     EnvisionedLine,
     FeatureAdvantage,
-    FeatureDelta,
     FeatureDiff,
 )
 
@@ -43,13 +58,15 @@ from .constants import (
     EVAL_CONCESSION_CP,
     MATERIAL_LOSS_CP,
     MAX_ALTERNATIVE_MERITS,
+    MAX_CLAIMS_PER_MOVE,
     MAX_FEATURE_ADVANTAGES,
     MERIT_SUPPRESS_CP,
     THRESHOLDS,
 )
+from .material import _imbalance
 from .realization import _line_feature_series
-from .verdicts import verdict_for_eval, verdict_for_transition
 from .tactical_evidence import CONCRETE_IDS, replay, tactical_claims
+from .verdicts import verdict_for_eval, verdict_for_transition
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +74,27 @@ logger = logging.getLogger(__name__)
 # probe is unavailable/failed). Same signature as
 # ``envisioned.trim_envisioned_line_by_probe`` expects.
 Prober = Callable[[str], "int | None"]
+
+MATERIAL_IDS = {"material_won", "material_standing", "tactical_material_loss"}
+# Static board facts that must be borne out by the displayed line (or a probe)
+# before they are stated: a one-square exchange test is not a tactic.
+STATIC_GATED = {"piece_left_en_prise", "hanging_piece", "exchange_loses_material", "piece_trapped", "fork"}
+# Activity-style claims that a material-changing capture at the move crowds out.
+ACTIVITY_IDS = {"activity_improved", "activity_reduced", "rooks_activated", "king_under_pressure",
+                "king_safer", "piece_pinned"}
+# When several rules describe the same board entity, the first listed wins.
+ENTITY_PRIORITY = [
+    ("hole", ["outpost_occupied", "strong_knight_established", "hole_created"]),
+    ("outpost", ["outpost_occupied", "strong_knight_established"]),
+    ("en_prise", ["piece_left_en_prise", "hanging_piece", "target"]),
+    ("hanging", ["piece_left_en_prise", "hanging_piece", "intent_targets_piece"]),
+    ("target", ["piece_left_en_prise", "hanging_piece", "intent_targets_piece"]),
+    ("king_attack", ["king_attack_builds", "king_zone_pressure", "king_under_pressure",
+                     "king_shelter_weakened", "king_file_opened"]),
+    ("pin", ["absolute_pin", "piece_pinned"]),
+]
+PROBE_TOLERANCE_CP = 40
+_SQUARE = re.compile(r"\b([a-h][1-8])\b")
 
 
 def _decode_eval(cp: int | None) -> tuple:
@@ -80,8 +118,8 @@ class _FactsCtx:
     phase_raw: str
     depth: int
     start_vec: dict
-    # Optional cheap engine prober for the post-build horizon-effect trim
-    # (Improvement 1). None disables the trim (engine-free callers/tests).
+    # Optional cheap engine prober for the probe trim and for confirming
+    # static exchange facts. None disables both (engine-free callers/tests).
     prober: Prober | None = None
     horizon_policy: str = "current_quiet_bounded"
     claim_policy: str = "current"
@@ -90,11 +128,7 @@ class _FactsCtx:
 
 def _trim_line(line: EnvisionedLine, prober: Prober | None) -> EnvisionedLine:
     """Apply the probe-based tail trim right after an envisioned line is
-    built, BEFORE it backs any feature vector/diff/claim computation — a
-    statically-quiescent leaf can still be tactically loaded (discovered
-    attack, skewer), and once claims are computed from it there is no way to
-    walk that back. ``ENVISIONED_PROBE_TRIM_ENABLED=0`` opts out; a missing
-    prober (engine-free path, most unit tests) is a no-op either way."""
+    built, BEFORE it backs any feature vector/diff/claim computation."""
     if prober is None or not probe_trim_enabled():
         return line
     try:
@@ -105,241 +139,255 @@ def _trim_line(line: EnvisionedLine, prober: Prober | None) -> EnvisionedLine:
 
 
 def _first_quiet_fen(line: EnvisionedLine) -> str:
-    """The first quiescent position at/after the played move — the horizon at
-    which the move is *assessed*. For a quiet move that is the position right
-    after it; for a capture that will be recaptured it is the node where the
-    forcing sequence settles (so transient features are not reported as real)."""
-    for fen in line.fens:
-        if fen and is_quiescent(chess.Board(fen)):
-            return fen
+    """The position at the line's immediate horizon (the first settled ply after
+    the move); the leaf when the line never settles within three plies."""
+    k = line.immediate_horizon_ply
+    if 1 <= k <= len(line.fens):
+        return line.fens[k - 1]
     return line.leaf_fen
 
 
-def _feature_extremum_ply(series_for_feature: list[int], direction: int, window: int) -> int:
-    """Index into ``series_for_feature`` (0 = start position, matching
-    ``realization._line_feature_series``'s point-0-is-start convention) of
-    the most extreme value in ``direction`` (+1/-1, the sign of the delta
-    already fired for this feature) within the first ``window`` plies.
-
-    Guards against the fixed first-quiescent-ply checkpoint landing PAST the
-    moment a transient feature (a piece hanging mid-sequence, a rook's open
-    file before it gets blocked again) was actually at its most pronounced,
-    just because the position stayed non-quiescent a few plies longer for
-    unrelated reasons."""
-    if not series_for_feature:
-        return 0
-    limit = min(window, len(series_for_feature) - 1)
-    best_idx = 0
-    best_val = direction * series_for_feature[0]
-    for i in range(1, limit + 1):
-        val = direction * series_for_feature[i]
-        if val > best_val:
-            best_val = val
-            best_idx = i
-    return best_idx
+def claim_identity(claim: Claim) -> tuple:
+    """Stable identity of what a claim is about: rule, side and entity."""
+    return (claim.rule_id, claim.beneficiary, claim.entity or claim.text)
 
 
-def _sharpen_immediate_diff(
-    diff: FeatureDiff, line: EnvisionedLine, immediate_fen: str
-) -> FeatureDiff:
-    """Per-feature horizon fix (Improvement 2): for every feature already in
-    the immediate diff, check its full per-ply series (engine-free,
-    ``realization._line_feature_series``) for a materially stronger value —
-    same direction as the fired delta — earlier in the line than the fixed
-    first-quiescent-ply checkpoint, within the line's normal display window.
-    When one exists, use THAT ply's value for the claim instead, so the
-    claim reflects the moment the feature was actually most true rather than
-    an arbitrary quiescence checkpoint that may have overshot it.
-
-    Design choice: we REPLACE the immediate value (rather than only adding a
-    flag) because the fired ``delta_cp`` is a concrete number printed in the
-    claim text; a flag-only approach would leave that number stale. We only
-    ever move further in the ALREADY-fired direction (never introduce a new
-    feature, never flip a delta's sign), so a delta can never jump between
-    the positive/negative lists here, and the immediate-vs-forecast dedup in
-    ``_two_horizon_claims`` (``_is_new``) is keyed on feature name/beneficiary
-    — never on the numeric value — so this cannot regress that priority
-    ordering; it only changes which FEN backs the number."""
-    names = [d.name for d in (diff.positive + diff.negative)]
-    if not names:
-        return diff
-    series = _line_feature_series(line.start_fen, line.fens, names=names)
-    points = [line.start_fen, *line.fens]
-    try:
-        immediate_idx = points.index(immediate_fen)
-    except ValueError:
-        immediate_idx = len(points) - 1
-    window = min(max_display_plies(), len(line.fens))
-    threshold = THRESHOLDS.get("min_claim_cp", 8)
-
-    def _sharpen(deltas: list[FeatureDelta]) -> list[FeatureDelta]:
-        out: list[FeatureDelta] = []
-        for d in deltas:
-            s = series.get(d.name)
-            if not s:
-                out.append(d)
-                continue
-            direction = 1 if d.delta_cp > 0 else -1
-            ext_idx = _feature_extremum_ply(s, direction, window)
-            ext_val = s[ext_idx]
-            if ext_idx != immediate_idx and direction * (ext_val - d.after_cp) >= threshold:
-                out.append(
-                    d.model_copy(
-                        update={"after_cp": ext_val, "delta_cp": ext_val - d.before_cp}
-                    )
-                )
-            else:
-                out.append(d)
-        out.sort(key=lambda x: -abs(x.delta_cp))
-        return out
-
-    return FeatureDiff(positive=_sharpen(diff.positive), negative=_sharpen(diff.negative))
+def _entity_square(claim: Claim) -> str | None:
+    if claim.entity and ":" in claim.entity:
+        tail = claim.entity.rsplit(":", 1)[1]
+        if _SQUARE.fullmatch(tail):
+            return tail
+    return None
 
 
-THREAT_IDS = {"hanging_piece", "intent_targets_piece"}
+def _dedupe_entities(claims: list[Claim]) -> list[Claim]:
+    """Keep one claim per board entity when several rules describe the same square."""
+    kept: list[Claim] = []
+    rank = {rule: i for _, rules in ENTITY_PRIORITY for i, rule in enumerate(rules)}
+    groups = {rule: tuple(rules) for _, rules in ENTITY_PRIORITY for rule in rules}
+    by_square: dict[tuple[tuple, str], Claim] = {}
+    for claim in sorted(claims, key=lambda c: rank.get(c.rule_id, 99)):
+        square = _entity_square(claim)
+        group = groups.get(claim.rule_id)
+        if square is None or group is None:
+            kept.append(claim)
+            continue
+        key = (group, square)
+        if key in by_square:
+            continue
+        by_square[key] = claim
+        kept.append(claim)
+    return kept
 
 
-def _threat_resolved(claim: Claim, boards: list[chess.Board], line: EnvisionedLine, support: int) -> str | None:
-    """A threat that the displayed line makes irrelevant: the target is never taken,
-    never moves away, and is no longer attacked at the end (its attacker was traded
-    off or blocked). A target that is captured or retreats keeps the claim."""
-    import re
-    anchor = re.search(r"\b([a-h][1-8])\b", claim.text)
-    if not anchor or claim.beneficiary not in ("white", "black"):
+def _tag(claim: Claim, line: EnvisionedLine, first: int, last: int, immediate_ply: int) -> Claim:
+    claim.support_ply = first
+    claim.support_fen = line.fens[first - 1]
+    claim.baseline_fen = line.start_fen
+    claim.first_ply, claim.last_ply = first, last
+    claim.persistence = "held" if last == len(line.fens) else "transient"
+    # What happens on the move itself (ply 1) is always immediate, even when the
+    # sequence never settles; otherwise the immediate horizon decides.
+    if first <= max(1, immediate_ply):
+        claim.realization = "immediate"
+        claim.caused_by_ply, claim.caused_by_san = None, None
+    else:
+        claim.realization = "envisioned"
+        claim.caused_by_ply, claim.caused_by_san = first, line.line_san[first - 1]
+    return claim
+
+
+def _capture_squares(line: EnvisionedLine, boards: list[chess.Board], upto: int) -> list[int]:
+    out = []
+    for k in range(1, min(upto, len(line.line_uci)) + 1):
+        move = chess.Move.from_uci(line.line_uci[k - 1])
+        if boards[k - 1].is_capture(move):
+            out.append(move.to_square)
+    return out
+
+
+def _fill_evidence(claim: Claim, line: EnvisionedLine, boards: list[chess.Board]) -> None:
+    """Derive evidence from the claimed features when the rule gave none."""
+    if claim.evidence.squares or claim.evidence.files:
+        return
+    support = claim.support_ply or len(boards) - 1
+    node = boards[min(support, len(boards) - 1)]
+    if claim.rule_id in MATERIAL_IDS:
+        squares = _capture_squares(line, boards, support)
+        claim.evidence = evidence_for(node, squares, baseline_squares=squares, source="rule")
+        return
+    claim.evidence = evidence_from_features(node, boards[0], claim.features_involved)
+
+
+def _target_square(claim: Claim) -> int | None:
+    for piece in claim.evidence.pieces:
+        if piece.get("role") == "target":
+            return chess.parse_square(piece["square"])
+    if claim.evidence.squares:
+        return chess.parse_square(claim.evidence.squares[0])
+    return None
+
+
+def _captured_later(line: EnvisionedLine, boards: list[chess.Board], square: int, after_ply: int) -> bool:
+    for k in range(after_ply + 1, len(line.line_uci) + 1):
+        move = chess.Move.from_uci(line.line_uci[k - 1])
+        if move.to_square == square and boards[k - 1].is_capture(move):
+            return True
+        if move.from_square == square:
+            return False  # the piece left; later captures on the square are of something else
+    return False
+
+
+def _probe_confirms_capture(ctx: _FactsCtx, line: EnvisionedLine, board: chess.Board, square: int,
+                            attacker: chess.Color) -> bool | None:
+    """Ask the engine whether taking on ``square`` keeps the attacker's eval (None: unknown)."""
+    if ctx.prober is None or line.root_eval_cp is None or abs(line.root_eval_cp) >= 999000:
         return None
-    square = chess.parse_square(anchor.group(1))
-    piece = boards[support].piece_at(square)
-    if piece is None:
+    if board.turn != attacker:
         return None
-    for index in range(support + 1, len(boards)):
-        move = chess.Move.from_uci(line.line_uci[index - 1])
-        if move.from_square == square or move.to_square == square:
-            return None
-    attacker = chess.WHITE if claim.beneficiary == "white" else chess.BLACK
-    if boards[-1].is_attacked_by(attacker, square):
+    gain, capture = best_capture_gain(board, square)
+    if capture is None:
+        return False
+    probe = board.copy(stack=False)
+    probe.push(capture)
+    value = ctx.prober(probe.fen())
+    if value is None:
         return None
-    return "threat_resolved_in_displayed_continuation"
+    sign = 1 if attacker == chess.WHITE else -1
+    return sign * value >= sign * line.root_eval_cp - PROBE_TOLERANCE_CP
 
 
-def _two_horizon_claims(
+def _gate_static_facts(ctx: _FactsCtx, claims: list[Claim], line: EnvisionedLine,
+                       boards: list[chess.Board]) -> list[Claim]:
+    """Keep a static exchange fact only when the displayed line (or a probe) bears it out."""
+    kept = []
+    for claim in claims:
+        if claim.rule_id not in STATIC_GATED:
+            kept.append(claim)
+            continue
+        support = claim.support_ply or 1
+        square = _target_square(claim)
+        reason = None
+        if claim.rule_id in ("piece_left_en_prise", "hanging_piece", "piece_trapped"):
+            attacker = chess.WHITE if claim.beneficiary == "white" else chess.BLACK
+            if square is None:
+                reason = "no_target_square"
+            elif not _captured_later(line, boards, square, support):
+                confirmed = _probe_confirms_capture(ctx, line, boards[support], square, attacker)
+                if confirmed is not True:
+                    reason = "capture_not_realized_in_line" if confirmed is None else "capture_refuted_by_probe"
+        elif claim.rule_id == "exchange_loses_material":
+            sign = 1 if ctx.mover == "White" else -1
+            series = _line_feature_series(line.start_fen, line.fens, names=["MATERIAL_BALANCE"]).get("MATERIAL_BALANCE") or []
+            lost = any(sign * (v - series[0]) <= -MATERIAL_LOSS_CP for v in series[1:4]) if series else False
+            if square is None or not (_captured_later(line, boards, square, support) or lost):
+                reason = "loss_not_realized_in_line"
+        elif claim.rule_id == "fork":
+            forker = chess.parse_square(claim.evidence.squares[0]) if claim.evidence.squares else None
+            subject = next((chess.parse_square(p["square"]) for p in claim.evidence.pieces if p.get("role") == "subject"), forker)
+            targets = [chess.parse_square(p["square"]) for p in claim.evidence.pieces if p.get("role") == "target"]
+            if subject is not None and support < len(line.line_uci):
+                reply = chess.Move.from_uci(line.line_uci[support])
+                if reply.to_square == subject and boards[support].is_capture(reply):
+                    reason = "forking_piece_captured_at_once"
+            if reason is None:
+                king_target = any(boards[support].piece_type_at(t) == chess.KING for t in targets)
+                cashed = any(_captured_later(line, boards, t, support) for t in targets)
+                # A fork that fails is still the idea behind an error, so the
+                # comment can say why it does not work; a sound move's fork
+                # must show its gain in the line.
+                quality = getattr(ctx.move_event.move_quality, "value", ctx.move_event.move_quality) or ""
+                failed_attempt = (line.line_uci[:1] == [ctx.move_event.uci]
+                                  and quality in ("inaccuracy", "mistake", "blunder"))
+                if not (king_target or cashed or failed_attempt):
+                    reason = "fork_not_cashed_in_line"
+        if reason:
+            ctx.evidence_suppressions.append({"rule_id": claim.rule_id, "reason": reason,
+                                              "support_ply": support, "branch": line.line_uci[:1],
+                                              "text": claim.text})
+        else:
+            kept.append(claim)
+    return kept
+
+
+def _material_changing_capture(claims: list[Claim], boards: list[chess.Board]) -> bool:
+    """A capture at the move or the reply that changes the material balance."""
+    if any(c.rule_id in ("exchange_loses_material", "exchange_sequence") and (c.support_ply or 9) <= 2 for c in claims):
+        return True
+    for c in claims:
+        if c.rule_id == "legal_capture" and (c.support_ply or 9) <= 2 and len(boards) > c.support_ply:
+            if _imbalance(boards[c.support_ply]) != _imbalance(boards[0]):
+                return True
+    return False
+
+
+def _trajectory_claims(
     ctx: _FactsCtx, line: EnvisionedLine, eval_cp: int | None
 ) -> tuple[list[Claim], dict]:
-    """Run the rules at two horizons and merge them:
+    """Run the rules along the whole displayed line and keep persistent claims.
 
-    - *immediate* — start vs. the first quiet node after the move: what the move
-      itself does (stated as fact);
-    - *forecast* — start vs. the envisioned leaf: what only develops deeper in
-      the line (hedged, tagged ``envisioned``).
-
-    Immediate claims win per rule and per dominant feature; forecast claims are
-    added only for features the move did not already move. Returns the merged
-    claims and the leaf vector (for the material-loss fallback)."""
+    Returns the merged claims (concrete facts first, uncapped) and the leaf
+    vector (for the material-loss fallback)."""
     leaf_vec = compute_feature_vector_fen(line.leaf_fen)
-    if not replay(line):
+    boards = replay(line)
+    if not boards:
         return [], leaf_vec
+    immediate_ply = line.immediate_horizon_ply
+    leaf_board = chess.Board(line.leaf_fen)
+    concrete = tactical_claims(line)
+    for claim in concrete:
+        _tag(claim, line, claim.support_ply or 1, len(line.fens), immediate_ply)
+        claim.persistence = "held"
     if (
         not line.evidence_valid
+        or immediate_ply < 1
         or not is_quiescent(ctx.board_before)
-        or not is_quiescent(chess.Board(line.leaf_fen))
-        or chess.Board(line.leaf_fen).is_game_over()
+        or not is_quiescent(leaf_board)
+        or leaf_board.is_game_over()
     ):
-        return tactical_claims(line), leaf_vec
-    immediate_fen = _first_quiet_fen(line)
-    immediate_vec = compute_feature_vector_fen(immediate_fen)
+        return _gate_static_facts(ctx, concrete, line, boards), leaf_vec
     common = {
         "phase": ctx.phase_raw,
         "mover": ctx.mover.upper(),
         "eval_cp": eval_cp,
         "start_board": ctx.board_before,
-        "cap": ctx.claim_policy != "contrastive",
+        "cap": False,
     }
-    # Numeric deltas, flags and square geometry must describe the SAME node.
-    immediate_diff = diff_vectors(ctx.start_vec, immediate_vec)
-    immediate = run_rules(
-        immediate_diff,
-        leaf_board=chess.Board(immediate_fen),
-        **common,
-    )
-    forecast = run_rules(
-        diff_vectors(ctx.start_vec, leaf_vec),
-        leaf_board=chess.Board(line.leaf_fen),
-        **common,
-    )
-    for claim in immediate:
-        claim.support_ply = line.fens.index(immediate_fen) + 1
-        claim.support_fen = immediate_fen
-        claim.baseline_fen = line.start_fen
-        claim.realization = "immediate" if claim.support_ply == 1 else "envisioned"
-    for claim in forecast:
-        claim.realization = "envisioned"
-        claim.support_ply = len(line.fens)
-        claim.support_fen = line.leaf_fen
-        claim.baseline_fen = line.start_fen
-
-    seen_rules = {(c.rule_id, c.beneficiary) for c in immediate}
-    seen_feats = {
-        (c.features_involved[0], c.beneficiary)
-        for c in immediate
-        if c.features_involved
-    }
-
-    def _is_new(c: Claim) -> bool:
-        if (c.rule_id, c.beneficiary) in seen_rules:
-            return False
-        primary = c.features_involved[0] if c.features_involved else None
-        return (primary, c.beneficiary) not in seen_feats
-
-    # Deduplicate only after checking persistence: an unstable immediate
-    # claim must not conceal a properly anchored, stable forecast fact.
-    merged = immediate + forecast
-    boards = replay(line)
-    kept = []
-    for claim in merged:
-        reason = None
-        support = claim.support_ply or 0
-        if boards and support < len(boards) - 1:
-            if "MATERIAL_BALANCE" in claim.features_involved:
-                # Material standing is an exact state. A temporary capture
-                # surplus must not survive a displayed recapture.
-                from .material import _imbalance
-                if any(_imbalance(b) != _imbalance(boards[support]) for b in boards[support + 1:]):
-                    reason = "material_state_changes_in_displayed_continuation"
-            elif any("PASS" in name for name in claim.features_involved):
-                import re
-                anchors = re.findall(r"\b[a-h][1-8]\b", claim.text)
-                for anchor in anchors:
-                    square = chess.parse_square(anchor)
-                    piece = boards[support].piece_at(square)
-                    if piece is None or piece.piece_type != chess.PAWN:
-                        continue
-                    # Follow the actual pawn, allowing legal advances/captures.
-                    for index in range(support + 1, len(boards)):
-                        move = chess.Move.from_uci(line.line_uci[index - 1])
-                        if move.from_square == square and boards[index - 1].piece_at(square) == piece:
-                            square = move.to_square
-                        if boards[index].piece_at(square) != piece:
-                            reason = "passed_pawn_anchor_removed_in_displayed_continuation"
-                            break
-            elif claim.rule_id in THREAT_IDS:
-                reason = _threat_resolved(claim, boards, line, support)
-        if reason:
-            ctx.evidence_suppressions.append({"rule_id": claim.rule_id, "reason": reason,
-                                              "support_ply": support, "branch": line.line_uci[:1]})
-        else:
-            kept.append(claim)
-    immediate_ids = {id(c) for c in immediate}
-    surviving_immediate = [c for c in kept if id(c) in immediate_ids]
-    seen_rules = {(c.rule_id, c.beneficiary) for c in surviving_immediate}
-    seen_feats = {(c.features_involved[0], c.beneficiary)
-                  for c in surviving_immediate if c.features_involved}
-    kept = surviving_immediate + [c for c in kept if id(c) not in immediate_ids and _is_new(c)]
-    concrete = tactical_claims(line)
-    if concrete:
-        # Concrete actions explain the move before broad activity scores. The
-        # opponent's incidental activity must not crowd out the reply evidence.
-        activity = {"activity_improved", "activity_reduced", "rooks_activated", "king_under_pressure", "king_safer", "piece_pinned"}
-        kept = [c for c in kept if c.rule_id not in activity]
+    n = len(line.fens)
+    trajectories: dict[tuple, dict] = {}
+    for k in range(immediate_ply, n + 1):
+        node_vec = leaf_vec if k == n else compute_feature_vector_fen(line.fens[k - 1])
+        for claim in run_rules(diff_vectors(ctx.start_vec, node_vec), leaf_board=boards[k], **common):
+            key = claim_identity(claim)
+            entry = trajectories.setdefault(key, {"first": k, "claim": claim})
+            entry["last"] = k
+    kept: list[Claim] = []
+    for entry in trajectories.values():
+        claim = _tag(entry["claim"], line, entry["first"], entry["last"], immediate_ply)
+        if claim.persistence != "held":
+            ctx.evidence_suppressions.append({
+                "rule_id": claim.rule_id, "reason": "transient_in_displayed_line",
+                "support_ply": entry["first"], "last_ply": entry["last"],
+                "branch": line.line_uci[:1], "text": claim.text})
+            continue
+        _fill_evidence(claim, line, boards)
+        kept.append(claim)
+    kept = _dedupe_entities(kept)
+    kept = _gate_static_facts(ctx, kept, line, boards)
+    concrete = _gate_static_facts(ctx, concrete, line, boards)
+    if _material_changing_capture(concrete, boards):
+        # A capture that changes material explains the move; the activity
+        # swing it causes is a side effect, not a plan.
+        dropped = [c for c in kept if c.rule_id in ACTIVITY_IDS]
+        for c in dropped:
+            ctx.evidence_suppressions.append({"rule_id": c.rule_id, "reason": "activity_crowded_out_by_capture",
+                                              "support_ply": c.support_ply, "branch": line.line_uci[:1], "text": c.text})
+        kept = [c for c in kept if c.rule_id not in ACTIVITY_IDS]
     return concrete + kept, leaf_vec
+
+
+# Backwards-compatible alias (the two-checkpoint builder was replaced by trajectories).
+_two_horizon_claims = _trajectory_claims
 
 
 def _played_line_claims(
@@ -366,8 +414,10 @@ def _played_line_claims(
             depth=ctx.depth,
         )
         played_line = _trim_line(played_line, ctx.prober)
-        selection = {"version": "current_quiet_bounded", "selected_ply": len(played_line.fens)}
-    claims, leaf_vec = _two_horizon_claims(ctx, played_line, move_event.eval_after_cp)
+        selection = {"version": "trajectory_settlement_v1", "selected_ply": len(played_line.fens),
+                     "reason": played_line.horizon_reason, "settled_ply": played_line.settled_ply,
+                     "immediate_horizon_ply": played_line.immediate_horizon_ply}
+    claims, leaf_vec = _trajectory_claims(ctx, played_line, move_event.eval_after_cp)
     line_diff = diff_vectors(ctx.start_vec, leaf_vec)
     ordered = claims if ctx.claim_policy == "contrastive" else order_claims_for_mover(claims, ctx.mover)
     return played_line, line_diff, leaf_vec, _concrete_first(ordered), selection
@@ -418,6 +468,100 @@ def _fallback_claim(
     return None
 
 
+# Plain names of the feature groups a merit or edge claim may speak of.
+FEATURE_GROUPS = (("MATERIAL", "material"), ("KING_DANGER", "king safety"), ("KING_SAFETY", "king safety"),
+                  ("PASSED", "passed pawns"), ("BISHOP_PAIR", "the bishop pair"), ("BISHOP", "bishop quality"),
+                  ("ROOK", "rook activity"), ("KNIGHT", "knight placement"), ("PAWN", "pawn structure"),
+                  ("MOBILITY", "piece activity"), ("ACTIVITY", "piece activity"), ("SPACE", "space"),
+                  ("CENTER", "central control"), ("KING", "king safety"))
+DIVERGENCE_MIN_CP = 30  # a feature group difference that already distinguishes the lines
+MERIT_MIN_CP = 10  # smallest feature edge worth stating as the point of a sound move
+EDGE_MIN_CP = 4  # smallest matched-depth difference stated as what the alternative does better
+
+
+def feature_group(name: str) -> str | None:
+    return next((label for key, label in FEATURE_GROUPS if key in name), None)
+
+
+def _feature_claim(rule_id: str, text: str, beneficiary: str, name: str, cp: int,
+                   line: EnvisionedLine, ply: int) -> Claim:
+    """A claim about one feature at ``ply`` of ``line``, with evidence from the feature's definition."""
+    ply = max(1, min(ply, len(line.fens)))
+    board = chess.Board(line.fens[ply - 1])
+    squares, files = feature_squares(board, name)
+    claim = Claim(rule_id=rule_id, text=text, text_state=text, beneficiary=beneficiary,
+                  features_involved=[name], delta_cp=abs(cp), entity=f"{rule_id}:{feature_group(name)}",
+                  evidence=evidence_for(board, squares, files=files, source="feature"))
+    return _tag(claim, line, ply, len(line.fens), line.immediate_horizon_ply)
+
+
+def merit_claim(ctx: _FactsCtx, claims: list[Claim], line: EnvisionedLine, diff: FeatureDiff,
+                better: BestAlternative | None) -> Claim | None:
+    """The point of a sound move when no rule produced a merit for the mover.
+
+    First choice: the feature group where the played line beats the alternative
+    (matched depth when available). Otherwise the mover's largest feature gain in
+    the played line itself. None when neither reaches the threshold."""
+    mover_key = ctx.mover.lower()
+    if any(c.beneficiary == mover_key and not c.is_concession for c in claims):
+        return None
+    san = ctx.move_event.san
+    sign = 1 if ctx.mover == "White" else -1
+    if better is not None:
+        matched = bool(better.matched_ply and better.feature_advantages_matched)
+        advantages = better.feature_advantages_matched if matched else better.feature_advantages
+        favouring = [a for a in advantages
+                     if sign * a.advantage_cp < 0 and feature_group(a.name) and "MATERIAL" not in a.name]
+        if favouring:
+            best = max(favouring, key=lambda a: abs(a.advantage_cp))
+            if abs(best.advantage_cp) >= MERIT_MIN_CP:
+                text = (f"Compared with {better.san}, {san} leaves {ctx.mover} better placed in "
+                        f"{feature_group(best.name)}.")
+                return _feature_claim("merit_over_alternative", text, mover_key, best.name, best.advantage_cp,
+                                      line, better.matched_ply if matched else len(line.fens))
+    gains = [d for d in (diff.positive if ctx.mover == "White" else diff.negative)
+             if feature_group(d.name) and "MATERIAL" not in d.name]
+    if gains:
+        best_delta = max(gains, key=lambda d: abs(d.delta_cp))
+        if abs(best_delta.delta_cp) >= MERIT_MIN_CP:
+            text = f"The main gain of {san} for {ctx.mover} is {feature_group(best_delta.name)}."
+            return _feature_claim("main_gain", text, mover_key, best_delta.name, best_delta.delta_cp,
+                                  line, len(line.fens))
+    return None
+
+
+def alternative_edge_claim(ctx: _FactsCtx, alt_san: str, alt_line: EnvisionedLine,
+                           matched_ply: int | None, played_line: EnvisionedLine) -> Claim | None:
+    """What the better move does better when the regular comparison is empty: the
+    largest matched-depth feature difference in the alternative's favour, even a small one."""
+    if matched_ply is None or matched_ply < 1:
+        return None
+    played_vec = compute_feature_vector_fen(played_line.fens[matched_ply - 1])
+    alt_vec = compute_feature_vector_fen(alt_line.fens[matched_ply - 1])
+    advantages = diff_of_diffs(diff_vectors(ctx.start_vec, played_vec), diff_vectors(ctx.start_vec, alt_vec),
+                               min_abs_cp=EDGE_MIN_CP, max_features=12)
+    sign = 1 if ctx.mover == "White" else -1
+    favouring = [a for a in advantages if sign * a.advantage_cp > 0 and feature_group(a.name)]
+    if not favouring:
+        return None
+    best = max(favouring, key=lambda a: abs(a.advantage_cp))
+    text = (f"Where {alt_san} does better than {ctx.move_event.san}: {feature_group(best.name)}, "
+            f"{matched_ply} plies after the move.")
+    return _feature_claim("alternative_edge", text, ctx.mover.lower(), best.name, best.advantage_cp,
+                          alt_line, matched_ply)
+
+
+def _cap_positional(claims: list[Claim], other: set[tuple], mover: str, limit: int) -> list[Claim]:
+    """Contrast-first cap: concrete and material claims are exempt; among the
+    rest, claims about entities the other line does not share rank first,
+    then by weight. Concessions keep the order ``order_claims_for_mover`` gave."""
+    exempt = [c for c in claims if c.rule_id in CONCRETE_IDS or c.rule_id in MATERIAL_IDS]
+    rest = [c for c in claims if c not in exempt]
+    rest.sort(key=lambda c: (c.is_concession, claim_identity(c) in other, -c.delta_cp))
+    kept = exempt + rest[:limit]
+    return [c for c in claims if c in kept]
+
+
 def _alternative_merits(
     best_claims: list[Claim], main_claims: list[Claim], mover: str, claim_policy: str = "current"
 ) -> list[Claim]:
@@ -426,22 +570,19 @@ def _alternative_merits(
                 for c in _concrete_first(best_claims) if c.rule_id in CONCRETE_IDS][:3]
     if claim_policy == "contrastive":
         return concrete + [c for c in best_claims if c.rule_id not in CONCRETE_IDS]
-    main_texts = {c.text for c in main_claims}
+    main_ids = {claim_identity(c) for c in main_claims}
     mover_key = mover.lower()
-    return concrete + [
-        c
-        for c in best_claims
-        if c.rule_id not in CONCRETE_IDS and c.beneficiary in (mover_key, None) and c.text not in main_texts
-    ][:max(0, MAX_ALTERNATIVE_MERITS - len(concrete))]
+    rest = [c for c in best_claims
+            if c.rule_id not in CONCRETE_IDS and c.beneficiary in (mover_key, None) and claim_identity(c) not in main_ids]
+    rest.sort(key=lambda c: (c.rule_id not in MATERIAL_IDS, -c.delta_cp))
+    return concrete + rest[:max(0, MAX_ALTERNATIVE_MERITS - len(concrete))]
 
 
 def _feature_advantages(
     played_diff: FeatureDiff | None, alt_diff: FeatureDiff
 ) -> list[FeatureAdvantage]:
-    """Feature-diff-of-diffs (Improvement 3): the alternative's own
-    start->leaf swing vs. the played move's, per feature, in cp. Additive to
-    the existing claim-text-dedup ``claims`` list -- see
-    ``envisioned.diff_of_diffs`` for the full rationale."""
+    """Feature-diff-of-diffs: the alternative's own start->leaf swing vs. the
+    played move's, per feature, in cp."""
     if played_diff is None:
         return []
     return diff_of_diffs(
@@ -452,14 +593,41 @@ def _feature_advantages(
     )
 
 
+def _matched_comparison(ctx: _FactsCtx, played: EnvisionedLine, alt: EnvisionedLine
+                        ) -> tuple[int | None, list[FeatureAdvantage], str | None]:
+    """Compare both lines at the same depth (the shorter line's length) as well."""
+    n = min(len(played.fens), len(alt.fens))
+    if n < 1:
+        return None, [], None
+    played_vec = compute_feature_vector_fen(played.fens[n - 1])
+    alt_vec = compute_feature_vector_fen(alt.fens[n - 1])
+    matched = diff_of_diffs(diff_vectors(ctx.start_vec, played_vec), diff_vectors(ctx.start_vec, alt_vec),
+                            min_abs_cp=THRESHOLDS.get("min_claim_cp", 8), max_features=MAX_FEATURE_ADVANTAGES)
+    note = None
+    if abs(len(played.fens) - len(alt.fens)) > 1:
+        note = (f"The lines settle at different depths: {len(played.fens)} plies after "
+                f"{played.line_san[0] if played.line_san else '?'} and {len(alt.fens)} plies after "
+                f"{alt.line_san[0] if alt.line_san else '?'}; the comparison at {n} plies is also given.")
+    return n, matched, note
+
+
+def _build_alternative_line(ctx: _FactsCtx, pv_uci: list[str], eval_cp: int | None) -> EnvisionedLine:
+    move_event = ctx.move_event
+    if ctx.horizon_policy == "adaptive_feature":
+        line, _selection = select_adaptive_horizon(
+            move_event.fen_before, pv_uci, root_eval_cp=eval_cp, depth=ctx.depth, prober=ctx.prober,
+        )
+        return line
+    line = envisioned_for_best_move(move_event.fen_before, pv_uci, best_eval_cp=eval_cp, depth=ctx.depth)
+    return _trim_line(line, ctx.prober)
+
+
 def _build_better_alternative(
-    ctx: _FactsCtx, main_claims: list[Claim], played_diff: FeatureDiff | None = None
+    ctx: _FactsCtx, main_claims: list[Claim], played_diff: FeatureDiff | None = None,
+    played_line: EnvisionedLine | None = None,
 ) -> BestAlternative | None:
     """The engine's preferred move + its merits, whenever a different move was
-    played — so the better line can always be visualized, regardless of how
-    small the gap is or whether it's the same piece (Guid). Uses the
-    already-computed PVs, so it costs no extra engine search.
-    """
+    played — so the better line can always be visualized (Guid)."""
     move_event = ctx.move_event
     if not (
         move_event.best_move_uci
@@ -475,41 +643,44 @@ def _build_better_alternative(
         else []
     )
     best_cp, best_mate = _decode_eval(move_event.best_move_eval_cp)
-    if ctx.horizon_policy == "adaptive_feature":
-        best_line, _selection = select_adaptive_horizon(
-            move_event.fen_before, best_pv_uci, root_eval_cp=best_cp,
-            depth=ctx.depth, prober=ctx.prober,
-        )
-    else:
-        best_line = envisioned_for_best_move(
-            move_event.fen_before, best_pv_uci, best_eval_cp=best_cp, depth=ctx.depth
-        )
-        best_line = _trim_line(best_line, ctx.prober)
-    best_claims, best_leaf_vec = _two_horizon_claims(ctx, best_line, best_cp)
+    best_line = _build_alternative_line(ctx, best_pv_uci, best_cp)
+    best_claims, best_leaf_vec = _trajectory_claims(ctx, best_line, best_cp)
     if _is_decided(best_cp, best_mate):
         best_claims = _material_only(best_claims)
     alt_diff = diff_vectors(ctx.start_vec, best_leaf_vec)
+    matched_ply, matched, note = _matched_comparison(ctx, played_line, best_line) if played_line else (None, [], None)
+    alt_san = move_event.best_move_san or move_event.best_move_uci
+    merits = _alternative_merits(best_claims, main_claims, ctx.mover, ctx.claim_policy)
+    sign = 1 if ctx.mover == "White" else -1
+    distinguishing = [a for a in (matched or _feature_advantages(played_diff, alt_diff))
+                      if sign * a.advantage_cp >= DIVERGENCE_MIN_CP]
+    main_ids = {claim_identity(c) for c in main_claims}
+    fresh = [c for c in merits if c.beneficiary == ctx.mover.lower() and claim_identity(c) not in main_ids]
+    if played_line and not distinguishing and not fresh:
+        edge = alternative_edge_claim(ctx, alt_san, best_line, matched_ply, played_line)
+        if edge is not None:
+            merits = merits + [edge]
     return BestAlternative(
-        san=move_event.best_move_san or move_event.best_move_uci,
+        san=alt_san,
         uci=move_event.best_move_uci,
         eval_cp=best_cp,
         eval_mate=best_mate,
         verdict=verdict_for_eval(best_cp, best_mate),
         display_line=best_line,
-        claims=_alternative_merits(best_claims, main_claims, ctx.mover, ctx.claim_policy),
+        claims=merits,
         feature_advantages=_feature_advantages(played_diff, alt_diff),
+        matched_ply=matched_ply,
+        feature_advantages_matched=matched,
+        horizon_note=note,
     )
 
 
 def _build_inferior_alternative(
-    ctx: _FactsCtx, main_claims: list[Claim], played_diff: FeatureDiff | None = None
+    ctx: _FactsCtx, main_claims: list[Claim], played_diff: FeatureDiff | None = None,
+    played_line: EnvisionedLine | None = None,
 ) -> BestAlternative | None:
     """When the engine's best move was actually played, surface the runner-up
-    (2nd-best PV) as a contrast for the "!" — so the reader sees what the move was
-    chosen over (Guid). The wording later adapts to the gap: a clearly-worse
-    runner-up reads as "weaker", a near-equal one as "a comparable alternative".
-    Uses the already-computed PVs, so no extra search.
-    """
+    (2nd-best PV) as a contrast for the "!" (Guid)."""
     move_event = ctx.move_event
     if not (move_event.best_move_uci and move_event.best_move_uci == move_event.uci):
         return None
@@ -532,20 +703,12 @@ def _build_inferior_alternative(
     except (ValueError, chess.IllegalMoveError):
         second_san = second_uci
     second_pv_uci = [str(m.move) for m in pvs[1] if getattr(m, "move", None)]
-    if ctx.horizon_policy == "adaptive_feature":
-        alt_line, _selection = select_adaptive_horizon(
-            move_event.fen_before, second_pv_uci, root_eval_cp=second_cp,
-            depth=ctx.depth, prober=ctx.prober,
-        )
-    else:
-        alt_line = envisioned_for_best_move(
-            move_event.fen_before, second_pv_uci, best_eval_cp=second_cp, depth=ctx.depth
-        )
-        alt_line = _trim_line(alt_line, ctx.prober)
-    alt_claims, alt_leaf_vec = _two_horizon_claims(ctx, alt_line, second_cp)
+    alt_line = _build_alternative_line(ctx, second_pv_uci, second_cp)
+    alt_claims, alt_leaf_vec = _trajectory_claims(ctx, alt_line, second_cp)
     if _is_decided(second_cp, second_mate):
         alt_claims = _material_only(alt_claims)
     alt_diff = diff_vectors(ctx.start_vec, alt_leaf_vec)
+    matched_ply, matched, note = _matched_comparison(ctx, played_line, alt_line) if played_line else (None, [], None)
     return BestAlternative(
         san=second_san,
         uci=second_uci,
@@ -556,6 +719,9 @@ def _build_inferior_alternative(
         claims=_alternative_merits(alt_claims, main_claims, ctx.mover, ctx.claim_policy),
         is_inferior=True,
         feature_advantages=_feature_advantages(played_diff, alt_diff),
+        matched_ply=matched_ply,
+        feature_advantages_matched=matched,
+        horizon_note=note,
     )
 
 
@@ -574,6 +740,8 @@ def _refutation_san(played_line: EnvisionedLine, move_quality: str) -> str | Non
 
 
 _DUBIOUS = ("inaccuracy", "mistake", "blunder")
+SOUND_GAP_CP = 50  # a "good" move that is this much behind the engine choice is not given a merit
+SOUND_QUALITIES = {"best", "best_move", "good", "great", "great_move", "brilliant", "excellent", "book"}
 
 
 ONLY_WIN_MARGIN_CP = 10_000  # first choice keeps a forced mate, the second does not
@@ -627,8 +795,6 @@ def _filter_claims(
 ) -> list[Claim]:
     """Drop misleading claims: noise in decided positions, and the mover's
     incidental "merits" when the move leaves them clearly worse off."""
-    # Decisive evals: positional claims are noise, but the material standing
-    # ("White is a rook up") is exactly what explains the result — keep it.
     if _is_decided(eval_cp, eval_mate):
         before = claims
         claims = _material_only(claims)
@@ -636,10 +802,7 @@ def _filter_claims(
             logger.debug(
                 "_filter_claims: decisive-position gate (eval_cp=%s, eval_mate=%s, "
                 "threshold=%d) dropped %d non-material claim(s): %s",
-                eval_cp,
-                eval_mate,
-                DECISIVE_CLAIM_CP,
-                len(before) - len(claims),
+                eval_cp, eval_mate, DECISIVE_CLAIM_CP, len(before) - len(claims),
                 [c.rule_id for c in before if c not in claims],
             )
     mover_pov_eval = (
@@ -657,13 +820,9 @@ def _filter_claims(
             logger.debug(
                 "_filter_claims: merit-suppress gate (mover_pov_eval=%s, "
                 "threshold=-%d) dropped %d mover-merit claim(s): %s",
-                mover_pov_eval,
-                MERIT_SUPPRESS_CP,
-                len(before) - len(claims),
+                mover_pov_eval, MERIT_SUPPRESS_CP, len(before) - len(claims),
                 [c.rule_id for c in before if c not in claims],
             )
-    # When rules abstain, the verdict and legal variation are the explanation.
-    # Do not turn a partial tactical leaf into an ungrounded material claim.
     return claims
 
 
@@ -672,8 +831,7 @@ def _attach_series(
     better: BestAlternative | None,
     fen_before: str,
 ) -> tuple[EnvisionedLine, BestAlternative | None]:
-    """Attach the per-ply feature series to the charted lines. Claim realization
-    (immediate vs envisioned) is already set from the firing horizon."""
+    """Attach the per-ply feature series to the charted lines."""
     played_line = _with_feature_series(played_line, fen_before)
     if better is not None and better.display_line is not None:
         better = better.model_copy(
@@ -695,10 +853,9 @@ def build_comment_facts(
 ) -> CommentFacts | None:
     """Assemble the move's inviolable facts from data the engine pass already paid for.
 
-    ``prober`` is an optional cheap engine callable (FEN -> White-POV cp)
-    used to sanity-check envisioned lines' leaves against a horizon-effect
-    contradiction before any claim/feature-diff is computed from them
-    (Improvement 1); omit it for engine-free/offline callers and tests."""
+    ``prober`` is an optional cheap engine callable (FEN -> White-POV cp) used
+    to sanity-check envisioned lines' leaves and to confirm static exchange
+    facts the displayed line does not realize; omit it for engine-free callers."""
     if horizon_policy not in {"current_quiet_bounded", "adaptive_feature"}:
         raise ValueError(f"unknown horizon policy: {horizon_policy}")
     if claim_policy not in {"current", "contrastive"}:
@@ -741,13 +898,23 @@ def build_comment_facts(
         refutation_san=refutation_san,
     )
     better = None if terminal_result else (_build_better_alternative(
-        ctx, claims, diff
-    ) or _build_inferior_alternative(ctx, claims, diff))
+        ctx, claims, diff, played_line
+    ) or _build_inferior_alternative(ctx, claims, diff, played_line))
     contrast_selection = None
     if better is not None:
         better = better.model_copy(
             update={"horizon_matched": horizons_match(played_line, better.display_line)}
         )
+    mover_pov = None if eval_cp is None else (eval_cp if mover == "White" else -eval_cp)
+    gap = (None if better is None or better.eval_cp is None or eval_cp is None
+           else (1 if mover == "White" else -1) * (better.eval_cp - eval_cp))
+    sound = (move_quality in SOUND_QUALITIES and not terminal_result and not _is_decided(eval_cp, eval_mate)
+             and mover_pov is not None and mover_pov > -MERIT_SUPPRESS_CP
+             and (better is None or better.is_inferior or (gap is not None and gap < SOUND_GAP_CP)))
+    if sound:
+        merit = merit_claim(ctx, claims, played_line, diff, better)
+        if merit is not None:
+            claims = claims + [merit]
     if claim_policy == "contrastive" and better is not None:
         played_concrete = [c for c in claims if c.rule_id in CONCRETE_IDS]
         alternative_concrete = [c for c in better.claims if c.rule_id in CONCRETE_IDS]
@@ -763,6 +930,11 @@ def build_comment_facts(
         played_concrete = [c for c in claims if c.rule_id in CONCRETE_IDS]
         claims, _unused, contrast_selection = select_contrastive_claims(claims, [], mover=mover)
         claims = played_concrete + [c for c in claims if c.rule_id not in CONCRETE_IDS]
+    else:
+        # Contrast-first cap over the uncapped pool: what distinguishes the
+        # played line from the alternative ranks above what both share.
+        other = {claim_identity(c) for c in better.claims} if better is not None else set()
+        claims = _cap_positional(claims, other, mover, MAX_CLAIMS_PER_MOVE)
     claims = _concrete_first(claims)
     played_line, better = _attach_series(played_line, better, move_event.fen_before)
     verdict = verdict_for_transition(eval_before_cp, eval_cp, eval_mate, mover)
@@ -804,5 +976,6 @@ def build_comment_facts(
             "alternative_horizon_matched": (
                 better.horizon_matched if better is not None else None
             ),
+            "alternative_horizon_note": better.horizon_note if better is not None else None,
         },
     )

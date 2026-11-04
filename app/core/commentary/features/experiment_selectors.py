@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 import chess
 
-from app.core.commentary.features.envisioned import is_quiescent, max_display_plies
+from app.core.commentary.features.envisioned import group_deltas, is_quiescent, max_display_plies
 from app.core.commentary.features.guid_features import compute_feature_vector_fen
 from app.models.comment_facts import Claim, EnvisionedLine
 
@@ -77,24 +77,8 @@ def _probe_status(root_eval_cp: int | None, fen: str, prober: Prober | None) -> 
 
 
 def _group_deltas(start: dict, end: dict) -> dict[str, int]:
-    """Heuristic feature groups, not verified rule concepts.
-
-    Collapse side/net aliases and pawn aggregate/component overlap. Use the
-    strongest member instead of summing correlated magnitudes.
-    """
-    groups: dict[str, int] = {}
-    for name, value in start.items():
-        if name not in end:
-            continue
-        delta = end[name].value_cp - value.value_cp
-        if abs(delta) < ADAPTIVE_MIN_FEATURE_CP:
-            continue
-        base = re.sub(r"^(WHITE_|BLACK_)", "", name)
-        if base in {"EVALUATE_PAWNS", "PAWN_DOUBLED", "PAWN_ISOLATED", "PAWN_BACKWARD", "WEAK_PAWNS"}:
-            base = "PAWN_STRUCTURE"
-        if abs(delta) > abs(groups.get(base, 0)):
-            groups[base] = delta
-    return groups
+    """Heuristic feature groups (shared with the settlement test in ``envisioned``)."""
+    return group_deltas(start, end)
 
 
 def select_adaptive_horizon(

@@ -10,6 +10,7 @@ from app.core.commentary.features.guid_features import (
     rooks_on_seventh_squares,
 )
 from app.models.comment_facts import Claim
+from app.core.commentary.features.guid_features.evidence import evidence_for
 
 from .constants import COUNT_CLAIM_CP, DECISIVE_CLAIM_CP, SIDES, THRESHOLDS
 from .context import _benef, _benef_opp, _Ctx, _side_label, _toward
@@ -73,6 +74,8 @@ def rule_strong_knight(ctx: _Ctx) -> list[Claim]:
             out.append(
                 Claim(
                     rule_id="strong_knight_established",
+                    entity=f"outpost:{sqs[0]}" if sqs else None,
+                    **({"evidence": evidence_for(ctx.leaf_board, [chess.parse_square(sqs[0])])} if sqs else {}),
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)} establishes a strong knight{where}.",
                     text_state=f"{_side_label(side)} has a strong knight{where}.",
@@ -121,6 +124,7 @@ def rule_bad_bishop(ctx: _Ctx) -> list[Claim]:
             out.append(
                 Claim(
                     rule_id="bad_bishop_created",
+                    entity=f"bad_bishop:{sqs[0]}" if sqs else None,
                     beneficiary=_benef_opp(side),
                     text=f"{_side_label(side)} is left with a bad bishop{where}.",
                     text_state=f"{_side_label(side)}'s bishop{where} is now bad.",
@@ -175,6 +179,8 @@ def rule_rook_activity(ctx: _Ctx) -> list[Claim]:
             out.append(
                 Claim(
                     rule_id="rook_reaches_seventh",
+                    entity=f"seventh:{sqs[0]}" if sqs else None,
+                    **({"evidence": evidence_for(ctx.leaf_board, [chess.parse_square(sqs[0])])} if sqs else {}),
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)}'s rook reaches the seventh rank{where}.",
                     text_state=f"{_side_label(side)} has a rook on the seventh rank{where}.",

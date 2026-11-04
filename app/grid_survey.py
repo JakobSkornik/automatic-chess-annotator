@@ -107,7 +107,8 @@ def freeze_grid(manifest, variants):
     models = manifest.get('models', [])
     # Version 2 (best/worst choices) studies stay importable; new studies use version 3.
     if (manifest.get('kind') != 'comparison_grid' or manifest.get('questionnaire_version') not in (2, 3)
-            or len(games) != 10 or [g['bracket'] for g in games] != survey.BRACKETS
+            # Ten games, each in a known rating band (a study may use two games per band).
+            or len(games) != 10 or any(g['bracket'] not in survey.BRACKETS for g in games)
             or len({g['id'] for g in games}) != 10 or manifest.get('levels') != LEVELS
             or not 2 <= len(models) <= 7 or len({m['id'] for m in models}) != len(models)):
         raise ValueError('Invalid comparison grid definition')

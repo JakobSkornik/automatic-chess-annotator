@@ -6,6 +6,7 @@ import chess
 
 from app.core.commentary.features.guid_features.features.threats import hanging
 from app.models.comment_facts import Claim
+from app.core.commentary.features.guid_features.evidence import evidence_for
 
 from .constants import SIDES
 from .context import _benef, _Ctx, _side_label
@@ -35,9 +36,13 @@ def rule_threats(ctx: _Ctx) -> list[Claim]:
         piece_name = chess.piece_name(ctx.leaf_board.piece_type_at(square))
         victim = _side_label("BLACK" if side == "WHITE" else "WHITE")
         text = f"{victim}'s {piece_name} on {new_hanging[0]} is undefended and attacked."
+        attackers = list(ctx.leaf_board.attackers(side == "WHITE", square))
         out.append(
             Claim(
                 rule_id="hanging_piece",
+                entity=f"hanging:{new_hanging[0]}",
+                evidence=evidence_for(ctx.leaf_board, [square, *attackers],
+                                      roles={square: "target", **{a: "attacker" for a in attackers}}),
                 beneficiary=_benef(side),
                 # The feature diff says the count of hanging pieces increased;
                 # the opponent's move may have created the threat, so avoid
@@ -73,6 +78,9 @@ def rule_pin(ctx: _Ctx) -> list[Claim]:
             out.append(
                 Claim(
                     rule_id="piece_pinned",
+                    entity=f"pin:{chess.square_name(victim)}",
+                    evidence=evidence_for(ctx.leaf_board, [attacker, victim, king],
+                                          roles={attacker: "attacker", victim: "target", king: "king"}),
                     beneficiary=_benef(side),
                     text=text,
                     text_state=text,

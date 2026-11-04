@@ -1116,6 +1116,7 @@ def test_first_quiet_fen_skips_transient_capture_node():
         line_uci=["a1a2", "a2a3"],
         fens=[noisy, quiet_a],
         leaf_fen=quiet_a,
+        immediate_horizon_ply=2,
     )
     assert _first_quiet_fen(line) == quiet_a
     # A quiet move: the post-move node itself is the assessment horizon.

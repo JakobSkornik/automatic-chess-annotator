@@ -126,7 +126,8 @@ def _claim_reason(claim: Claim, line: EnvisionedLine) -> tuple[int | None, str |
         return None, "baseline_position_mismatch"
     if claim.realization not in ("immediate", "envisioned"):
         return None, "unknown_realization"
-    if (claim.realization == "immediate") != (ply == 1):
+    horizon = max(1, getattr(line, "immediate_horizon_ply", 1) or 1)
+    if (claim.realization == "immediate") != (ply <= horizon):
         return None, "timing_mismatch"
     return ply, None
 
@@ -279,6 +280,8 @@ def _replay_branch(
                 "support_fen": claim.support_fen,
                 "baseline_fen": claim.baseline_fen,
                 "realization": claim.realization,
+                "caused_by": labels[ply - 1] if claim.realization == "envisioned" else None,
+                "evidence_squares": list(claim.evidence.squares),
                 "features": _feature_evidence(claim),
             }
         )

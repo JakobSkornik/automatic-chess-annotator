@@ -1,27 +1,34 @@
-"""Envisioned-position machinery (Guid §5.3).
+"""Envisioned-position machinery (Guid §5.3), trajectory horizon (2 Nov 2026).
 
-The envisioned position is the end of a *shortened* principal variation:
-the engine PV is capped to a displayable length and its tail is trimmed
-while the leaf is not quiescent (last move a capture, promotion or check),
-to dodge horizon-effect noise. The feature-difference vector between the
-starting position and the envisioned position — split into positive
-(favoring White) and negative (favoring Black) components — is the raw
-material every positional comment is built from (Tables 5.1/5.2).
+The envisioned position is the end of a *shortened* principal variation. The
+endpoint is chosen by *settlement*: the earliest quiet ply after which no
+feature group newly crosses its threshold or reverses direction for the rest
+of the bounded window (hard cap 12 plies). When no ply settles, the ply whose
+feature changes persist best to the end of the window is used; the fixed
+display window is only the last resort. The line also records its *immediate
+horizon*: the first settled ply after the move (1-3), at which "what the move
+does" is read.
 
-Everything here is engine-free: PVs and evals come from searches the
-engine pass already paid for.
+Quiescence is SEE-based and counts pawns: a position is quiet when the side
+not to move has nothing the mover can win material on by a capture sequence.
+
+Everything here is engine-free: PVs and evals come from searches the engine
+pass already paid for.
 """
 
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable
 
 import chess
 
 from app.core.commentary.features.guid_features import (
     FeatureVector,
+    compute_feature_vector_fen,
 )
+from app.core.commentary.features.see import en_prise_squares
 from app.models.comment_facts import (
     EnvisionedLine,
     FeatureAdvantage,
@@ -29,9 +36,16 @@ from app.models.comment_facts import (
     FeatureDiff,
 )
 
+# Smallest feature-group change (cp) that counts as a concept appearing.
+MIN_GROUP_CP = 8
+# A displayed line shows at least the move and the reply, unless the game ends.
+MIN_SETTLE_PLIES = 2
+# The immediate horizon is the first quiet, non-forcing ply of the kept line:
+# after a quiet move that is ply 1, after an exchange the ply where it settles.
+
 
 def base_display_plies() -> int:
-    """Application display target; Guid does not prescribe a fixed ply count."""
+    """Fallback display target when no ply settles; Guid prescribes no fixed count."""
     try:
         return max(1, int(os.environ.get("ENVISIONED_BASE_PLIES", "5")))
     except ValueError:
@@ -39,7 +53,7 @@ def base_display_plies() -> int:
 
 
 def max_display_plies() -> int:
-    """Hard safety cap when extending the base length to reach a quiescent leaf."""
+    """Hard safety cap on the displayed line."""
     try:
         return max(1, int(os.environ.get("ENVISIONED_MAX_PLIES", "12")))
     except ValueError:
@@ -47,9 +61,7 @@ def max_display_plies() -> int:
 
 
 def probe_trim_enabled() -> bool:
-    """Opt-out knob for the probe-based horizon-effect trim (Improvement 1),
-    following the same env-var convention as ``ENVISIONED_BASE_PLIES`` /
-    ``ENVISIONED_MAX_PLIES``. Defaults to enabled."""
+    """Opt-out knob for the probe-based horizon-effect trim. Defaults to enabled."""
     return os.environ.get("ENVISIONED_PROBE_TRIM_ENABLED", "1").strip().lower() not in (
         "0",
         "false",
@@ -58,49 +70,100 @@ def probe_trim_enabled() -> bool:
     )
 
 
-_SEE_VALUES = {
-    chess.PAWN: 1,
-    chess.KNIGHT: 3,
-    chess.BISHOP: 3,
-    chess.ROOK: 5,
-    chess.QUEEN: 9,
-    chess.KING: 99,
-}
-
-
 def is_quiescent(board: chess.Board) -> bool:
-    """Static quiescence: not in check and no obviously en-prise piece.
+    """Static quiescence: not in check and nothing en prise by static exchange.
 
-    En-prise = a non-pawn piece of the side *not* to move that the mover can
-    capture with a cheaper attacker, or that is attacked and undefended.
-    """
+    En prise = a piece *or pawn* of the side not to move that the mover can win
+    material on, playing out the capture sequence on that square (SEE). The
+    earlier heuristic ignored pawns, so a pawn exchange counted as quiet and
+    claims were read mid-exchange (changed 2 Nov 2026)."""
     if board.is_check():
         return False
-    mover = board.turn
-    victim_color = not mover
-    for sq, piece in board.piece_map().items():
-        if piece.color != victim_color or piece.piece_type == chess.KING:
-            continue
-        attackers = board.attackers(mover, sq)
-        if not attackers:
-            continue
-        defenders = board.attackers(victim_color, sq)
-        victim_v = _SEE_VALUES[piece.piece_type]
-        cheapest = min(_SEE_VALUES[board.piece_at(a).piece_type] for a in attackers)
-        if cheapest < victim_v:
-            return False
-        if not defenders and piece.piece_type != chess.PAWN:
-            return False
-    return True
+    return not en_prise_squares(board, not board.turn)
 
 
 def _is_forcing(board_before: chess.Board, move: chess.Move) -> bool:
-    """Capture, promotion, or check — moves a quiescent line must not end on."""
+    """Capture, promotion, or check — moves a quiet line must not end on."""
     if board_before.is_capture(move) or move.promotion:
         return True
     b = board_before.copy(stack=False)
     b.push(move)
     return b.is_check()
+
+
+_SIDE_PREFIX = re.compile(r"^(WHITE_|BLACK_)")
+_PAWN_GROUP = {"EVALUATE_PAWNS", "PAWN_DOUBLED", "PAWN_ISOLATED", "PAWN_BACKWARD", "WEAK_PAWNS"}
+
+
+def group_deltas(start: FeatureVector, end: FeatureVector) -> dict[str, int]:
+    """Feature-group changes (start -> end) above ``MIN_GROUP_CP``.
+
+    Side and net aliases collapse into one group, and the pawn aggregate and
+    its components into one; the strongest member represents the group so
+    correlated magnitudes are not summed."""
+    groups: dict[str, int] = {}
+    for name, value in start.items():
+        if name not in end:
+            continue
+        delta = end[name].value_cp - value.value_cp
+        if abs(delta) < MIN_GROUP_CP:
+            continue
+        base = _SIDE_PREFIX.sub("", name)
+        if base in _PAWN_GROUP:
+            base = "PAWN_STRUCTURE"
+        if abs(delta) > abs(groups.get(base, 0)):
+            groups[base] = delta
+    return groups
+
+
+# A ply is settled when its feature story is stable: the groups present there
+# persist (same sign, above threshold) through the next PERSIST_WINDOW plies,
+# and no new group appears within the look-ahead. Persistence is measured over
+# a bounded window, not to the end of the line: an engine line keeps changing
+# for twelve plies, so "stable until the end" would only ever select the end.
+SETTLE_PERSISTENCE = 0.75
+SETTLE_LOOKAHEAD = 2
+PERSIST_WINDOW = 4
+
+
+def _persistence(groups: list[dict[str, int]], k: int) -> float:
+    """Share of the groups at ply k that still hold through the next PERSIST_WINDOW plies."""
+    at_k = groups[k - 1]
+    later = groups[k:k + PERSIST_WINDOW]
+    if not at_k or not later:
+        return 1.0
+    return sum(1 for name, value in at_k.items()
+               if all(name in g and g[name] * value > 0 for g in later)) / len(at_k)
+
+
+def settled_ply(groups: list[dict[str, int]], candidates: list[int]) -> tuple[int | None, str]:
+    """The earliest candidate ply whose feature story is stable.
+
+    ``groups[k-1]`` holds the group deltas start -> ply k. Ply k is settled when
+    at least ``SETTLE_PERSISTENCE`` of its groups persist through the next
+    ``PERSIST_WINDOW`` plies and no group absent at k appears within the next
+    ``SETTLE_LOOKAHEAD`` plies. The earliest such ply is the endpoint, so the line stops where the
+    move's consequences have materialized rather than at the end of the
+    window. When none is settled, the candidate with the best persistence wins
+    if at least half of its groups persist; otherwise ``(None, reason)``."""
+    n = len(groups)
+    for k in candidates:
+        at_k = groups[k - 1]
+        ahead = groups[k:min(n, k + SETTLE_LOOKAHEAD)]
+        if any(name not in at_k for g in ahead for name in g):
+            continue
+        if _persistence(groups, k) >= SETTLE_PERSISTENCE:
+            return k, "settled"
+    best: tuple[float, int] | None = None
+    for k in candidates:
+        if not groups[k - 1]:
+            continue
+        persistent = _persistence(groups, k)
+        if best is None or persistent > best[0]:
+            best = (persistent, k)
+    if best is not None and best[0] >= 0.5:
+        return best[1], "persistence"
+    return None, "no_settled_ply"
 
 
 def build_envisioned_line(
@@ -111,7 +174,7 @@ def build_envisioned_line(
     depth: int | None = None,
     max_plies: int | None = None,
 ) -> EnvisionedLine:
-    """Choose a bounded quiet endpoint, preserving terminal forcing lines.
+    """Choose the endpoint by settlement, preserving terminal forcing lines.
 
     If no quiet endpoint exists, retain the available tactical continuation
     and mark its evidence unsuitable for strategic claims.
@@ -141,29 +204,49 @@ def build_envisioned_line(
         board.push(mv)
         moves.append(mv)
         fens.append(board.fen())
+        if board.is_game_over():
+            break
 
     walked = len(moves)
+    quiet_cache: dict[int, bool] = {}
+
+    def _quiet(k: int) -> bool:
+        if k not in quiet_cache:
+            quiet_cache[k] = is_quiescent(chess.Board(fens[k - 1]))
+        return quiet_cache[k]
 
     def _unsettled(k: int) -> bool:
         """Ply k ends on a forcing move or a non-quiescent leaf."""
         if k == 0 or chess.Board(fens[k - 1]).is_game_over():
             return False
-        return _is_forcing(boards_before[k - 1], moves[k - 1]) or not is_quiescent(
-            chess.Board(fens[k - 1])
-        )
+        return _is_forcing(boards_before[k - 1], moves[k - 1]) or not _quiet(k)
 
-    # Extend past the display target to finish forcing play.
-    keep = min(base, walked)
-    while keep < walked and _unsettled(keep):
-        keep += 1
-    if keep and _unsettled(keep):
-        quiet_prefixes = [k for k in range(1, keep) if not _unsettled(k)]
-        if quiet_prefixes:
-            keep = quiet_prefixes[-1]
+    reason = "fixed_window"
+    settled: int | None = None
+    if walked and chess.Board(fens[-1]).is_game_over():
+        keep, reason = walked, "terminal"
+    else:
+        candidates = [k for k in range(min(MIN_SETTLE_PLIES, walked), walked + 1) if k and not _unsettled(k)]
+        if candidates:
+            start_vec = compute_feature_vector_fen(start_fen)
+            groups = [group_deltas(start_vec, compute_feature_vector_fen(fen)) for fen in fens]
+            settled, reason = settled_ply(groups, candidates)
+        if settled is not None:
+            keep = settled
+        else:
+            # Last resort: the fixed window, extended to finish forcing play.
+            keep = min(base, walked)
+            while keep < walked and _unsettled(keep):
+                keep += 1
+            if keep and _unsettled(keep):
+                quiet_prefixes = [k for k in range(1, keep) if not _unsettled(k)]
+                if quiet_prefixes:
+                    keep = quiet_prefixes[-1]
+            reason = "fixed_window"
+    immediate = next((k for k in range(1, keep + 1) if not _unsettled(k)), 0)
     moves = moves[:keep]
     sans = sans[:keep]
     fens = fens[:keep]
-    boards_before = boards_before[:keep]
     trimmed = walked - keep
 
     leaf_fen = fens[-1] if fens else start_fen
@@ -180,6 +263,9 @@ def build_envisioned_line(
         start_quiescent=start_q,
         leaf_quiescent=leaf_q,
         evidence_valid=bool(keep) and not _unsettled(keep),
+        immediate_horizon_ply=immediate,
+        settled_ply=settled,
+        horizon_reason=reason,
     )
 
 
@@ -234,6 +320,9 @@ def trim_envisioned_line_by_probe(
             "trimmed_plies": line.trimmed_plies + (len(line.fens) - keep),
             "leaf_quiescent": is_quiescent(chess.Board(line.fens[keep - 1])),
             "feature_series": {name: values[:keep + 1] for name, values in line.feature_series.items()},
+            "immediate_horizon_ply": min(line.immediate_horizon_ply, keep),
+            "settled_ply": min(line.settled_ply, keep) if line.settled_ply else None,
+            "horizon_reason": f"{line.horizon_reason}+probe_trim",
         }
     )
     return trimmed_line
@@ -294,17 +383,7 @@ def diff_of_diffs(
 
     Every feature name here is already White-POV signed (``WHITE_*``/``BLACK_*``
     are separate, oppositely-signed features per ``vector.py``), so the two
-    diffs' ``delta_cp`` values are directly comparable by name without any
-    extra POV bookkeeping — unlike claim text, which is deduplicated by rule
-    id/beneficiary, this is a genuine number: "the alternative gains N more
-    cp of rook activity than the played move does", grounded in the actual
-    feature vectors rather than in claim-text absence.
-
-    ``min_abs_cp`` mirrors ``diff_vectors``'s own materiality convention
-    (the smallest cp swing worth reporting at all); callers doing user-facing
-    surfacing should pass a higher threshold (e.g. Guid's ``min_claim_cp``)
-    so only claim-worthy swings show up. Results are sorted by |advantage|
-    descending and optionally capped to ``max_features``."""
+    diffs' ``delta_cp`` values are directly comparable by name."""
 
     def _by_name(diff: FeatureDiff) -> dict[str, int]:
         return {d.name: d.delta_cp for d in (diff.positive + diff.negative)}

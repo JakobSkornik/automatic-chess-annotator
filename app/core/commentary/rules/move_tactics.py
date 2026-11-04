@@ -16,6 +16,7 @@ from __future__ import annotations
 import chess
 
 from app.models.comment_facts import Claim
+from app.core.commentary.features.guid_features.evidence import evidence_for
 
 from .exchange import VALUE, see
 
@@ -52,17 +53,26 @@ def move_tactic_claims(before: chess.Board, move: chess.Move, after: chess.Board
     side, opponent = _label(mover), _label(not mover)
     claims = []
 
-    def add(rule_id: str, text: str, feature: str, beneficiary: chess.Color = mover) -> None:
+    def add(rule_id: str, text: str, feature: str, beneficiary: chess.Color = mover,
+            squares=(), roles=None) -> None:
+        squares = list(squares) or [move.to_square]
         claims.append(Claim(rule_id=rule_id, text=text, text_state=text, features_involved=[feature],
+                            entity=f"{rule_id}:{chess.square_name(move.to_square)}",
+                            evidence=evidence_for(after, squares, roles=roles,
+                                                  baseline_squares=[move.from_square, *squares[1:]]),
                             **{**common, "beneficiary": _label(beneficiary).lower()}))
 
     piece_name = chess.piece_name(before.piece_type_at(move.from_square))
-    safe = see(before, move) >= 0
+    # A fork must survive: an equal trade (SEE 0 on a capture) is an exchange,
+    # not a fork, and a piece that can be taken for free forks nothing.
+    gain = see(before, move)
+    safe = gain > 0 if before.is_capture(move) else gain >= 0
     # Fork: the moved piece attacks two or more winnable pieces at once.
     forked = _targets(after, move.to_square)
     if safe and len(forked) >= 2:
         add("fork", f"{side}'s {piece_name} on {chess.square_name(move.to_square)} attacks "
-                    f"{_names(after, forked)} at once (a fork).", "TACTIC_FORK")
+                    f"{_names(after, forked)} at once (a fork).", "TACTIC_FORK",
+            squares=[move.to_square, *forked], roles={t: "target" for t in forked})
     # Discovered attack or check: another piece of the mover is uncovered.
     for square in chess.SquareSet(after.occupied_co[mover]):
         if square == move.to_square or after.piece_type_at(square) not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
@@ -71,14 +81,17 @@ def move_tactic_claims(before: chess.Board, move: chess.Move, after: chess.Board
         if not new:
             continue
         slider = f"{side}'s {chess.piece_name(after.piece_type_at(square))} on {chess.square_name(square)}"
+        roles = {square: "attacker", **{t: "target" for t in new}}
         if any(after.piece_type_at(t) == chess.KING for t in new):
             add("discovered_check", f"Moving the {piece_name} uncovers a check by {slider} (a discovered check).",
-                "TACTIC_DISCOVERED")
+                "TACTIC_DISCOVERED", squares=[move.to_square, square, *new], roles=roles)
         else:
             add("discovered_attack", f"Moving the {piece_name} uncovers {slider} against {_names(after, new)} "
-                                     f"(a discovered attack).", "TACTIC_DISCOVERED")
+                                     f"(a discovered attack).", "TACTIC_DISCOVERED",
+                squares=[move.to_square, square, *new], roles=roles)
     if len(after.checkers()) >= 2:
-        add("double_check", f"{side} gives a double check: the {opponent} king must move.", "TACTIC_DOUBLE_CHECK")
+        add("double_check", f"{side} gives a double check: the {opponent} king must move.", "TACTIC_DOUBLE_CHECK",
+            squares=[move.to_square, *after.checkers(), after.king(not mover)])
     # Mate threat: if the opponent passed, the mover would mate in one.
     if not after.is_check() and not after.is_game_over():
         threat = after.copy(stack=False)
@@ -88,7 +101,9 @@ def move_tactic_claims(before: chess.Board, move: chess.Move, after: chess.Board
             mate = threat.is_checkmate()
             threat.pop()
             if mate:
-                add("mate_threat", f"{side} threatens mate with {threat.san(reply)}.", "TACTIC_MATE_THREAT")
+                add("mate_threat", f"{side} threatens mate with {threat.san(reply)}.", "TACTIC_MATE_THREAT",
+                    squares=[reply.from_square, reply.to_square, after.king(not mover)],
+                    roles={reply.to_square: "target"})
                 break
     # Early queen: out before the minor pieces are developed.
     if (before.piece_type_at(move.from_square) == chess.QUEEN and before.fullmove_number <= 10
@@ -97,5 +112,7 @@ def move_tactic_claims(before: chess.Board, move: chess.Move, after: chess.Board
                    (chess.Piece(chess.KNIGHT, mover), chess.Piece(chess.BISHOP, mover)))
         if home >= 2:
             add("early_queen", f"{side}'s queen comes out while {home} of {side}'s minor pieces are still "
-                               f"on their starting squares.", "DEVELOPMENT", beneficiary=not mover)
+                               f"on their starting squares.", "DEVELOPMENT", beneficiary=not mover,
+                squares=[move.to_square, *[sq for sq in MINOR_HOMES[mover] if before.piece_at(sq) in
+                                           (chess.Piece(chess.KNIGHT, mover), chess.Piece(chess.BISHOP, mover))]])
     return claims

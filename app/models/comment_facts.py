@@ -43,6 +43,25 @@ class FeatureAdvantage(BaseModel):
     advantage_cp: int  # alt_delta_cp - played_delta_cp
 
 
+class ClaimEvidence(BaseModel):
+    """Board entities a claim is about, so the UI can highlight them on hover.
+
+    ``squares`` and ``pieces`` describe the support position (the node the claim
+    is anchored to); ``baseline_squares`` describe the same entities in the
+    starting position (useful for claims about something lost or resolved).
+    ``files`` names whole files (open files, pawn files). Every list is sorted
+    and deduplicated; square names are lowercase algebraic ("e4")."""
+
+    squares: list[str] = Field(default_factory=list)
+    # {"square": "e4", "piece": "knight", "color": "white", "role": "subject"}
+    pieces: list[dict] = Field(default_factory=list)
+    baseline_squares: list[str] = Field(default_factory=list)
+    files: list[str] = Field(default_factory=list)
+    # "rule": the rule named the entities itself; "feature": derived from the
+    # claimed feature's definition at the support node.
+    source: str = "rule"
+
+
 class EnvisionedLine(BaseModel):
     """A shortened, quiescence-trimmed PV with its envisioned (leaf) position."""
 
@@ -61,6 +80,15 @@ class EnvisionedLine(BaseModel):
     # Lets the UI chart how the fired-rule features evolve through the line.
     feature_series: dict[str, list[int]] = Field(default_factory=dict)
     evidence_valid: bool = True
+    # Horizon bookkeeping (trajectory horizon, 2 Nov 2026):
+    # - ``immediate_horizon_ply``: the first settled ply after the move (1..3);
+    #   claims anchored at or before it are "immediate".
+    # - ``settled_ply``: the ply chosen as the envisioned endpoint by the
+    #   settlement test, when one was found (else None: fallback window).
+    # - ``horizon_reason``: how the endpoint was chosen.
+    immediate_horizon_ply: int = 1
+    settled_ply: int | None = None
+    horizon_reason: str = "fixed_window"
 
 
 class Claim(BaseModel):
@@ -90,6 +118,22 @@ class Claim(BaseModel):
     support_ply: int | None = None
     support_fen: str | None = None
     baseline_fen: str | None = None
+    # Trajectory horizon (2 Nov 2026): the first ply at which the claim fired is
+    # the support ply; an envisioned claim also names the line move that caused
+    # it, so prose can locate it ("after ...Nxe4"). ``first_ply``/``last_ply``
+    # record where along the displayed line the claim held.
+    caused_by_ply: int | None = None
+    caused_by_san: str | None = None
+    first_ply: int | None = None
+    last_ply: int | None = None
+    # "held": still true at the line's endpoint; "transient": fired and then
+    # vanished (such claims are dropped before writing and kept only in the
+    # suppression record).
+    persistence: str = "held"
+    # Stable identity of the thing the claim is about (rule, side, entity);
+    # used to merge trajectories and to dedupe by entity, not by sentence.
+    entity: str | None = None
+    evidence: ClaimEvidence = Field(default_factory=ClaimEvidence)
 
 
 class BestAlternative(BaseModel):
@@ -112,6 +156,12 @@ class BestAlternative(BaseModel):
     # claim-text dedup path is unchanged; this is a further-grounded number
     # for downstream composer work that wants to cite it directly.
     feature_advantages: list[FeatureAdvantage] = Field(default_factory=list)
+    # Same comparison at a matched depth (the shorter of the two lines), so the
+    # two lines are compared at the same horizon as well as at their own ends.
+    matched_ply: int | None = None
+    feature_advantages_matched: list[FeatureAdvantage] = Field(default_factory=list)
+    # Human-readable note when the two lines settle at different depths.
+    horizon_note: str | None = None
 
 
 class CommentFacts(BaseModel):

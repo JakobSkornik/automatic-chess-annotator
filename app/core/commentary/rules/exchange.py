@@ -10,61 +10,20 @@ from __future__ import annotations
 import chess
 
 from app.models.comment_facts import Claim
+from app.core.commentary.features.guid_features.evidence import evidence_for
 
-VALUE = {chess.PAWN: 100, chess.KNIGHT: 300, chess.BISHOP: 300, chess.ROOK: 500, chess.QUEEN: 900, chess.KING: 20000}
+from app.core.commentary.features.see import (  # noqa: F401 (re-exported)
+    VALUE,
+    as_side_to_move as _as_side_to_move,
+    best_capture_gain,
+    captured_value as _captured_value,
+    cheapest_capture as _cheapest_capture,
+    see,
+)
+
 # Smallest exchange loss reported as a fact, and smallest gain that wins material: one pawn.
 MIN_LOSS_CP = 100
 MATERIAL_GAIN_CP = 100
-
-
-def _captured_value(board: chess.Board, move: chess.Move) -> int:
-    if board.is_en_passant(move):
-        return VALUE[chess.PAWN]
-    piece = board.piece_at(move.to_square)
-    return VALUE[piece.piece_type] if piece else 0
-
-
-def _cheapest_capture(board: chess.Board, square: int) -> chess.Move | None:
-    captures = [m for m in board.generate_legal_captures() if m.to_square == square]
-    return min(captures, key=lambda m: VALUE[board.piece_type_at(m.from_square)], default=None)
-
-
-def see(board: chess.Board, move: chess.Move) -> int:
-    """Material the mover gains (+) or loses (-) on ``move``'s target square, in centipawns."""
-    gains = [_captured_value(board, move)]
-    piece = board.piece_at(move.from_square)
-    on_square = VALUE[move.promotion] if move.promotion else VALUE[piece.piece_type]
-    if move.promotion:
-        gains[0] += VALUE[move.promotion] - VALUE[chess.PAWN]
-    probe = board.copy(stack=False)
-    probe.push(move)
-    while (reply := _cheapest_capture(probe, move.to_square)) is not None:
-        gains.append(on_square - gains[-1])
-        on_square = VALUE[probe.piece_type_at(reply.from_square)]
-        probe.push(reply)
-    # Each side may stop capturing when going on would cost it material.
-    for depth in range(len(gains) - 1, 0, -1):
-        gains[depth - 1] = -max(-gains[depth - 1], gains[depth])
-    return gains[0]
-
-
-def best_capture_gain(board: chess.Board, square: int) -> tuple[int, chess.Move | None]:
-    """The side to move's best SEE gain from capturing on ``square`` (0 when no capture pays)."""
-    best, best_move = 0, None
-    for move in board.generate_legal_captures():
-        if move.to_square == square:
-            gain = see(board, move)
-            if gain > best:
-                best, best_move = gain, move
-    return best, best_move
-
-
-def _as_side_to_move(board: chess.Board, color: chess.Color) -> chess.Board:
-    view = board.copy(stack=False)
-    if view.turn != color:
-        view.ep_square = None
-    view.turn = color
-    return view
 
 
 def _name(board: chess.Board, square: int) -> str:
@@ -99,7 +58,11 @@ def material_loss_claims(before: chess.Board, move: chess.Move, after: chess.Boa
                 text = (f"{side}'s {piece_name} moves to {target}, where {taker} can take it, "
                         f"and the exchange on {target} loses material for {side}.")
             claims.append(Claim(rule_id="exchange_loses_material", text=text, text_state=text,
-                                features_involved=["TACTICAL_EXCHANGE"], **{**common, "beneficiary": opponent.lower()}))
+                                features_involved=["TACTICAL_EXCHANGE"], entity=f"exchange:{target}",
+                                evidence=evidence_for(after, [move.to_square, reply.from_square],
+                                                      roles={move.to_square: "target", reply.from_square: "attacker"},
+                                                      baseline_squares=[move.from_square, reply.from_square]),
+                                **{**common, "beneficiary": opponent.lower()}))
     # Other pieces of the mover that the move leaves open to a winning capture.
     opponent_color = not mover
     for square in chess.SquareSet(after.occupied_co[mover]):
@@ -116,5 +79,8 @@ def material_loss_claims(before: chess.Board, move: chess.Move, after: chess.Boa
         attacker = _name(after, capture.from_square)
         text = f"After {side}'s move, {_name(after, square)} is no longer safe: {attacker} can win it."
         claims.append(Claim(rule_id="piece_left_en_prise", text=text, text_state=text,
-                            features_involved=["TACTICAL_EXCHANGE"], **{**common, "beneficiary": opponent.lower()}))
+                            features_involved=["TACTICAL_EXCHANGE"], entity=f"en_prise:{chess.square_name(square)}",
+                            evidence=evidence_for(after, [square, capture.from_square],
+                                                  roles={square: "target", capture.from_square: "attacker"}),
+                            **{**common, "beneficiary": opponent.lower()}))
     return claims

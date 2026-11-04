@@ -54,8 +54,10 @@ async def prepare(args):
                   'position_selection': fixed['_description'] if fixed else 'Highest absolute engine evaluation swing among eligible key moments; ties use earliest ply. Chosen before model generation.',
                   'stop_at_comparison': args.stop_at_comparison,
                   **({'engine_evidence_from': {'folder': args.reuse_engine_from.name,
-                      'engine_sha256': {g['id']: g['engine_sha256'] for g in reused['games']},
-                      'note': 'Engine search reused; move events and comment facts rebuilt with this study code.'}}
+                      'engine_sha256': {g['id']: g['engine_sha256'] for g in reused['games']
+                                        if any(s['id'] == g['id'] and s['pgn_sha256'] == g['pgn_sha256'] for s in selection['games'])},
+                      'note': 'Engine search reused for the listed games; move events and comment facts rebuilt with this '
+                              'study code. Games not listed got a fresh engine analysis.'}}
                      if reused else {}),
                   'generation_scope': ('Reverse-order conversation from the last key moment down to the comparison position; earlier moves are not commented. '
                                        if args.stop_at_comparison else 'Complete game conversations; ')
@@ -87,9 +89,10 @@ async def prepare(args):
                 raise ValueError('Engine cache changed')
             print(f"Reusing verified engine evidence for {entry['id']}", flush=True)
             continue
-        if reused:
+        source_entry = next((g for g in reused['games'] if g['id'] == entry['id']
+                             and g['pgn_sha256'] == entry['pgn_sha256']), None) if reused else None
+        if source_entry:
             # Identical engine evidence from another study; only events and facts are rebuilt.
-            source_entry = next(g for g in reused['games'] if g['id'] == entry['id'])
             raw = (args.reuse_engine_from / 'engine' / f"{entry['id']}.private.pkl").read_bytes()
             if hashlib.sha256(raw).hexdigest() != source_entry['engine_sha256']:
                 raise ValueError(f"{entry['id']}: reused engine cache does not match its study")

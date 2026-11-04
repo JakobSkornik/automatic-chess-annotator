@@ -50,16 +50,19 @@ GUID_COMPOSER_SYSTEM = (
     "('in return', 'at the cost of') for sound moves, or as the move's drawbacks "
     "('now the opponent ...') when the concession mode says 'consequence'. NEVER "
     "present a concession as an achievement of the move.\n"
-    "- TIMING: every claim is tagged <immediate> or <in the line>. State "
-    "<immediate> claims as fact. A claim tagged <in the line> is NOT yet true "
-    "after the move — it only develops deeper in the variation, so you MUST hedge "
-    "it ('may lead to', 'risks', 'could leave', 'is set to') and never assert it "
-    "as already achieved.\n"
+    "- TIMING: every claim is tagged <after the move>, <after the forced sequence> or "
+    "<in the line>. State <after the move> claims as fact. A claim tagged <after the "
+    "forced sequence> holds once the forced replies that follow the move have been "
+    "played: introduce it with that sequence ('after the exchanges', 'once the queens "
+    "come off'), never as the position right after the move. A claim tagged <in the "
+    "line> is NOT yet true after the move: it only develops deeper in the variation, "
+    "so you MUST hedge it ('may lead to', 'risks', 'could leave', 'is set to') and "
+    "never assert it as already achieved.\n"
     "- If REFUTATION is present, the text MUST name that move as what punishes "
     "the played move (it is the board-level reason the move fails).\n"
     "- If BETTER ALTERNATIVE is present, end with one sentence naming it. When its "
     "Significance is 'materially better', frame its claims as the opportunity the "
-    "mover passed up: 'missed the chance to ...' for <immediate> claims, 'missed "
+    "mover passed up: 'missed the chance to ...' for <after the move> claims, 'missed "
     "the potential to ...' for <in the line> claims. When 'roughly equal', present "
     "it neutrally as a comparable option, never as a miss. Always include its "
     "verdict and PV token.\n"
@@ -136,7 +139,9 @@ ENRICHMENT_RULES = (
 )
 
 
-def _claim_prompt_line(c: Claim) -> str:
+def _claim_prompt_line(c: Claim, horizon: int = 1) -> str:
+    """One catalog line; ``horizon`` is the line's immediate horizon ply, so an immediate
+    claim supported later than ply 1 is tagged as holding after the forced sequence."""
     line = f"- {c.text}"
     if c.text_state:
         line += f" | state-form: {c.text_state}"
@@ -144,8 +149,17 @@ def _claim_prompt_line(c: Claim) -> str:
         line += f" [{c.flag_note}]"
     if c.features_involved:
         line += f" (features: {', '.join(c.features_involved[:3])})"
-    line += " <in the line>" if c.realization == "envisioned" else " <immediate>"
+    if c.realization == "envisioned":
+        line += " <in the line>"
+    elif (c.support_ply or 1) > 1 and horizon > 1:
+        line += " <after the forced sequence>"
+    else:
+        line += " <after the move>"
     return line
+
+
+def _horizon(line) -> int:
+    return max(1, getattr(line, "immediate_horizon_ply", 1) or 1) if line is not None else 1
 
 
 def _alternative_block(facts: CommentFacts) -> list[str]:
@@ -169,7 +183,7 @@ def _alternative_block(facts: CommentFacts) -> list[str]:
             f"Standing: {standing}",
             f"PV token (copy verbatim): {_alt_pv_token(alt)}",
             "Claims (what this line would have given):",
-            *([_claim_prompt_line(c) for c in alt.claims] or ["- (none)"]),
+            *([_claim_prompt_line(c, _horizon(alt.display_line)) for c in alt.claims] or ["- (none)"]),
         ]
     gap = alt_gap_cp(facts)
     significance = (
@@ -185,7 +199,7 @@ def _alternative_block(facts: CommentFacts) -> list[str]:
         f"Significance: {significance}",
         f"PV token (copy verbatim): {_alt_pv_token(alt)}",
         "Claims (the gains the mover forwent):",
-        *([_claim_prompt_line(c) for c in alt.claims] or ["- (none)"]),
+        *([_claim_prompt_line(c, _horizon(alt.display_line)) for c in alt.claims] or ["- (none)"]),
     ]
 
 
@@ -208,8 +222,9 @@ def build_facts_user_prompt(
     enrichment: dict[str, Any] | None = None,
     archetype: str | None = None,
 ) -> str:
-    merit_lines = [_claim_prompt_line(c) for c in facts.claims if not c.is_concession]
-    concession_lines = [_claim_prompt_line(c) for c in facts.claims if c.is_concession]
+    horizon = _horizon(facts.display_line)
+    merit_lines = [_claim_prompt_line(c, horizon) for c in facts.claims if not c.is_concession]
+    concession_lines = [_claim_prompt_line(c, horizon) for c in facts.claims if c.is_concession]
     if not merit_lines and not concession_lines:
         merit_lines = [
             "- (no positional claims fired; comment on verdict and line only)"

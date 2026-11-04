@@ -87,14 +87,16 @@ def test_export_pawn_recapture_does_not_assert_temporary_surplus_or_passer(monke
     row = AnalyzedMoveData(index=9, ply=10, san=event.san, uci=event.uci,
                            fen_before=event.fen_before, fen_after=event.fen_after,
                            phase_raw='mid', hidden_features={'_engine': {'after_pv_uci': branch.line_uci[1:]}})
-    # Force an over-eager immediate horizon to reproduce the historical bug;
-    # later legal nodes must veto its temporary material and pawn anchors.
+    # Force an over-eager immediate horizon (ply 1, mid-exchange) to reproduce the
+    # historical bug; the trajectory must drop what the line itself undoes.
     from app.core.commentary.rules import facts_builder
+    real_builder = facts_builder.envisioned_for_played_move
     monkeypatch.setattr(facts_builder, 'is_quiescent', lambda board: True)
-    monkeypatch.setattr(facts_builder, '_first_quiet_fen', lambda branch: branch.fens[0])
+    monkeypatch.setattr(facts_builder, 'envisioned_for_played_move',
+                        lambda *a, **k: real_builder(*a, **k).model_copy(update={'immediate_horizon_ply': 1}))
     facts = build_comment_facts(row, event)
     assert any(c.rule_id in {'legal_capture', 'exchange_sequence'} for c in facts.claims)
     assert not any(c.rule_id == 'material_won' for c in facts.claims)
     assert not any('passed pawn on d4' in c.text for c in facts.claims)
-    assert any(s['reason'] == 'material_state_changes_in_displayed_continuation'
+    assert any(s['reason'] == 'transient_in_displayed_line' and s['rule_id'] == 'material_won'
                for s in facts.selection_metadata['evidence_suppressions'])

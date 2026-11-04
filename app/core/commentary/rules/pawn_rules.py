@@ -9,6 +9,7 @@ from app.core.commentary.features.guid_features import (
     passed_pawn_squares,
 )
 from app.models.comment_facts import Claim
+from app.core.commentary.features.guid_features.evidence import evidence_for
 
 from .constants import SIDES, THRESHOLDS
 from .context import _benef, _benef_opp, _Ctx, _side_label, _toward
@@ -150,6 +151,7 @@ def rule_doubled_pawns(ctx: _Ctx) -> list[Claim]:
             out.append(
                 Claim(
                     rule_id="doubled_pawns_accepted",
+                    entity=f"doubled:{new_files[0]}" if new_files else None,
                     beneficiary=_benef_opp(side),
                     text=f"{_side_label(side)} is left with doubled{where}.",
                     text_state=f"{_side_label(side)} now has doubled{where}.",
@@ -209,6 +211,8 @@ def rule_passed_pawn(ctx: _Ctx) -> list[Claim]:
             out.append(
                 Claim(
                     rule_id="passed_pawn_created",
+                    entity=f"passer:{sqs[0][0]}" if sqs else None,
+                    **({"evidence": evidence_for(ctx.leaf_board, [chess.parse_square(sqs[0])])} if sqs else {}),
                     beneficiary=_benef(side),
                     text=f"{_side_label(side)} obtains a passed pawn{where}.",
                     text_state=f"{_side_label(side)} has a passed pawn{where}.",

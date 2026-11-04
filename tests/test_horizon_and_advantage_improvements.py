@@ -4,9 +4,9 @@ pipeline:
 1. The probe-based tail trim (``trim_envisioned_line_by_probe``) is actually
    wired into ``build_comment_facts`` and runs BEFORE claims/feature-diff are
    computed, not as a post-hoc patch on the already-built facts.
-2. Per-feature horizon selection: the "immediate" claim value is sharpened
-   against the per-ply feature series instead of trusting the fixed
-   first-quiescent-ply checkpoint unconditionally.
+2. (Removed 2 Nov 2026: the per-feature sharpening helper was never wired in;
+   the trajectory horizon now anchors every claim at the ply where it first
+   fires, see tests/test_trajectory_horizon.py.)
 3. Feature-diff-of-diffs: ``envisioned.diff_of_diffs`` correctly computes,
    per feature, how much more an alternative move's own diff moves compared
    to the played move's diff, and it is attached to ``BestAlternative``.
@@ -18,8 +18,6 @@ from app.core.commentary.features.envisioned import diff_of_diffs
 from app.core.commentary.features.guid_features.weights import FeatureValue
 from app.core.commentary.rules.facts_builder import (
     _feature_advantages,
-    _feature_extremum_ply,
-    _sharpen_immediate_diff,
     build_comment_facts,
 )
 from app.models.chess_events import (
@@ -124,101 +122,6 @@ def test_probe_trim_env_opt_out(monkeypatch):
     # Opted out: the line is untouched despite a contradicting prober.
     assert facts.display_line.leaf_fen == fen_after_nf6
     assert len(facts.display_line.fens) == 2
-
-
-# ---------------------------------------------------------------------------
-# Improvement 2: per-feature horizon selection
-# ---------------------------------------------------------------------------
-
-
-def test_feature_extremum_ply_finds_earlier_peak():
-    # White-POV series: start=0, ply1=50 (peak), ply2=10 (receded).
-    series = [0, 50, 10]
-    assert _feature_extremum_ply(series, direction=1, window=2) == 1
-
-
-def test_feature_extremum_ply_respects_window():
-    series = [0, 5, 90]
-    # window=1 only looks at plies 0..1, so it must not see the ply-2 peak.
-    assert _feature_extremum_ply(series, direction=1, window=1) == 1
-    assert _feature_extremum_ply(series, direction=1, window=2) == 2
-
-
-def _patch_series(monkeypatch, table):
-    """Stub ``compute_feature_vector_fen`` as seen by realization.py's
-    ``_line_feature_series`` so the per-ply series is fully controlled."""
-    import app.core.commentary.rules.realization as realization_mod
-
-    def fake_compute(fen):
-        return table[fen]
-
-    monkeypatch.setattr(realization_mod, "compute_feature_vector_fen", fake_compute)
-
-
-def test_sharpen_immediate_diff_prefers_earlier_true_peak(monkeypatch):
-    """The naive first-quiescent-ply checkpoint (ply2) undersells a feature
-    that peaked at ply1 -- the sharpened diff must use the ply1 value."""
-    table = {
-        "start": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=0)},
-        "ply1": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=50)},
-        "ply2": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=10)},
-    }
-    _patch_series(monkeypatch, table)
-
-    line = EnvisionedLine(start_fen="start", fens=["ply1", "ply2"], leaf_fen="ply2")
-    diff = FeatureDiff(
-        positive=[
-            FeatureDelta(name="TESTFEAT", delta_cp=10, before_cp=0, after_cp=10)
-        ]
-    )
-    sharpened = _sharpen_immediate_diff(diff, line, immediate_fen="ply2")
-    d = sharpened.positive[0]
-    assert d.after_cp == 50
-    assert d.delta_cp == 50
-
-
-def test_sharpen_immediate_diff_noop_when_checkpoint_already_representative(
-    monkeypatch,
-):
-    """Regression safety: when the naive checkpoint IS the peak, nothing
-    changes."""
-    table = {
-        "start": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=0)},
-        "ply1": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=10)},
-        "ply2": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=50)},
-    }
-    _patch_series(monkeypatch, table)
-
-    line = EnvisionedLine(start_fen="start", fens=["ply1", "ply2"], leaf_fen="ply2")
-    diff = FeatureDiff(
-        positive=[
-            FeatureDelta(name="TESTFEAT", delta_cp=50, before_cp=0, after_cp=50)
-        ]
-    )
-    sharpened = _sharpen_immediate_diff(diff, line, immediate_fen="ply2")
-    d = sharpened.positive[0]
-    assert d.after_cp == 50
-    assert d.delta_cp == 50
-
-
-def test_sharpen_immediate_diff_ignores_small_difference(monkeypatch):
-    """A tiny (sub-threshold) earlier bump must not override the checkpoint."""
-    table = {
-        "start": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=0)},
-        "ply1": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=12)},
-        "ply2": {"TESTFEAT": FeatureValue(name="TESTFEAT", value_cp=10)},
-    }
-    _patch_series(monkeypatch, table)
-
-    line = EnvisionedLine(start_fen="start", fens=["ply1", "ply2"], leaf_fen="ply2")
-    diff = FeatureDiff(
-        positive=[
-            FeatureDelta(name="TESTFEAT", delta_cp=10, before_cp=0, after_cp=10)
-        ]
-    )
-    sharpened = _sharpen_immediate_diff(diff, line, immediate_fen="ply2")
-    d = sharpened.positive[0]
-    assert d.after_cp == 10  # 2cp gap is below min_claim_cp -- no override
 
 
 # ---------------------------------------------------------------------------
