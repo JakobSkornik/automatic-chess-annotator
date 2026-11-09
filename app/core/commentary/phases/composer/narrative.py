@@ -12,10 +12,27 @@ import re
 import chess
 
 from . import rewrite
+from app.core.commentary import pipeline_flags
 from .framing import alternative_comparison, alt_gap_cp
 from .evidence import _board_summary
 
 VERSION = "grounded_narrative_v14"
+# Processing order of the game (v18: latest move first; v19 writer_forward_order: first move first).
+_ORDER_NOTE_BACKWARD = ("this game is processed backwards. Do not use later-game knowledge as "
+                        "current evidence.")
+_ORDER_NOTE_FORWARD = ("this game is processed from the first move to the last, so they describe "
+                       "earlier moves only. Do not treat them as evidence for this move.")
+# v19 transient_at_errors: how a kept transient claim is to be described.
+_TRANSIENT_NOTE = (
+    " TRANSIENT CLAIMS: a claim with persistence transient holds from holds_from until holds_until "
+    "and is then traded off or resolved in the line. It explains what the opponent gains from the "
+    "error before the trade: state it for that stretch of the line and never as the end of the line.")
+# v19 validator_sentence_cites: the writer returns sentences, each with its own citations.
+_SENTENCE_NOTE = (
+    " OUTPUT: return JSON {sentences: [{text, main, alternative}]}, one entry per sentence, in "
+    "order; each sentence cites the claim IDs it rests on in main and alternative, and an ID may "
+    "appear in at most one sentence. A sentence that names a square or a move needs a citation; only "
+    "a pure assessment sentence (no squares, no moves) may be uncited.")
 SYSTEM = (
     "Write the COMPLETE chess annotation, as a human annotator explaining the decision. "
     "Return JSON {text, main, alternative}; main and alternative are arrays of the claim IDs "
@@ -140,8 +157,7 @@ SYSTEM = (
     "say what the position is like instead. Line moves: the application counts the engine-line "
     "moves you name (beyond the played move and the alternative itself) and rejects the text "
     "when a branch has more than two, so describe consequences through pieces and squares. "
-    "Previous session comments are editorial context only; this game is processed backwards. "
-    "Do not use later-game knowledge as current evidence. Before answering, check the text has "
+    "Previous session comments are editorial context only; " + _ORDER_NOTE_BACKWARD + " Before answering, check the text has "
     "no decimal numbers, no necessity words, no uncertified uniqueness claims, no unsupplied squares, "
     "no after_forced_sequence or in_line claim stated as true right after the move, and that every cited "
     "ID exists once in its own branch."
@@ -153,6 +169,28 @@ SCHEMA = {
         for branch in ("main", "alternative")}},
     "required": ["text", "main", "alternative"],
 }
+# Check 11 (v19): the same content, one entry per sentence.
+SENTENCE_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"sentences": {"type": "array", "minItems": 1, "maxItems": 12, "items": SCHEMA}},
+    "required": ["sentences"],
+}
+
+
+def system_prompt() -> str:
+    """The writer instructions for the active switches (SYSTEM is the v18 text)."""
+    text = SYSTEM
+    if pipeline_flags.enabled("writer_forward_order"):
+        text = text.replace(_ORDER_NOTE_BACKWARD, _ORDER_NOTE_FORWARD)
+    if pipeline_flags.enabled("transient_at_errors"):
+        text += _TRANSIENT_NOTE
+    if pipeline_flags.enabled("validator_sentence_cites"):
+        text += _SENTENCE_NOTE
+    return text
+
+
+def schema() -> dict:
+    return SENTENCE_SCHEMA if pipeline_flags.enabled("validator_sentence_cites") else SCHEMA
 REVIEW_SYSTEM = (
     "Review the COMPLETE proposed annotation against its supplied evidence. Return the one "
     "decision for index 0 in the sentences schema. Read every assertion, including assessment "
@@ -417,8 +455,68 @@ def line_moves_named(text, evidence):
     return counts
 
 
+# Check 10 (v19): a move named in SAN (piece letter, pawn capture or castling).
+_SAN_MOVE = re.compile(r"(?<![A-Za-z0-9])(O-O(?:-O)?|[KQRBN][a-h]?[1-8]?x?[a-h][1-8]|[a-h]x[a-h][1-8](?:=[QRBN])?)"
+                       r"[+#]?(?![A-Za-z0-9])")
+
+
+def _san_key(san):
+    return san.replace("0", "O").rstrip("+#")
+
+
+def allowed_moves(evidence):
+    """Moves the text may name in SAN: every move of both traces and of the sequence, and
+    every legal move in each position of the displayed lines (start and after each ply)."""
+    allowed = set()
+    for events in (evidence.get("traces") or {}).values():
+        allowed.update(_san_key(event["anchor"].split(".")[-1]) for event in events)
+    for token in _SAN_MOVE.findall(json.dumps(evidence.get("sequence"))):
+        allowed.add(_san_key(token))
+    fens = set()
+    for branch in (evidence.get("board_context") or {}).values():
+        fens.add(branch["start"]["fen"])
+        fens.update(position["board"]["fen"] for position in branch.get("positions") or [])
+    for fen in fens:
+        board = chess.Board(fen)
+        allowed.update(_san_key(board.san(move)) for move in board.legal_moves)
+    return allowed
+
+
+def moves_named(text):
+    return {_san_key(m.group(1)) for m in _SAN_MOVE.finditer(text)}
+
+
+def _flatten_sentences(proposal, evidence):
+    """Check 11: validate per-sentence citations and return the whole-annotation form."""
+    sentences = proposal.get("sentences") if isinstance(proposal, dict) else None
+    if set(proposal or {}) != {"sentences"} or not isinstance(sentences, list) or not sentences:
+        raise ValueError("Expected sentences with their own citations")
+    flat = {"text": "", "main": [], "alternative": []}
+    parts = []
+    for sentence in sentences:
+        if not isinstance(sentence, dict) or set(sentence) != {"text", "main", "alternative"}:
+            raise ValueError("Expected sentences with their own citations")
+        text = sentence["text"]
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("Empty sentence")
+        ids = [i for branch in ("main", "alternative") for i in (sentence[branch] or [])]
+        plain = _PLACEHOLDER.sub("", text)
+        if not ids and (_SQUARE.search(plain) or _SAN_MOVE.search(plain)):
+            raise ValueError("Sentence names a square or move without a citation")
+        for branch in ("main", "alternative"):
+            if not isinstance(sentence[branch], list):
+                raise ValueError("Unknown or duplicate branch citation")
+            flat[branch].extend(sentence[branch])  # duplicates fail the branch check below
+        parts.append(text.strip())
+    flat["text"] = " ".join(parts)
+    return flat
+
+
 def parse_proposal(raw, evidence):
     proposal = json.loads(raw)
+    sentence_form = pipeline_flags.enabled("validator_sentence_cites")
+    if sentence_form:
+        proposal = _flatten_sentences(proposal, evidence)
     if not isinstance(proposal, dict) or set(proposal) != {"text", "main", "alternative"}:
         raise ValueError("Expected complete annotation with branch-local citations")
     text = proposal["text"]
@@ -446,6 +544,10 @@ def parse_proposal(raw, evidence):
         raise ValueError("Square absent from cited claims or traces")
     if _INTERNAL.search(plain):
         raise ValueError("Internal vocabulary in the text")
+    if pipeline_flags.enabled("validator_piece_moves"):
+        unknown = moves_named(plain) - allowed_moves(evidence)
+        if unknown:
+            raise ValueError(f"Move not in the displayed lines or legal in them: {sorted(unknown)}")
     for branch, count in line_moves_named(plain, evidence).items():
         if count > MAX_LINE_MOVES:
             raise ValueError(f"More than {MAX_LINE_MOVES} engine-line moves named in the {branch} branch")

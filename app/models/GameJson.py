@@ -90,6 +90,9 @@ class AnalysisInfo(BaseModel):
     depth: int
     multipv: int
     timestamp: float
+    # What produced the record: pipeline profile, behaviour switches, engine
+    # settings, code commit (app.core.commentary.pipeline_flags.fingerprint).
+    pipeline: dict[str, Any] | None = None
 
 
 class FeatureSeries(BaseModel):

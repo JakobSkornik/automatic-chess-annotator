@@ -228,7 +228,7 @@ _SPECS: tuple[FeatureSpec, ...] = (
         "Activity",
         "cp",
         "stockfish",
-        "Space advantage: safe squares controlled behind the pawn chain.",
+        "Space: squares attacked on the opponent's half of the board, weight 1 each.",
     ),
     # --- king safety ---
     FeatureSpec(

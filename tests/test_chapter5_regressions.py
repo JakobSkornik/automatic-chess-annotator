@@ -156,8 +156,8 @@ def test_editor_validates_ids_and_preserves_claim_owner():
             render_editor_response(bad, facts, "intermediate", "neutral")
 
 
-@pytest.mark.asyncio
-async def test_prose_provider_response_falls_back_safely(monkeypatch):
+def test_prose_provider_response_falls_back_safely(monkeypatch):
+    import asyncio
     monkeypatch.setenv("HUMANIZATION_LEVEL", "2")
     class Service:
         class _provider:
@@ -167,7 +167,7 @@ async def test_prose_provider_response_falls_back_safely(monkeypatch):
         async def _llm_call_json_schema(self, *args, **kwargs):
             return '{"text":"White has an extra queen."}'
     facts = facts_for()
-    result = await compose_facts_comment(Service(), facts, model=None, effort="low")
+    result = asyncio.run(compose_facts_comment(Service(), facts, model=None, effort="low"))
     assert result["rendering"] == "template"
     assert not result["contract_ok"]
     assert "extra queen" not in result["text"]

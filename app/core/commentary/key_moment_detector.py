@@ -4,6 +4,7 @@ import logging
 import os
 import chess
 
+from app.core.commentary import pipeline_flags
 from app.models.Move import Move
 
 logger = logging.getLogger(__name__)
@@ -356,7 +357,8 @@ class KeyMomentDetector:
         return [
             *_eval_swing_class(perspective_change, decided),
             *_good_defense(previous_move.score, is_white_move, perspective_change),
-            *_missed_opportunity(pvs_for_move, current_move, is_white_move, decided),
+            *([] if pipeline_flags.enabled("no_missed_opportunity")
+              else _missed_opportunity(pvs_for_move, current_move, is_white_move, decided)),
             *_great_move(pvs_for_move, current_move, is_white_move, previous_move),
             *self._critical_decision(
                 pvs_for_move, current_move, previous_move, prev_hf, curr_hf

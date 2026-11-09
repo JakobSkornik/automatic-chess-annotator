@@ -4,7 +4,7 @@ import chess
 
 from app.core.engine.analysis_retriever import _attach_comment_facts, _dedup_claims
 from app.models.chess_events import AnalyzedMoveData, MoveEvent, MoveEventType, MoveQuality
-from app.models.comment_facts import Claim, CommentFacts
+from app.models.comment_facts import Claim, CommentFacts, EnvisionedLine
 
 
 def facts(claims, ply=1):
@@ -56,7 +56,12 @@ def test_unselected_moves_do_not_consume_game_comment_budget(monkeypatch):
                                 fen_before=before, fen_after=board.fen(), phase="mid",
                                 move_quality=MoveQuality.MISTAKE, event_type=MoveEventType.QUIET,
                                 key_moment_type="mistake" if i else None))
-    monkeypatch.setattr(rules, "build_comment_facts", lambda row, event, **kw: facts([claim], row.ply))
+    def build(row, event, **kw):
+        built = facts([claim], row.ply)
+        line = EnvisionedLine(start_fen=chess.STARTING_FEN, leaf_fen=chess.STARTING_FEN,
+                              fens=[chess.STARTING_FEN], evidence_valid=True)
+        return built.model_copy(update={"display_line": line})
+    monkeypatch.setattr(rules, "build_comment_facts", build)
     _attach_comment_facts(events, rows)
     assert events[0].comment_facts.claims == [claim]
     assert events[1].comment_facts.claims == [claim]

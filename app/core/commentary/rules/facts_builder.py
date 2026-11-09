@@ -40,6 +40,7 @@ from app.core.commentary.features.experiment_selectors import (
     select_adaptive_horizon,
     select_contrastive_claims,
 )
+from app.core.commentary import pipeline_flags
 from app.core.commentary.features.see import best_capture_gain
 from app.models.chess_events import AnalyzedMoveData, MoveEvent
 from app.models.comment_facts import (
@@ -300,7 +301,20 @@ def _gate_static_facts(ctx: _FactsCtx, claims: list[Claim], line: EnvisionedLine
                 failed_attempt = (line.line_uci[:1] == [ctx.move_event.uci]
                                   and quality in ("inaccuracy", "mistake", "blunder"))
                 if not (king_target or cashed or failed_attempt):
-                    reason = "fork_not_cashed_in_line"
+                    if pipeline_flags.enabled("fork_probe"):
+                        # Like the other static facts: after the reply, taking one of the
+                        # targets must keep the forking side's eval within tolerance.
+                        attacker = chess.WHITE if claim.beneficiary == "white" else chess.BLACK
+                        confirmed = None
+                        if support < len(boards) - 1:
+                            results = [_probe_confirms_capture(ctx, line, boards[support + 1], t, attacker)
+                                       for t in targets]
+                            confirmed = True if True in results else (None if None in results else False)
+                        if confirmed is not True:
+                            reason = ("fork_not_cashed_in_line" if confirmed is None
+                                      else "fork_refuted_by_probe")
+                    else:
+                        reason = "fork_not_cashed_in_line"
         if reason:
             ctx.evidence_suppressions.append({"rule_id": claim.rule_id, "reason": reason,
                                               "support_ply": support, "branch": line.line_uci[:1],
@@ -362,8 +376,22 @@ def _trajectory_claims(
             entry = trajectories.setdefault(key, {"first": k, "claim": claim})
             entry["last"] = k
     kept: list[Claim] = []
+    quality = getattr(ctx.move_event.move_quality, "value", ctx.move_event.move_quality) or ""
+    # At an error, a transient claim in the opponent's favour that lasts at least
+    # two plies is the point of the error (Guid, p. 76-77): the opponent gains
+    # something that is later traded off, and the comparison with the line's end
+    # would hide it. Kept with persistence "transient" when the switch is on.
+    keep_transient = (pipeline_flags.enabled("transient_at_errors")
+                      and line.line_uci[:1] == [ctx.move_event.uci]
+                      and quality in ("inaccuracy", "mistake", "blunder"))
     for entry in trajectories.values():
         claim = _tag(entry["claim"], line, entry["first"], entry["last"], immediate_ply)
+        if (claim.persistence != "held" and keep_transient
+                and claim.beneficiary not in (ctx.mover.lower(), None)
+                and entry["last"] - entry["first"] + 1 >= 2):
+            _fill_evidence(claim, line, boards)
+            kept.append(claim)
+            continue
         if claim.persistence != "held":
             ctx.evidence_suppressions.append({
                 "rule_id": claim.rule_id, "reason": "transient_in_displayed_line",
@@ -490,7 +518,7 @@ def _feature_claim(rule_id: str, text: str, beneficiary: str, name: str, cp: int
     ply = max(1, min(ply, len(line.fens)))
     board = chess.Board(line.fens[ply - 1])
     squares, files = feature_squares(board, name)
-    claim = Claim(rule_id=rule_id, text=text, text_state=text, beneficiary=beneficiary,
+    claim = Claim(rule_id=rule_id, text=text, text_state=text, beneficiary=beneficiary, supplementary=True,
                   features_involved=[name], delta_cp=abs(cp), entity=f"{rule_id}:{feature_group(name)}",
                   evidence=evidence_for(board, squares, files=files, source="feature"))
     return _tag(claim, line, ply, len(line.fens), line.immediate_horizon_ply)
@@ -577,7 +605,7 @@ def lines_diverge_claim(ctx: _FactsCtx, alt_san: str, alt_line: EnvisionedLine,
     board = chess.Board(alt_line.fens[ply - 1])
     move = chess.Move.from_uci(alt_line.line_uci[ply - 1])
     claim = Claim(rule_id="lines_diverge", text=text, text_state=text, beneficiary=ctx.mover.lower(),
-                  delta_cp=EDGE_MIN_CP, entity="lines_diverge",
+                  delta_cp=EDGE_MIN_CP, entity="lines_diverge", supplementary=True,
                   evidence=evidence_for(board, [move.from_square, move.to_square], roles={move.to_square: "subject"}))
     return _tag(claim, alt_line, ply, len(alt_line.fens), alt_line.immediate_horizon_ply)
 
@@ -626,9 +654,13 @@ def _feature_advantages(
 
 def _matched_comparison(ctx: _FactsCtx, played: EnvisionedLine, alt: EnvisionedLine
                         ) -> tuple[int | None, list[FeatureAdvantage], str | None]:
-    """Compare both lines at the same depth (the shorter line's length) as well."""
+    """Compare both lines at the same depth (the shorter line's length) as well.
+
+    With the ``quiet_end_comparison`` switch the lines are compared only at their
+    own quiet ends (``_feature_advantages``), because the longer line is not
+    checked for quiescence at the shorter line's length."""
     n = min(len(played.fens), len(alt.fens))
-    if n < 1:
+    if n < 1 or pipeline_flags.enabled("quiet_end_comparison"):
         return None, [], None
     played_vec = compute_feature_vector_fen(played.fens[n - 1])
     alt_vec = compute_feature_vector_fen(alt.fens[n - 1])

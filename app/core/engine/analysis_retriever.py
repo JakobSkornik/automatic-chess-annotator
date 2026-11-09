@@ -20,6 +20,7 @@ from typing import Any
 import chess
 from chess.pgn import Game
 
+from app.core.commentary import pipeline_flags
 from app.core.commentary.event_extractor import ChessEventExtractor
 from app.core.commentary.features.guid_features import (
     compute_feature_vector,
@@ -202,6 +203,7 @@ def assemble_game_json(state: EnginePipelineState) -> GameJson:
             depth=DEFAULT_ANALYSIS_DEPTH,
             multipv=DEFAULT_PV_COUNT,
             timestamp=time.time(),
+            pipeline=pipeline_flags.fingerprint(),
         ),
     )
 

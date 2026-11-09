@@ -28,6 +28,14 @@ from app.core.engine.analysis_retriever import _apply_back_to_back_key_moment_su
 from app.core.commentary.phases.composer.narrative import VERSION
 
 
+def _flavour(event) -> str:
+    """'tactical' when a tactic appears in the played or the better line, else 'positional'."""
+    from app.core.engine.analysis.moment_kinds import TACTIC_IN_LINE
+    facts = event.comment_facts
+    lines = [facts] + ([facts.better_alternative] if facts.better_alternative is not None else [])
+    return 'tactical' if any(c.rule_id in TACTIC_IN_LINE for record in lines for c in record.claims) else 'positional'
+
+
 def save_json(path, value):
     temporary = path.with_suffix(path.suffix + '.tmp')
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -137,6 +145,18 @@ async def prepare(args):
                 preferred = [i for i in candidates if kinds[i] in order]
                 if not preferred:
                     raise ValueError(f"{entry['id']}: no {order} moment for level {level}")
+                # Only positions the selector accepts (facts present, a merit for sound moves,
+                # not a lost-position error), then the requested flavour: 'tactical' needs a
+                # tactic in either line, 'positional' needs facts without one.
+                usable = [i for i in preferred if complexity(candidate_state.move_events, i) is not None]
+                preferred = usable or preferred
+                flavour = chosen_position.get('flavour')
+                if flavour:
+                    flavoured = [i for i in preferred if _flavour(candidate_state.move_events[i]) == flavour]
+                    if flavoured:
+                        preferred = flavoured
+                    else:
+                        print(f"{entry['id']}: no {flavour} {order} moment; flavour ignored", flush=True)
                 def rank(i):
                     event = candidate_state.move_events[i]
                     loss = (event.comment_facts.selection_metadata.get('comment_selection') or {}).get('verified_loss_cp') or 0
