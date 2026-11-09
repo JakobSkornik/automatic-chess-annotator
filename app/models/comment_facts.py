@@ -132,6 +132,11 @@ class Claim(BaseModel):
     # vanished (such claims are dropped before writing and kept only in the
     # suppression record).
     persistence: str = "held"
+    # True for the four supplementary claims (merit_over_alternative, main_gain,
+    # alternative_edge, lines_diverge) that are derived from the comparison of
+    # the two lines rather than from a rule over the feature vector. RV2
+    # coverage counts exclude them.
+    supplementary: bool = False
     # Stable identity of the thing the claim is about (rule, side, entity);
     # used to merge trajectories and to dedupe by entity, not by sentence.
     entity: str | None = None

@@ -22,6 +22,8 @@ from app.core.commentary.key_moment_detector import (
     KeyMomentDetector,
     decisive_eval_cp,
 )
+from app.core.commentary import pipeline_flags
+from app.core.engine.analysis.constants import MATE_SCORE
 from app.core.commentary.openings.eco_book import ECOBook
 from app.models.chess_events import (
     AnalyzedMoveData,
@@ -110,10 +112,42 @@ def _best_move_and_eval(
     return best_uci, best_san, best_eval
 
 
+def _is_mate_coded(score: int | None) -> bool:
+    return score is not None and abs(score) >= MATE_SCORE - 1000
+
+
+def _mate_class(best_eval: int | None, cur_score: int | None) -> MoveQuality | None:
+    """Classes when a forced mate is involved (``mate_classes`` switch).
+
+    Both mates for the same side: a different distance to mate is not a loss
+    (BEST). Best is mate for the mover, played is a numeric eval: MISTAKE when
+    the position stays decided for the mover (beyond the decisive interval),
+    BLUNDER otherwise. Played walks into a mate while best did not: BLUNDER.
+    Returns None when no mate is involved."""
+    if best_eval is None or cur_score is None:
+        return None
+    best_mate, cur_mate = _is_mate_coded(best_eval), _is_mate_coded(cur_score)
+    if not best_mate and not cur_mate:
+        return None
+    if best_mate and cur_mate:
+        return MoveQuality.BEST if best_eval * cur_score > 0 else MoveQuality.BLUNDER
+    if best_mate:  # gave up a forced mate
+        if best_eval * cur_score > 0 and abs(cur_score) > decisive_eval_cp():
+            return MoveQuality.MISTAKE
+        return MoveQuality.BLUNDER
+    # best is numeric, played is mate: either the mover mates (cannot be worse than best)
+    # or the mover gets mated
+    return MoveQuality.BEST if cur_score * best_eval > 0 else MoveQuality.BLUNDER
+
+
 def _move_quality_for(
     loss: int, best_eval: int | None, cur_score: int | None, played_is_best: bool
 ) -> MoveQuality:
     """Quality from eval loss; demoted to GOOD in already-decided positions (Guid)."""
+    if pipeline_flags.enabled("mate_classes") and not played_is_best:
+        mate_class = _mate_class(best_eval, cur_score)
+        if mate_class is not None:
+            return mate_class
     move_quality = _move_quality_from_loss(loss, played_is_best)
     negative = (MoveQuality.INACCURACY, MoveQuality.MISTAKE, MoveQuality.BLUNDER)
     if move_quality in negative and best_eval is not None and cur_score is not None:
@@ -263,6 +297,9 @@ class ChessEventExtractor:
         self._eco = eco_book or ECOBook()
         self._key_moment_detector = key_moment_detector or KeyMomentDetector()
         self._prev_pawn_center: str | None = None
+        # Phase transitions already used as a key-moment anchor in this game;
+        # a boundary crossed twice (promotion, count rising again) is not news.
+        self._transitions_used: set[str] = set()
 
     def extract_events(
         self,
@@ -274,6 +311,7 @@ class ChessEventExtractor:
         """Build the per-move MoveEvent list (quality, motifs, key moments, opening) from engine-analyzed rows."""
         mainline = list(game.mainline_moves())
         events: list[MoveEvent] = []
+        self._transitions_used = set()
         prev_move_obj: Move | None = previous_engine_move
         for i, row in enumerate(analyzed_rows):
             ch_move = _resolve_move(row, mainline)
@@ -461,8 +499,12 @@ class ChessEventExtractor:
         # A phase transition is an annotation anchor on an otherwise quiet move,
         # but it never displaces a quality tag; when the move is also tagged, the
         # transition still travels on its own `phase_transition` field.
-        if not key_moment and self._transition_for(board_before, board_after):
-            key_moment = "endgame_transition"
+        if not key_moment:
+            transition = self._transition_for(board_before, board_after)
+            if transition and (transition not in self._transitions_used
+                               or not pipeline_flags.enabled("transition_once")):
+                self._transitions_used.add(transition)
+                key_moment = "endgame_transition"
         return key_moment
 
     def _transition_for(

@@ -269,8 +269,9 @@ async def _compose_rewrite(service, facts, level, archetype, template, *, model,
         result["claim_catalog"] = evidence
         stage = "provider"
         raw = await service._llm_call_json_schema(
-            rewrite.SYSTEM, user, model=model, effort=effort,
-            schema=rewrite.SCHEMA, schema_name="grounded_rewrite", max_output_tokens=commentary_output_limit(),
+            getattr(rewrite, "system_prompt", lambda: rewrite.SYSTEM)(), user, model=model, effort=effort,
+            schema=getattr(rewrite, "schema", lambda: rewrite.SCHEMA)(), schema_name="grounded_rewrite",
+            max_output_tokens=commentary_output_limit(),
         )
         result["raw_proposal"] = raw
         stage = "validation"

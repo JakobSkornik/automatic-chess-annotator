@@ -89,7 +89,11 @@ def catalog(facts: CommentFacts) -> dict:
                 "caused_by": labels[ply - 1] if claim.realization == "envisioned" else None,
                 "evidence_squares": list(claim.evidence.squares),
                 "evidence_pieces": [piece_label(p) for p in claim.evidence.pieces],
-                "rule_id": claim.rule_id, "features": claim.features_involved})
+                "rule_id": claim.rule_id, "features": claim.features_involved,
+                # v19 transient_at_errors: only kept transient claims carry these two keys.
+                **({"persistence": "transient",
+                    "holds_until": labels[min(max(claim.last_ply or ply, ply), len(labels)) - 1]}
+                   if claim.persistence == "transient" else {})})
         result.setdefault("lines", {})[name] = line_summary(line, labels, result[name])
     return result
 

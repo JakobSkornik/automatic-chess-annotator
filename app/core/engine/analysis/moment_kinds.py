@@ -264,6 +264,30 @@ def feature_events(event: Any) -> tuple[list[str], list[str]]:
     return ([r for r in immediate if r in CONCRETE_FACTS], [r for r in immediate if r not in CONCRETE_FACTS])
 
 
+# v19 (decision_point_groups): the feature vector in five groups, each with its own
+# divergence threshold (cp, summed over the group's features).
+FEATURE_GROUP_THRESHOLDS_CP = {"material": 100, "pawns": 25, "pieces": 20, "king": 60, "tactics": 30}
+_FEATURE_GROUP_OF = (
+    ("MATERIAL", "material"),
+    ("KING", "king"), ("BACK_RANK", "king"), ("CASTLING", "king"),
+    ("PAWN", "pawns"), ("PASSER", "pawns"),
+    ("HANGING", "tactics"), ("PINS", "tactics"), ("WEAK_ENEMIES", "tactics"),
+)
+
+
+def feature_group(name: str) -> str:
+    base = name.removeprefix("WHITE_").removeprefix("BLACK_")
+    return next((group for key, group in _FEATURE_GROUP_OF if key in base), "pieces")
+
+
+def _grouped_divergence(advantages) -> int:
+    sums: dict[str, int] = {}
+    for advantage in advantages:
+        group = feature_group(advantage.name)
+        sums[group] = sums.get(group, 0) + advantage.advantage_cp
+    return sum(1 for group, total in sums.items() if abs(total) >= FEATURE_GROUP_THRESHOLDS_CP[group])
+
+
 def feature_divergence(event: Any) -> int:
     """Feature groups where the played line and the alternative differ by DIVERGENCE_CP or more."""
     facts = getattr(event, "comment_facts", None)
@@ -271,6 +295,9 @@ def feature_divergence(event: Any) -> int:
     if alt is None:
         return 0
     advantages = list(getattr(alt, "feature_advantages_matched", None) or []) or list(alt.feature_advantages or [])
+    from app.core.commentary import pipeline_flags  # lazy: avoids an import cycle
+    if pipeline_flags.enabled("decision_point_groups"):
+        return _grouped_divergence(advantages)
     groups = set()
     for advantage in advantages:
         if abs(advantage.advantage_cp) >= DIVERGENCE_CP:

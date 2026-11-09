@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.commentary import llm_call_log
+from app.core.commentary import llm_call_log, pipeline_flags
 from app.core.commentary.advanced_comment_service import AdvancedCommentService
 from app.core.commentary.annotation_tokens import resolve_tokens_for_comment
 from app.core.commentary.features.move_category import classify_move_event
@@ -278,7 +278,11 @@ class GameAnnotationPipeline:
             ordered_mis, covered = _coverage_order(state.move_events, side, level)
             # Intermediate and expert get one comment on each long uncommented sequence.
             anchors = attach_sequences(state.move_events, sorted(set(ordered_mis) | covered), level)
-            ordered_mis = sorted(set(ordered_mis) | set(anchors), key=lambda i: -state.move_events[i].ply)
+            # v19 (writer_forward_order): first to last, so the session history holds only
+            # earlier comments and no later-game knowledge can leak into a comment.
+            forward = pipeline_flags.enabled("writer_forward_order")
+            ordered_mis = sorted(set(ordered_mis) | set(anchors),
+                                 key=lambda i: state.move_events[i].ply * (1 if forward else -1))
             context_events = getattr(state.context, "move_events", None)
             if context_events is not None and len(context_events) == len(state.move_events):
                 context_events[:] = state.move_events
