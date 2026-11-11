@@ -43,6 +43,7 @@ def response_record(row):
     return {'response_id': row['id'], 'survey_id': row['survey_id'], 'elo': row['elo'],
             'rating_system': row['rating_system'], 'rating_band': row['rating'],
             'assignment': json.loads(row['assignment']), 'reviews': json.loads(row['reviews']),
+            'task_assignment': json.loads(row['task_assignment']), 'task_answers': json.loads(row['task_answers']),
             'feedback': row['feedback'], 'created_at': row['created_at'], 'completed_at': row['completed_at']}
 
 

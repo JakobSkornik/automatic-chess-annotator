@@ -43,6 +43,11 @@ def round_board(token: str, game_id: str, request: Request):
     return grid_survey.get_round_board(token, participant_token(request), game_id)
 
 
+@router.get('/{token}/task/{task_id}')
+def task_data(token: str, task_id: str, request: Request):
+    return grid_survey.get_task(token, participant_token(request), task_id)
+
+
 @router.get('/{token}/game/{candidate_id}')
 def candidate_game(token: str, candidate_id: str, request: Request):
     return grid_survey.get_candidate_game(token, participant_token(request), candidate_id)
@@ -53,17 +58,30 @@ def summary(token: str):
     return grid_survey.results(token)
 
 
-@router.get('/results/{token}/export.csv')
-def export_csv(token: str):
-    data = grid_survey.results(token)
+def _csv(rows, fields, filename):
     output = io.StringIO(newline='')
-    fields = ['response_id', 'participant_elo', 'participant_rating_system', 'participant_rating', 'game_id', 'model', 'level', 'round_order',
-              'candidate_order', 'decision', *[c['id'] for c in grid_survey.CRITERIA], 'round_feedback',
-              'overall_feedback', 'submitted_at']
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader()
-    for row in data['responses']:
+    for row in rows:
         writer.writerow({key: "'" + value if isinstance(value, str) and value.lstrip().startswith(('=', '+', '-', '@')) else value
                          for key, value in row.items()})
     return Response(output.getvalue(), media_type='text/csv', headers={
-        'Content-Disposition': 'attachment; filename="chess-comparison-responses.csv"'})
+        'Content-Disposition': f'attachment; filename="{filename}"'})
+
+
+@router.get('/results/{token}/export.csv')
+def export_csv(token: str):
+    data = grid_survey.results(token)
+    fields = ['response_id', 'participant_elo', 'participant_rating_system', 'participant_rating', 'game_id', 'position_type',
+              'model', 'level', 'round_order', 'candidate_order', 'decision', *[c['id'] for c in data['criteria']],
+              'round_feedback', 'overall_feedback', 'submitted_at']
+    return _csv(data['responses'], fields, 'chess-comparison-responses.csv')
+
+
+@router.get('/results/{token}/tasks.csv')
+def export_tasks_csv(token: str):
+    fields = ['response_id', 'participant_elo', 'participant_rating_system', 'participant_rating', 'task_id', 'game_id',
+              'position_type', 'line', 'rule_id', 'task_order', 'rated_position', 'line_plies', 'answer_ply', 'support_ply',
+              'board_ply', 'chart_change_ply', 'correct_support_ply', 'correct_board_ply', 'correct', 'could_check', 'trust', 'elapsed_ms',
+              'submitted_at']
+    return _csv(grid_survey.results(token)['task_responses'], fields, 'chess-comparison-tasks.csv')
