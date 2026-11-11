@@ -68,7 +68,8 @@ def install_bundled_surveys(folder: Path | None = None) -> int:
             if existing is not None:
                 if (any(existing[k] != definition[k] for k in ('public_hash', 'admin_hash', 'created_at'))
                         or json.loads(existing['manifest']) != manifest
-                        or json.loads(existing['games']) != games):
+                        # Stored games are read through today's game model, as in grid_survey.install_definition.
+                        or survey._freeze_games(manifest, json.loads(existing['games'])) != games):
                     raise ValueError(f'Existing frozen survey differs from bundle: {path.name}')
                 continue
             db.execute('INSERT INTO surveys (id,public_hash,admin_hash,manifest,games,created_at) VALUES (?,?,?,?,?,?)', (
