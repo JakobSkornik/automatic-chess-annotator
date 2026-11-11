@@ -287,3 +287,28 @@ def test_a_game_with_a_fixed_level_has_one_cell_per_model():
     assert {(c['game_id'], c['level']) for c in cells} == {
         ('game-01', 'expert'), ('game-02', 'beginner'), ('game-02', 'intermediate'), ('game-02', 'expert')}
     assert len(cells) == 2 + 6
+
+
+def test_bundle_install_accepts_studies_stored_before_a_model_field_was_added(setup, monkeypatch):
+    """A deploy that adds an optional field to the game model must still start on a
+    database whose studies were stored without that field (analysis_info.pipeline, v19)."""
+    from app.survey_bundle import export_bundle, install_bundled_surveys
+    client, links, tmp = setup
+    folder = tmp / 'bundles'
+    export_bundle(links['participant_token'], links['results_token'], folder / 'comparison.json.gz')
+    with grid_survey.database() as db, db:
+        rows = db.execute('SELECT variant_id, game FROM comparison_variants').fetchall()
+        for row in rows:
+            game = json.loads(row['game'])
+            assert 'pipeline' in game['analysis_info']
+            del game['analysis_info']['pipeline']
+            db.execute('UPDATE comparison_variants SET game=? WHERE variant_id=?', (json.dumps(game), row['variant_id']))
+    assert install_bundled_surveys(folder) == 0
+    assert client.get(f"/surveys/grid/{links['participant_token']}").status_code == 200
+    # A real difference is still refused.
+    with grid_survey.database() as db, db:
+        row = db.execute('SELECT variant_id, game FROM comparison_variants LIMIT 1').fetchone()
+        game = json.loads(row['game']); game['moves'][0]['comment'] = 'CHANGED AFTER PUBLICATION'
+        db.execute('UPDATE comparison_variants SET game=? WHERE variant_id=?', (json.dumps(game), row['variant_id']))
+    with pytest.raises(ValueError, match='differs from bundle'):
+        install_bundled_surveys(folder)

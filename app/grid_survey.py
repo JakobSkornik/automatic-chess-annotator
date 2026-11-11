@@ -277,9 +277,14 @@ def install_definition(definition):
         db.execute('BEGIN IMMEDIATE')
         existing = db.execute('SELECT * FROM surveys WHERE id=?', (definition['id'],)).fetchone()
         if existing:
+            # The stored games were written by the code of their day. Read them through
+            # today's game model before comparing, so a field added to the model since
+            # (with a default) does not make an unchanged study look different.
+            stored = exported_variants(db, definition['id'])
+            if stored != frozen:
+                stored = freeze_grid(definition['manifest'], stored)
             if (any(existing[k] != definition[k] for k in ('public_hash', 'admin_hash', 'created_at'))
-                    or json.loads(existing['manifest']) != definition['manifest']
-                    or exported_variants(db, definition['id']) != frozen):
+                    or json.loads(existing['manifest']) != definition['manifest'] or stored != frozen):
                 raise ValueError('Existing frozen comparison study differs from bundle')
             return 0
         db.execute('INSERT INTO surveys VALUES (?,?,?,?,?,?)', (
