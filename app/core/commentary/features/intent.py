@@ -10,6 +10,7 @@ from __future__ import annotations
 import chess
 
 from app.models.comment_facts import Claim
+from app.core.commentary import pipeline_flags
 from app.core.commentary.features.guid_features.evidence import evidence_for
 
 # Intent claims rank above routine positional swings but below material and
@@ -92,6 +93,9 @@ def _prepared_break_move(
         return None
     if not (leaf.attackers(mover, dest) & leaf.pieces(chess.PAWN, mover)):
         return None
+    if (pipeline_flags.enabled("statement_wording") and dest - origin == step
+            and chess.square_rank(origin) == (1 if mover else 6)):
+        return None  # one step from the starting square: the pawn could have gone there at once
     target = dest + step
     if not 0 <= target < 64 or chess.square_rank(target) in (0, 7):
         return None
@@ -199,8 +203,8 @@ def build_intent_claim(
         return Claim(
             rule_id="intent_opens_file",
             beneficiary=mover.lower(),
-            text=f"The {fname}-file becomes open for {side.lower()}'s rook.",
-            text_state=f"The {fname}-file is open for {side.lower()}'s rook.",
+            text=f"The {fname}-file becomes open for {side}'s rook.",
+            text_state=f"The {fname}-file is open for {side}'s rook.",
             features_involved=[],
             delta_cp=INTENT_CLAIM_CP,
             entity=f"file:{fname}",
@@ -213,8 +217,8 @@ def build_intent_claim(
         return Claim(
             rule_id="intent_semi_opens_file",
             beneficiary=mover.lower(),
-            text=f"The {fname}-file becomes semi-open for {side.lower()}'s rook.",
-            text_state=f"The {fname}-file is semi-open for {side.lower()}'s rook.",
+            text=f"The {fname}-file becomes semi-open for {side}'s rook.",
+            text_state=f"The {fname}-file is semi-open for {side}'s rook.",
             features_involved=[],
             delta_cp=INTENT_CLAIM_CP,
             entity=f"file:{fname}",

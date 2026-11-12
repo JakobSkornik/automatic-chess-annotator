@@ -1001,7 +1001,7 @@ def build_comment_facts(
         claims = _cap_positional(claims, other, mover, MAX_CLAIMS_PER_MOVE)
     claims = _concrete_first(claims)
     played_line, better = _attach_series(played_line, better, move_event.fen_before)
-    verdict = verdict_for_transition(eval_before_cp, eval_cp, eval_mate, mover)
+    verdict = verdict_for_transition(eval_before_cp, eval_cp, eval_mate, mover, move_class=move_quality)
     if terminal_result:
         claims = []
         eval_mate = None  # integer zero cannot represent the winning side
@@ -1009,7 +1009,7 @@ def build_comment_facts(
         verdict = (f"delivers checkmate for {mover}" if board_after.is_checkmate()
                    else "ends the game in a draw")
 
-    return CommentFacts(
+    facts = CommentFacts(
         ply=move_event.ply,
         san=move_event.san,
         uci=move_event.uci,
@@ -1043,3 +1043,9 @@ def build_comment_facts(
             "alternative_horizon_note": better.horizon_note if better is not None else None,
         },
     )
+    if better is not None and pipeline_flags.enabled("scaled_class_limits"):
+        # Recorded with the facts, so every reader of the material (template, writer,
+        # interface) names the alternative the same way.
+        from app.core.commentary.phases.composer.framing import alternative_comparison
+        better.comparison = alternative_comparison(facts)
+    return facts

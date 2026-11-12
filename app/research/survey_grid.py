@@ -47,9 +47,26 @@ def game_levels(definition, game):
     return [game['level']] if game.get('level') else definition['levels']
 
 
+# How a version of the version study is written (the 'writer' of an entry in 'models').
+WRITERS = ('full', 'lines_only', 'template')
+
+
+def versions(model):
+    """The three versions of the version study, all on one language model: P the full system,
+    T the template without a model, B the model without the statements of the rules."""
+    base = {'provider': model['provider'], 'llm': model['id']}
+    return [{'id': 'P', 'label': 'Full system', 'writer': 'full', **base},
+            {'id': 'T', 'label': 'Template without model', 'writer': 'template', **base},
+            {'id': 'B', 'label': 'Model without claims', 'writer': 'lines_only', **base}]
+
+
 def grid_cells(definition):
+    """One cell per game, model (or version) and level. ``llm`` is the language model that
+    writes the cell and ``writer`` how; for a model comparison they are the model itself and
+    the full system."""
     return [
         {'id': variant_id(g['id'], m['id'], level), 'game_id': g['id'], 'model': m['id'],
-         'provider': m['provider'], 'level': level}
+         'provider': m['provider'], 'level': level,
+         **({'llm': m['llm'], 'writer': m['writer']} if m.get('writer') else {})}
         for g in definition['games'] for m in definition['models'] for level in game_levels(definition, g)
     ]

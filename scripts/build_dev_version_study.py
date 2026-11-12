@@ -43,10 +43,9 @@ def numbered(start_fen, sans):
     return ' '.join(out)
 
 
-def template_comment(move, previous, position, level):
-    """The template version of a comment, rendered from the facts stored with the move."""
+def stored_facts(move, previous, position):
+    """The facts stored with a move of a published game, as the object the composer works on."""
     import chess
-    from app.core.commentary.phases.composer import _audience_view, comment_archetype, render_facts_template
     from app.models.comment_facts import CommentFacts
 
     stored = move['comment_facts']
@@ -76,7 +75,14 @@ def template_comment(move, previous, position, level):
     if alternative:
         facts['better_alternative'] = dict(alternative, claims=claims(alternative['claims']),
                                            display_line=line(alternative['display_line'], alternative.get('eval_cp')))
-    text = render_facts_template(_audience_view(CommentFacts.model_validate(facts), level), archetype=comment_archetype(None))
+    return CommentFacts.model_validate(facts)
+
+
+def template_comment(move, previous, position, level):
+    """The template version of a comment, rendered from the facts stored with the move."""
+    from app.core.commentary.phases.composer import _audience_view, comment_archetype, render_facts_template
+
+    text = render_facts_template(_audience_view(stored_facts(move, previous, position), level), archetype=comment_archetype(None))
     text = re.sub(r'\[pv:([^\]]+)\]', lambda m: numbered(position['fen_before'], m.group(1).split()), text)
     return text.replace('...', '…')
 
@@ -96,6 +102,8 @@ def main():
     os.environ['ACA_SURVEY_DB'] = str(args.db.resolve())
     os.environ.setdefault('ACA_PROFILE', 'v18')
     from app.grid_survey import publish_grid
+    from app.core.commentary import pipeline_flags
+    from app.core.commentary.phases.composer import narrative
     from app.research.survey_grid import variant_id
     from app.research.survey_tasks import build_task
 
@@ -115,7 +123,13 @@ def main():
         stored = source['variants'][variant_id(entry['id'], args.model, entry['level'])]
         move = stored['game']['moves'][position['move_index']]
         previous = stored['game']['moves'][position['move_index'] - 1] if position['move_index'] else None
-        texts = {'P': move['comment'], 'T': template_comment(move, previous, position, entry['level']), 'B': PLACEHOLDER}
+        full = move['comment']
+        if pipeline_flags.enabled('comment_blocks'):
+            # The stored comment keeps its wording (one paragraph); only the move numbers of
+            # the new layout are added, so the test study shows how numbered moves look.
+            _, evidence = narrative.prompt(stored_facts(move, previous, position), entry['level'])
+            full = narrative.number_moves(full, evidence)
+        texts = {'P': full, 'T': template_comment(move, previous, position, entry['level']), 'B': PLACEHOLDER}
         for version, text in texts.items():
             game = copy.deepcopy(stored['game'])
             game['moves'][position['move_index']]['comment'] = text

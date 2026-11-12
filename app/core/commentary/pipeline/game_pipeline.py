@@ -250,8 +250,9 @@ class GameAnnotationPipeline:
         comment_side: str | None = None,
         stop_at_move_index: int | None = None,
     ) -> None:
-        """``stop_at_move_index`` ends the reverse sweep at that move (inclusive):
-        earlier key moments stay uncommented. Used by the survey, which shows one move."""
+        """``stop_at_move_index`` ends the sweep at that move (inclusive). In the reverse order
+        the earlier key moments stay uncommented, in the forward order (v19) the later ones.
+        Used by the survey, which shows one move."""
         eff, level, side = _resolve_commentary_params(
             llm_effort, commentary_level, comment_side
         )
@@ -288,7 +289,8 @@ class GameAnnotationPipeline:
                 context_events[:] = state.move_events
             if stop_at_move_index is not None:
                 ordered_mis = [mi for mi in ordered_mis
-                               if state.move_events[mi].move_index >= stop_at_move_index]
+                               if (state.move_events[mi].move_index <= stop_at_move_index if forward
+                                   else state.move_events[mi].move_index >= stop_at_move_index)]
             n_total = max(
                 sum(
                     1 for move_event in state.move_events if move_event.key_moment_type

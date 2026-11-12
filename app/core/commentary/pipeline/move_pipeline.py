@@ -83,6 +83,10 @@ class FactsComposeStage:
             effort=ctx.composer_effort,
             level=ctx.commentary_level,
             key_moment_type=ctx.move_event.key_moment_type,
+            # The game up to this move, for the writer without claims (survey version B).
+            enrichment={"moves_before": [
+                event.san for event in (getattr(ctx.game_context, "move_events", None) or [])
+                if event.ply < ctx.move_event.ply]},
         )
         text = str(result.get("text") or "")
         if result.get("rendering_contract") in WHOLE_ANNOTATION_CONTRACTS and result.get("semantic_review") in {"accepted", "disabled"}:

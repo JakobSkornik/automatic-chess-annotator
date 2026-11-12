@@ -156,6 +156,10 @@ class BestAlternative(BaseModel):
     display_line: EnvisionedLine | None = None
     claims: list[Claim] = Field(default_factory=list)
     is_inferior: bool = False
+    # How this move compares with the played move for the mover: "better", "weaker",
+    # "comparable" or "unknown". None in material written before the field existed;
+    # readers of such material derive it from the two evaluations.
+    comparison: str | None = None
     horizon_matched: bool | None = None
     # Feature-diff-of-diffs against the played move (Improvement 3): the
     # features where this alternative's own start->leaf swing differs most

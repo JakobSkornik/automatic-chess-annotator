@@ -5,6 +5,7 @@ import chess
 from collections import Counter
 
 from app.models.comment_facts import Claim, EnvisionedLine
+from app.core.commentary import pipeline_flags
 from app.core.commentary.features.guid_features.evidence import evidence_for
 
 
@@ -162,6 +163,10 @@ def tactical_claims(line: EnvisionedLine) -> list[Claim]:
         text = (f"In the displayed exchange on {chess.square_name(target)}, "
                 f"White loses {pieces(losses[chess.WHITE])}, while "
                 f"Black loses {pieces(losses[chess.BLACK])}.")
+        if (pipeline_flags.enabled("statement_wording") and len(losses[chess.WHITE]) == 1
+                and losses[chess.WHITE] == losses[chess.BLACK]):
+            text = (f"{chess.piece_name(losses[chess.WHITE][0]).capitalize()}s are exchanged "
+                    f"on {chess.square_name(target)}.")
         origins = [chess.Move.from_uci(u).from_square for u in line.line_uci[:end]]
         summary = Claim(rule_id="exchange_sequence", text=text, text_state=text,
                         features_involved=["TACTICAL_CAPTURE", "TACTICAL_EXCHANGE"],

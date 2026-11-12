@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.core.commentary import pipeline_flags
+
 # Advantage-bracket boundaries (|centipawns|): equality < EQUAL < slight < SLIGHT
 # < clear < CLEAR < winning < WINNING <= decisive.
 EQUAL_MAX_CP = 25
@@ -30,6 +32,7 @@ def verdict_for_transition(
     after_cp: int | None,
     eval_mate: int | None,
     mover: str,
+    move_class: str | None = None,
 ) -> str:
     """Verdict phrased as the eval *story* of the move from the mover's seat:
     held / extended / slipped / thrown away / conceded — far more informative
@@ -52,7 +55,16 @@ def verdict_for_transition(
             return "holds the balance"
         if a > 0:
             return f"maintains {mover}'s advantage"
+        if pipeline_flags.enabled("statement_wording"):
+            return f"leaves {opp} with {_adv_bracket(-a)}"  # the move did not cause it
         return verdict_for_eval(after_cp)
+
+    sound = (pipeline_flags.enabled("statement_wording") and move_class is not None
+             and move_class not in ("inaccuracy", "mistake", "blunder"))
+    if d < 0 and sound and b >= EQUAL_MAX_CP and a >= EQUAL_MAX_CP:
+        return f"maintains {mover}'s advantage"
+    if d < 0 and sound and b <= -EQUAL_MAX_CP and a < b:
+        return f"leaves {opp} with {_adv_bracket(-a)}"
 
     if d < 0:  # the mover lost ground
         if b >= EQUAL_MAX_CP and a >= EQUAL_MAX_CP:

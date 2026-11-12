@@ -109,6 +109,8 @@ def test_system_prompt_and_schema_follow_the_switches(monkeypatch):
     text = narrative.system_prompt()
     assert "processed backwards" not in text and "from the first move to the last" in text
     assert "TRANSIENT CLAIMS" in text and "sentences" in text
+    assert narrative.schema() is narrative.BLOCK_SCHEMA
+    monkeypatch.setenv("ACA_V19_COMMENT_BLOCKS", "0")
     assert narrative.schema() is narrative.SENTENCE_SCHEMA
 
 

@@ -57,7 +57,14 @@ async def generate(args):
     # Only the locally prepared, hash-verified cache is accepted here.
     state = pickle.loads(raw)
     state.metadata = state.metadata.model_copy(update={'id':str(uuid.uuid4())})
-    os.environ[f"COMMENTARY_{cell['provider'].upper()}_MODEL"] = cell['model']
+    # A version of the version study names its language model and its writer; a model of the
+    # model comparison is its own language model, written by the full system.
+    llm, writer = cell.get('llm', cell['model']), cell.get('writer', 'full')
+    os.environ[f"COMMENTARY_{cell['provider'].upper()}_MODEL"] = llm
+    if writer == 'template':
+        os.environ['HUMANIZATION_LEVEL'] = '0'
+    elif writer == 'lines_only':
+        os.environ['COMMENTARY_RENDER_MODE'] = 'lines_only'
     os.environ['LOG_LLM_TO_FILE']='1'
     os.environ['LOG_LLM_DIR']=str(directory/'private-traces')
     ledger = SpendLedger(args.folder/'spend.private.sqlite3', args.budget_usd)
@@ -80,8 +87,11 @@ async def generate(args):
         if not game['commentary_complete']:
             raise RuntimeError('Commentary did not complete')
         trace = directory/'private-traces'/f'{state.metadata.id}.jsonl'
-        calls=[json.loads(line) for line in trace.read_text(encoding='utf-8').splitlines() if line.strip()]
-        if not calls or any(c['model']!=cell['model'] for c in calls):
+        calls=[json.loads(line) for line in trace.read_text(encoding='utf-8').splitlines() if line.strip()] if trace.exists() else []
+        if writer == 'template':
+            if calls:
+                raise RuntimeError('The template version must not call a model')
+        elif not calls or any(c['model']!=llm for c in calls):
             raise RuntimeError('Model provenance missing or inconsistent')
         if any(not c.get('ok') for c in calls):
             raise RuntimeError('Provider calls failed; retain traces and repair before publishing')
@@ -90,6 +100,11 @@ async def generate(args):
         target=game['moves'][entry['comparison_position']['move_index']]
         if not target.get('comment'):
             raise RuntimeError('Selected comparison position has no comment')
+        if 'writer' in cell and writer != 'template' and not str(target.get('commentary_status') or '').startswith('llm'):
+            # In a version study the compared comment must be the version's own text:
+            # a rejected draft would put the template under the model's label.
+            raise RuntimeError('The comment at the comparison position is not model-written: '
+                               + str(target.get('commentary_status')))
         game_path.write_text(json.dumps(game,ensure_ascii=False),encoding='utf-8')
         record.update(status='complete',completed_at=datetime.now(timezone.utc).isoformat(),
                       artifact_sha256=hashlib.sha256(game_path.read_bytes()).hexdigest(),

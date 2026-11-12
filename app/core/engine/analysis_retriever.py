@@ -647,6 +647,8 @@ async def run_engine_analysis_to_json(
     metadata_id: str | None = None,
 ) -> tuple[GameJson, EnginePipelineState]:
     """Passes 1-3: engine analysis + event extraction. Heuristic comments only."""
+    if pipeline_flags.enabled("hash_cleared_per_game"):
+        engine_connector.clear_hash()
     game = _parse_single_game(pgn_string)
     eco_book = ECOBook()
     retriever = AnalysisRetriever(engine_connector, game, eco_book)
@@ -715,6 +717,8 @@ def rebuild_comment_facts(state: EnginePipelineState, engine_connector: EngineCo
     Lets a study apply changed rules to identical engine evidence. Refutation
     scan results are kept from the saved events; the leaf probe uses the engine.
     """
+    if pipeline_flags.enabled("hash_cleared_per_game"):
+        engine_connector.clear_hash()
     eco_book = ECOBook()
     detector = AnalysisRetriever(engine_connector, state.game, eco_book).key_moment_detector
     refutations = {event.ply: event.refutations for event in state.move_events}

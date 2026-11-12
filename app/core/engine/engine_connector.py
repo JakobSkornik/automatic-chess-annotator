@@ -61,6 +61,14 @@ class EngineConnector:
             return False
         raise ValueError(f"{name} must be a boolean value, got {value!r}")
 
+    def clear_hash(self) -> bool:
+        """Empty the engine's hash table (the UCI button 'Clear Hash'). Returns False when
+        the engine does not offer it."""
+        if "Clear Hash" not in self.engine.options:
+            return False
+        self.engine.configure({"Clear Hash": None})
+        return True
+
     def _start_engine(self) -> chess.engine.SimpleEngine:
         """
         Launches the chess engine using the UCI protocol.
