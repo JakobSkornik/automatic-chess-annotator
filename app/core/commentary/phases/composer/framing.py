@@ -4,6 +4,8 @@ engine's move is "better" or merely "comparable"."""
 
 from __future__ import annotations
 
+import chess
+
 from app.core.commentary import pipeline_flags
 from app.models.comment_facts import Claim, CommentFacts
 
@@ -100,3 +102,53 @@ _ARCHETYPE_OPENER: dict[str, str] = {
     "brilliant_sacrifice": "is a brilliant sacrifice,",
     "kingside_attack": "turns the pieces toward the enemy king,",
 }
+
+
+# --- v19 other_moves_concede ---
+# Jakob's decision of 12 Nov 2026: a much worse second choice is not presented as "Weaker
+# was ..." and its line is not explained; the comment says what other moves concede.
+_PIECE_WORDS = {chess.QUEEN: "queen", chess.ROOK: "rook", chess.BISHOP: "bishop",
+                chess.KNIGHT: "knight", chess.PAWN: "pawn"}
+_COUNT_WORDS = {1: "a", 2: "two", 3: "three", 4: "four"}
+_CONCEDED_WORDS = {"bishop pair": "the bishop pair"}
+
+
+def clearly_worse_runner_up(facts: CommentFacts, *, threshold_cp: int = ALT_MATERIAL_GAP_CP) -> bool:
+    """The played move is the engine's choice and the next-best move is clearly worse."""
+    alt = facts.better_alternative
+    return bool(pipeline_flags.enabled("other_moves_concede") and alt is not None and alt.is_inferior
+                and alternative_comparison(facts, threshold_cp=threshold_cp) == "weaker")
+
+
+def _material_conceded(facts: CommentFacts) -> str | None:
+    """What the mover is short of at the end of the runner-up's line compared with the end of
+    the played line, net of the opponent ('a knight', 'two pawns'). None when the difference
+    is not a plain loss (an exchange of unequal pieces, or no difference)."""
+    try:
+        played = chess.Board(facts.display_line.leaf_fen or facts.display_line.fens[-1])
+        other_line = facts.better_alternative.display_line
+        other = chess.Board(other_line.leaf_fen or other_line.fens[-1])
+    except (AttributeError, IndexError, ValueError):
+        return None
+    mover = chess.WHITE if facts.mover == "White" else chess.BLACK
+
+    def net(board, piece):
+        return len(board.pieces(piece, mover)) - len(board.pieces(piece, not mover))
+
+    change = {piece: net(other, piece) - net(played, piece) for piece in _PIECE_WORDS}
+    if any(v > 0 for v in change.values()) or not any(v < 0 for v in change.values()):
+        return None
+    parts = [f"{_COUNT_WORDS.get(-v, str(-v))} {_PIECE_WORDS[piece]}{'s' if v < -1 else ''}"
+             for piece, v in change.items() if v < 0]
+    return " and ".join(parts)
+
+
+def other_moves_concede(facts: CommentFacts) -> list[str]:
+    """What moves other than the played one concede, by the runner-up: material first, then
+    the feature groups in which the played line comes out ahead. At most three."""
+    from .narrative import _feature_comparison  # narrative imports this module
+
+    material = _material_conceded(facts)
+    groups = (_feature_comparison(facts) or {}).get("favours_played_move") or []
+    features = [_CONCEDED_WORDS.get(g, g) for g in groups if not (material and g == "material")]
+    return (([material] if material else []) + features)[:3]

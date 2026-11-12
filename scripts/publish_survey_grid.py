@@ -32,7 +32,11 @@ def main():
         path=directory/'game.json'
         if record['status']!='complete' or hashlib.sha256(path.read_bytes()).hexdigest()!=record['artifact_sha256']:
             raise SystemExit('Grid variant is incomplete or changed: '+cell['id'])
-        if record['source_sha256']!=definition['architecture']['sha256'] or record['settings']!=definition['settings']:
+        # A study may keep cells of an earlier source state when it records which cells and in
+        # which files the two states differ (definition['earlier_architecture']).
+        earlier=definition.get('earlier_architecture') or {}
+        accepted={definition['architecture']['sha256']}|({earlier.get('sha256')} if cell['id'] in earlier.get('cells',[]) else set())
+        if record['source_sha256'] not in accepted or record['settings']!=definition['settings']:
             raise SystemExit('Grid variant uses another architecture or configuration: '+cell['id'])
         variants[cell['id']]={**cell,'game':json.loads(path.read_text(encoding='utf-8')),'provenance':record}
         records.append(record)

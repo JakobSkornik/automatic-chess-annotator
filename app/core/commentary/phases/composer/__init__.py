@@ -264,6 +264,22 @@ async def _compose_plain(service, facts, level, template, *, model, effort, key_
     }
     stage = "validation"
     try:
+        if pipeline_flags.enabled("base_writer"):
+            # The base model: position and engine lines only, each move on its own (no game
+            # conversation), the text taken as written.
+            result.update(prompt_version=plain.BASE_VERSION, rendering_contract=plain.BASE_VERSION)
+            user, evidence = plain.base_prompt(facts, level, key_moment_type=key_moment_type)
+            call = (service.review_json if getattr(service, "is_commentary_session", False)
+                    else service._llm_call_json_schema)
+            stage = "provider"
+            raw = await call(plain.base_system(level), user, model=model, effort=effort,
+                             schema=plain.BASE_SCHEMA, schema_name="base_comment",
+                             max_output_tokens=commentary_output_limit())
+            result["raw_proposal"] = raw
+            stage = "validation"
+            result.update(text=plain.base_parse(raw, evidence), rendering="llm",
+                          commentary_status="llm_unreviewed")
+            return result
         user, evidence = plain.prompt(facts, level, key_moment_type=key_moment_type,
                                       moves_before=moves_before)
         stage = "provider"

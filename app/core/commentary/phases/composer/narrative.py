@@ -13,7 +13,7 @@ import chess
 
 from . import rewrite
 from app.core.commentary import pipeline_flags
-from .framing import alternative_comparison, alt_gap_cp
+from .framing import alternative_comparison, alt_gap_cp, clearly_worse_runner_up, other_moves_concede
 from .evidence import _board_summary
 
 VERSION = "grounded_narrative_v14"
@@ -235,7 +235,25 @@ def system_prompt() -> str:
         text += LAYOUT_NOTE + _NUMBER_CHECK_NOTE
     if _sentence_form() and pipeline_flags.enabled("claimless_parts"):
         text += _CLAIMLESS_NOTE
+    if pipeline_flags.enabled("other_moves_concede"):
+        assert _RUNNER_UP_OLD in text
+        text = text.replace(_RUNNER_UP_OLD, _RUNNER_UP_NEW)
     return text
+
+
+# v19 other_moves_concede: the clearly worse runner-up is not shown to the writer at all.
+_RUNNER_UP_OLD = (
+    "do not present the runner-up as an "
+    "alternative or walk through its line. Say instead what the other moves concede, using the "
+    "runner-up's claims as the example (for instance 'other moves, such as Bxf6, leave Black's queen "
+    "on b3 to be taken').")
+_RUNNER_UP_NEW = (
+    "that move, its line and its claims are not supplied. Do not name or explain any other move. "
+    "Say in one sentence what the other moves concede, using only "
+    "assessment.alternative.concedes (for instance 'Other moves concede a knight and king "
+    "safety'); when that list is empty, say only that other moves are clearly weaker. Put the "
+    "sentence at the end of the move part, or make it the alternative part when it reads better "
+    "as a paragraph of its own; in this case the alternative part names no move.")
 
 
 def schema() -> dict:
@@ -452,6 +470,8 @@ def prompt(facts, level, key_moment_type=None):
         substitutions={key: value for key, value in substitutions.items() if value is not None})
     if blocks_enabled():
         add_move_labels(evidence)
+    if clearly_worse_runner_up(facts) and evidence["assessment"].get("alternative"):
+        evidence["assessment"]["alternative"]["concedes"] = other_moves_concede(facts)
     sequence = (facts.selection_metadata or {}).get("sequence")
     if sequence:
         evidence["sequence"] = sequence
@@ -476,11 +496,21 @@ def model_view(evidence):
     for branch in (assessment, assessment.get("alternative") or {}):
         branch.pop("eval_cp_white", None)
     view["placeholders"] = sorted(view.pop("substitutions", {}))
+    runner_up = assessment.get("alternative") or {}
+    hidden = "concedes" in runner_up
+    if hidden:
+        # v19 other_moves_concede: only what other moves concede reaches the writer.
+        view["alternative"] = []
+        for key in ("traces", "board_context"):
+            (view.get(key) or {}).pop("alternative", None)
+        assessment["alternative"] = {"role": runner_up.get("role"), "concedes": runner_up["concedes"]}
+        assessment.pop("horizon_note", None)  # it names the runner-up
+        view["placeholders"] = [name for name in view["placeholders"] if name == "MAIN_EVAL"]
     view["citable_ids"] = {branch: list(range(len(view[branch]))) for branch in ("main", "alternative")}
     if pipeline_flags.enabled("claimless_parts"):
         view["parts_without_claims"] = [
             part for part, branch in (("move", "main"), ("alternative", "alternative"))
-            if not view[branch] and (branch == "main" or assessment.get("alternative"))]
+            if not view[branch] and (branch == "main" or (assessment.get("alternative") and not hidden))]
     return view
 
 
@@ -621,6 +651,8 @@ def join_blocks(by_part, evidence):
     if by_part["alternative"]:
         blocks.append(" ".join(by_part["alternative"]))
     for block, branch in zip(blocks, ("main", "alternative")):
+        if branch == "alternative" and "concedes" in ((evidence.get("assessment") or {}).get("alternative") or {}):
+            continue  # v19 other_moves_concede: this paragraph names no move
         san = _root_san(evidence, branch)
         if san is None or not re.search(r"(?<![A-Za-z0-9])" + re.escape(san.rstrip("+#")) + r"(?![A-Za-z0-9])", block):
             raise ValueError(f"The {branch} block does not name its move")

@@ -113,6 +113,105 @@ def prompt(facts, level, key_moment_type=None, moves_before=None):
                       ensure_ascii=False), evidence
 
 
+# --- v19 base_writer: the base model ---
+# Jakob's decision of 12 Nov 2026: version B is the model on its own. It gets the position and
+# the two engine lines as text, nothing the system derives (no verdict, class, critical reply,
+# game so far or earlier comments), and it decides itself whether its comment has two paragraphs.
+BASE_VERSION = "base_lines_v2"
+# The writing rules are those of the full writer, so that the two texts differ in what they
+# say and not in how they are set. Every rule that needs the system's evidence is left out.
+BASE_SYSTEM = (
+    "Write the COMPLETE chess annotation of the played move, as a human annotator explaining the "
+    "decision. You receive the position before the move, the move played, and two lines of a "
+    "chess engine with their evaluations: the line after the move played and the line after "
+    "another move the engine considered. Nothing else is supplied: work out from the position "
+    "and the lines what the move changes, how good it is and why. "
+    "Write for a reader at {level} level, usually 60-120 words, never more than 200. Every comment "
+    "says why: the concrete cause of an error, the purpose of a quiet move, and what the other "
+    "move offers when it is mentioned. Do not pad the text with closing summaries or repeated "
+    "verdicts. Lead with what matters about the move. For a mistake or blunder say early and "
+    "plainly how serious it is and give its concrete cause. When the evaluations are close, say "
+    "so in words and treat the two moves as two plans. Explain the move through what it changes "
+    "in the position: pawn structure, piece activity, king safety, open files, strong or weak "
+    "squares and passed pawns, and what that prepares or prevents. The engine line is only "
+    "evidence: mention at most two of its moves per line, and only where they show such a change; "
+    "never retell the line move by move. Mention material only when the move itself wins or gives "
+    "it up, or when it is the outcome of the sequence after the move, in a short phrase. Keep "
+    "losing positions losing: better does not mean equal or winning. An engine line is an example, "
+    "not proof of forced play. Never write 'must', 'has to', 'have to' or 'forced to'. Treat the "
+    "other move as a separate possibility: what happens in its line did not happen in the game. "
+    "FORM: Whenever you mention a piece or pawn on a square, name its side ('Black's pawn on a7', "
+    "'White's knight on f3'). Begin with the played move written exactly as it is given "
+    "('24...Rhd8 is an inaccuracy: ...'). Write every move you name with its move number, exactly "
+    "as the lines number it ('27...Rxh2', '28.Kf6'). Never type a decimal number or an evaluation "
+    "figure anywhere in the text; describe evaluations in words ('slightly better', 'winning'). "
+    "No annotation marks such as '?' or '!', no square brackets, headings or lists. "
+    "PARAGRAPHS: when you discuss the other move as a statement of its own, put it in a second "
+    "paragraph after a single line break and name that move with its number at or near the start "
+    "('24...Rad8 was better: ...', 'Better was 24...Rad8, which ...'). Otherwise write one "
+    "paragraph. When the played move is the better one and the other move is much worse, do not "
+    "name or explain the other move: say in one sentence what other moves concede (a piece or a "
+    "pawn, or a feature such as king safety or the pawn structure). "
+    "Return JSON {{text}}."
+)
+BASE_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"text": {"type": "string"}}, "required": ["text"],
+}
+_PIECE_ORDER = ("king", "queen", "rook", "bishop", "knight", "pawn")
+
+
+def _placement(pieces):
+    return "; ".join(f"{name} {', '.join(pieces[name])}" for name in _PIECE_ORDER if pieces.get(name))
+
+
+def base_system(level):
+    return BASE_SYSTEM.format(level=level)
+
+
+def base_prompt(facts, level, key_moment_type=None):
+    """The request for the base model as plain text, and the full evidence (not sent)."""
+    _user, evidence = narrative.prompt(facts, level, key_moment_type=key_moment_type)
+    narrative.add_move_labels(evidence)
+    assessment, values = evidence["assessment"], evidence.get("substitutions") or {}
+    start = (evidence.get("board_context") or {}).get("main", {}).get("start") or {}
+    rows = [f"Position before the move (FEN): {start.get('fen')}"]
+    for side in ("white", "black"):
+        rows.append(f"{side.capitalize()}: {_placement((start.get('pieces') or {}).get(side) or {})}")
+    rows += [f"Side to move: {assessment['mover']}", f"Move played: {assessment['move_label']}", ""]
+    # Every move with its number, as the full writer gets its lines.
+    lines = {branch: " ".join(event["anchor"] for event in evidence["traces"].get(branch) or [])
+             for branch in ("main", "alternative")}
+    if lines["main"]:
+        rows.append(f"Engine line after the move played (evaluation {values.get('MAIN_EVAL', 'not given')}): "
+                    + lines["main"])
+    alternative = assessment.get("alternative")
+    if alternative and lines["alternative"]:
+        rows.append(f"Engine line after another move, {alternative['move_label']} "
+                    f"(evaluation {values.get('ALT_EVAL', 'not given')}): " + lines["alternative"])
+    rows.append("Evaluations are in pawns from White's point of view.")
+    return "\n".join(rows), evidence
+
+
+def base_parse(raw, evidence=None):
+    """The model's text with its own paragraphs, or ValueError. Only emptiness and length are
+    checked. Typographic apostrophes become plain ones and a move written without its number
+    gets the number of its line, as in the full writer's text."""
+    proposal = json.loads(raw)
+    text = proposal.get("text") if isinstance(proposal, dict) else None
+    if not isinstance(text, str):
+        raise ValueError("Expected text")
+    paragraphs = [" ".join(part.split()) for part in re.split(r"[\r\n]+", text.replace("\u2019", "'"))]
+    paragraphs = [part for part in paragraphs if part]
+    if not paragraphs:
+        raise ValueError("Empty comment")
+    # The display knows two paragraphs: anything further stays in the second.
+    text = "\n".join([paragraphs[0]] + ([" ".join(paragraphs[1:])] if paragraphs[1:] else []))
+    if len(text.split()) > narrative.MAX_WORDS:
+        raise ValueError("Word budget exceeded")
+    return narrative.number_moves(text, evidence) if evidence else text
+
+
 def parse_proposal(raw, evidence):
     """The accepted text (two blocks, placeholders still in place), or ValueError. Form and
     length only."""

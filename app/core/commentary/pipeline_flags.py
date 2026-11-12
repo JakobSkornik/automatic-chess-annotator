@@ -95,6 +95,18 @@ FLAGS: dict[str, tuple[str, str]] = {
         "rules/verdicts.py, rules/tactical_evidence.py, rules/prophylaxis.py, "
         "rules/feature_rules.py, features/intent.py, "
         "phases/composer/template.py"),
+    "other_moves_concede": (
+        "When the played move is the engine's choice and the next-best move is clearly worse, "
+        "that move is neither named nor explained: the template writes what other moves concede "
+        "(a piece or pawn, a feature), and the full writer gets that list in place of the "
+        "runner-up, its line and its claims.",
+        "phases/composer/framing.py, phases/composer/template.py, phases/composer/narrative.py"),
+    "base_writer": (
+        "Survey version B is the base model: it gets the position and the two engine lines with "
+        "their evaluations as text, one independent request per move, with the writing rules "
+        "of the full writer (numbered moves, sides named, no figures, paragraph rule, other "
+        "moves concede) and none of its evidence; only the length is checked.",
+        "phases/composer/plain.py, phases/composer/__init__.py"),
 }
 
 _PROFILES = {"v18": set(), "v19": set(FLAGS)}

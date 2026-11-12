@@ -218,6 +218,7 @@ class _Service:
 
 def test_lines_only_mode_uses_the_writer_without_claims(monkeypatch, stored):
     monkeypatch.setenv("ACA_PROFILE", "v19")
+    monkeypatch.setenv("ACA_V19_BASE_WRITER", "0")
     monkeypatch.setenv("COMMENTARY_RENDER_MODE", "lines_only")
     service = _Service(json.dumps({"sentences": [
         {"text": "24...Rhd8 is an inaccuracy because Black's pawn on h7 loses its defender.", "part": "move"}]}))
@@ -452,6 +453,7 @@ def test_template_exchange_hole_and_missed_continuation(monkeypatch, stored):
 
 def test_weaker_alternative_that_still_wins_says_still(monkeypatch, stored):
     monkeypatch.setenv("ACA_PROFILE", "v19")
+    monkeypatch.setenv("ACA_V19_OTHER_MOVES_CONCEDE", "0")  # the wording before 12 Nov
     facts = stored["game-14"].model_copy(deep=True)
     facts.move_quality, facts.eval_cp = "best", -450
     alt = facts.better_alternative
@@ -536,3 +538,101 @@ def test_template_leaves_out_the_statement_that_the_lines_part(monkeypatch, stor
     assert alternative == "Better was 24...Rad8, which leads to a clear advantage for Black."
     monkeypatch.setenv("ACA_V19_STATEMENT_WORDING", "0")
     assert "lines part" in render_facts_template(facts, archetype=comment_archetype(None))
+
+
+# --- the base model (version B from 12 Nov) ---
+
+def test_base_model_gets_the_position_and_the_two_lines_as_text(stored):
+    user, evidence = plain.base_prompt(stored["game-14"], "expert")
+    rows = user.split("\n")
+    assert rows[0].startswith("Position before the move (FEN): r6r/1pp2k1p/")
+    assert rows[1].startswith("White: king ") and rows[2].startswith("Black: king f7; rook ")
+    assert rows[3:5] == ["Side to move: Black", "Move played: 24...Rhd8"]
+    played, other = rows[6], rows[7]
+    assert played.startswith("Engine line after the move played (evaluation ") and "): 24...Rhd8 25.Rc4 " in played
+    assert other.startswith("Engine line after another move, 24...Rad8 (evaluation ") and "): 24...Rad8 " in other
+    # Every move carries its number, as in the lines of the full writer.
+    assert " 25...c6" in played
+    assert rows[-1] == "Evaluations are in pawns from White's point of view."
+    # Nothing the system derives reaches it.
+    assert evidence["main"]
+    for claim in evidence["main"]:
+        assert claim["change"] not in user
+    for word in ("inaccuracy", "mistake", "blunder", stored["game-14"].verdict):
+        assert word not in user
+    # The writing rules of the full writer, none of its evidence.
+    for rule in ("name its side", "with its move number", "second paragraph", "other moves concede",
+                 "Never type a decimal number"):
+        assert rule in plain.BASE_SYSTEM
+    for word in ("assessment.", "evidence.", "claim", "citable", "placeholder"):
+        assert word not in plain.BASE_SYSTEM
+
+
+def test_base_model_text_keeps_its_own_paragraphs(monkeypatch, stored):
+    monkeypatch.setenv("ACA_PROFILE", "v19")
+    assert plain.base_parse(json.dumps({"text": " One  statement.\n\n\nAnother one. "})) == "One statement.\nAnother one."
+    assert plain.base_parse(json.dumps({"text": "One.\nTwo.\nThree."})) == "One.\nTwo. Three."
+    _, evidence = plain.base_prompt(stored["game-14"], "expert")
+    numbered = plain.base_parse(json.dumps({"text": "Rhd8 leaves Black\u2019s pawn on h7 loose.\nRad8 was better."}), evidence)
+    assert numbered == "24...Rhd8 leaves Black's pawn on h7 loose.\n24...Rad8 was better."
+    assert plain.base_parse(json.dumps({"text": "A single paragraph with 0.66 in it."})) == "A single paragraph with 0.66 in it."
+    for text, message in (("  \n ", "Empty"), ("word " * 260, "Word budget")):
+        with pytest.raises(ValueError, match=message):
+            plain.base_parse(json.dumps({"text": text}))
+
+
+def test_lines_only_mode_uses_the_base_model_at_v19(monkeypatch, stored):
+    monkeypatch.setenv("ACA_PROFILE", "v19")
+    monkeypatch.setenv("COMMENTARY_RENDER_MODE", "lines_only")
+    service = _Service(json.dumps({"text": "Moving this rook leaves the h-pawn loose.\nThe other rook was the one to move."}))
+    service.is_commentary_session = True
+    independent = []
+
+    async def review_json(system, user, **kwargs):
+        independent.append((system, user, kwargs))
+        return service.reply
+    service.review_json = review_json
+    result = asyncio.run(compose_facts_comment(service, stored["game-14"], model="m", effort="low", level="expert"))
+    assert result["rendering"] == "llm" and result["prompt_version"] == "base_lines_v2"
+    assert result["text"] == "Moving this rook leaves the h-pawn loose.\nThe other rook was the one to move."
+    # One request outside the game conversation, so no earlier comment travels with it.
+    assert len(independent) == 1 and not service.requests
+    system, user, kwargs = independent[0]
+    assert system == plain.base_system("expert") and kwargs["schema"] is plain.BASE_SCHEMA
+    assert user.startswith("Position before the move (FEN): ")
+
+
+# --- other moves concede (12 Nov) ---
+
+def _first_choice_with_a_much_worse_second(stored):
+    facts = stored["game-14"].model_copy(deep=True)
+    alt = facts.better_alternative
+    alt.is_inferior = True
+    alt.eval_cp = facts.eval_cp + 300          # Black moved; 300 more for White is much worse
+    return facts
+
+
+def test_template_does_not_explain_a_much_worse_second_choice(monkeypatch, stored):
+    monkeypatch.setenv("ACA_PROFILE", "v19")
+    facts = _first_choice_with_a_much_worse_second(stored)
+    second = render_facts_template(facts, archetype=comment_archetype(None)).split("\n")[1]
+    assert second.startswith("Other moves ") and "Rad8" not in second and "Weaker" not in second
+    monkeypatch.setenv("ACA_V19_OTHER_MOVES_CONCEDE", "0")
+    assert "Weaker was 24...Rad8" in render_facts_template(facts, archetype=comment_archetype(None))
+
+
+def test_full_writer_does_not_see_a_much_worse_second_choice(monkeypatch, stored):
+    monkeypatch.setenv("ACA_PROFILE", "v19")
+    facts = _first_choice_with_a_much_worse_second(stored)
+    user, evidence = narrative.prompt(facts, "expert")
+    view = json.loads(user)["evidence"]
+    assert view["assessment"]["alternative"].keys() == {"role", "concedes"}
+    assert view["assessment"]["alternative"]["role"] == "runner_up_clearly_worse"
+    assert view["alternative"] == [] and "alternative" not in view["traces"] and "Rad8" not in user
+    assert "alternative" not in view["parts_without_claims"]
+    assert "are not supplied" in narrative.system_prompt() and "such as Bxf6" not in narrative.system_prompt()
+    # A paragraph about the other moves needs no move name.
+    text = narrative.join_blocks({"move": ["24...Rhd8 is best."], "alternative": ["Other moves concede a pawn."]}, evidence)
+    assert text == "24...Rhd8 is best.\nOther moves concede a pawn."
+    monkeypatch.setenv("ACA_V19_OTHER_MOVES_CONCEDE", "0")
+    assert "Rad8" in narrative.prompt(facts, "expert")[0] and "such as Bxf6" in narrative.system_prompt()

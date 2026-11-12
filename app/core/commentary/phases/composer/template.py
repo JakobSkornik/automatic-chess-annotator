@@ -13,6 +13,7 @@ from app.core.commentary.rules.verdicts import EQUAL_MAX_CP
 from app.core.commentary.rules.constants import INFERIOR_ALT_WEAKER_CP
 from app.models.comment_facts import Claim, CommentFacts
 
+from .framing import other_moves_concede
 from .framing import (
     _ARCHETYPE_OPENER,
     _is_alt_materially_better,
@@ -286,6 +287,10 @@ def _render_alternative(facts: CommentFacts, variant: int) -> str | None:
         # depends on the gap: clearly worse -> "Weaker was", else "comparable".
         comparison = alternative_comparison(facts, threshold_cp=INFERIOR_ALT_WEAKER_CP)
         clearly_weaker = comparison == "weaker"
+        if clearly_weaker and pipeline_flags.enabled("other_moves_concede"):
+            # A much worse second choice is not named or explained.
+            conceded = other_moves_concede(facts)
+            return f"Other moves concede {_listed(conceded)}." if conceded else "Other moves are clearly weaker."
         lead = (
             f"Weaker was {alt_san}"
             if clearly_weaker
