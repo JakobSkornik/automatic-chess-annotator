@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import chess
 import chess.pgn
 
@@ -60,9 +62,42 @@ def _map_phase(raw: str) -> str:
     return "middlegame"
 
 
-def _move_quality_from_loss(eval_loss_cp: int, played_is_best: bool) -> MoveQuality:
+# --- scaled_class_limits (v19): the classes end at a drop of the mover's expected score ---
+# Bands of Chess.com's expected-points classification; the conversion is the logistic
+# curve with 400 cp per decade (Elo), not Chess.com's own, rating-dependent model.
+CLASS_BANDS: tuple[tuple[MoveQuality, float], ...] = (
+    (MoveQuality.EXCELLENT, 0.02), (MoveQuality.GOOD, 0.05),
+    (MoveQuality.INACCURACY, 0.10), (MoveQuality.MISTAKE, 0.20))
+EXPECTED_SCORE_SCALE_CP = 400
+_SCORE_CLAMP_CP = 4000  # mate-coded scores are far beyond any centipawn value
+
+
+def expected_score(cp: float) -> float:
+    """Expected score (0..1) of the side whose evaluation is ``cp``."""
+    cp = max(-_SCORE_CLAMP_CP, min(_SCORE_CLAMP_CP, cp))
+    return 1 / (1 + 10 ** (-cp / EXPECTED_SCORE_SCALE_CP))
+
+
+def scaled_class_limits(best_mover_cp: float) -> list[tuple[MoveQuality, float]]:
+    """Per class, the centipawn loss at which it ends, for a position whose best move is
+    worth ``best_mover_cp`` to the mover. ``math.inf`` when the mover's expected score is
+    already lower than the band, so that no loss can reach the next class."""
+    before = expected_score(best_mover_cp)
+    limits = []
+    for quality, band in CLASS_BANDS:
+        after = before - band
+        limits.append((quality, math.inf if after <= 0 else
+                       best_mover_cp - EXPECTED_SCORE_SCALE_CP * math.log10(after / (1 - after))))
+    return limits
+
+
+def _move_quality_from_loss(eval_loss_cp: int, played_is_best: bool,
+                            best_mover_cp: float | None = None) -> MoveQuality:
     if played_is_best or eval_loss_cp <= BEST_MOVE_MAX_LOSS_CP:
         return MoveQuality.BEST
+    if best_mover_cp is not None:
+        return next((quality for quality, limit in scaled_class_limits(best_mover_cp)
+                     if eval_loss_cp < limit), MoveQuality.BLUNDER)
     if eval_loss_cp <= EXCELLENT_MAX_LOSS_CP:
         return MoveQuality.EXCELLENT
     if eval_loss_cp <= GOOD_MAX_LOSS_CP:
@@ -148,7 +183,12 @@ def _move_quality_for(
         mate_class = _mate_class(best_eval, cur_score)
         if mate_class is not None:
             return mate_class
-    move_quality = _move_quality_from_loss(loss, played_is_best)
+    best_mover_cp = None
+    if (pipeline_flags.enabled("scaled_class_limits") and loss > 0 and best_eval is not None
+            and cur_score is not None and best_eval != cur_score):
+        # Both scores are White's; the mover is the side for which the played move is worse.
+        best_mover_cp = best_eval if best_eval > cur_score else -best_eval
+    move_quality = _move_quality_from_loss(loss, played_is_best, best_mover_cp)
     negative = (MoveQuality.INACCURACY, MoveQuality.MISTAKE, MoveQuality.BLUNDER)
     if move_quality in negative and best_eval is not None and cur_score is not None:
         decisive = decisive_eval_cp()
@@ -481,7 +521,8 @@ class ChessEventExtractor:
             None
             if in_book_ply
             else self._key_moment_detector.detect(
-                analyzed, prev_move_obj, pvs, pv1_change_count=row.pv1_change_count
+                analyzed, prev_move_obj, pvs, pv1_change_count=row.pv1_change_count,
+                move_class=getattr(move_quality, "value", move_quality),
             )
         )
         if not key_moment:

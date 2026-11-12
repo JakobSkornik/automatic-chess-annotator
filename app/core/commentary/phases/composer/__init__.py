@@ -45,6 +45,7 @@ from typing import Any
 
 from app.models.comment_facts import Claim, CommentFacts, EnvisionedLine
 
+from app.core.commentary import pipeline_flags
 from .framing import ALT_MATERIAL_GAP_CP, alt_gap_cp, comment_archetype
 from .prompts import (
     SINGLE_LEVEL_SCHEMA,
@@ -215,6 +216,11 @@ async def compose_facts_comment(
                                       template, model=model, effort=effort,
                                       legacy=mode == "grounded_rewrite_v2",
                                       key_moment_type=key_moment_type)
+    if mode == "lines_only":
+        # Survey version B: the same model without the statements of the rules.
+        return await _compose_plain(service, facts, lvl, template, model=model, effort=effort,
+                                    key_moment_type=key_moment_type,
+                                    moves_before=(enrichment or {}).get("moves_before"))
     if mode != "bounded":
         raise ValueError(f"Unknown COMMENTARY_RENDER_MODE: {mode}")
 
@@ -245,6 +251,38 @@ async def compose_facts_comment(
     return _result(template, "template", False, lvl)
 
 
+async def _compose_plain(service, facts, level, template, *, model, effort, key_moment_type=None,
+                         moves_before=None):
+    """The writer without claims. A rejected draft leaves the template in place, marked as
+    such, so a survey run can tell that this comment is not the model's."""
+    from . import plain
+
+    result = {
+        "text": template, "rendering": "template", "contract_ok": True, "level": level,
+        "prompt_version": plain.VERSION, "rendering_contract": plain.VERSION, "writer": "lines_only",
+        "semantic_review": "disabled", "review_scope": "deterministic_validation_only",
+    }
+    stage = "validation"
+    try:
+        user, evidence = plain.prompt(facts, level, key_moment_type=key_moment_type,
+                                      moves_before=moves_before)
+        stage = "provider"
+        raw = await service._llm_call_json_schema(
+            plain.SYSTEM, user, model=model, effort=effort, schema=plain.SCHEMA,
+            schema_name="lines_only_comment", max_output_tokens=commentary_output_limit())
+        result["raw_proposal"] = raw
+        stage = "validation"
+        result.update(text=plain.render(plain.parse_proposal(raw, evidence), evidence),
+                      rendering="llm", commentary_status="llm_unreviewed")
+    except Exception as exc:
+        logger.warning("Writer without claims rejected at ply %s (%s stage): %s: %s",
+                       facts.ply, stage, type(exc).__name__, exc)
+        result.update(contract_ok=False, fallback_reason=str(exc)[:240],
+                      commentary_status={"validation": "template_validation_failed",
+                                         "provider": "template_provider_failed"}[stage])
+    return result
+
+
 async def _compose_rewrite(service, facts, level, archetype, template, *, model, effort, legacy=False,
                            key_moment_type=None):
     if legacy:
@@ -267,6 +305,11 @@ async def _compose_rewrite(service, facts, level, archetype, template, *, model,
         user, evidence = (rewrite.prompt(facts, level) if legacy
                           else rewrite.prompt(facts, level, key_moment_type=key_moment_type))
         result["claim_catalog"] = evidence
+        if (not legacy and pipeline_flags.enabled("claimless_parts")
+                and not evidence.get("main") and not evidence.get("alternative")):
+            # Neither line has a claim: there is nothing to explain beyond the assessment,
+            # which the template states.
+            return dict(result, commentary_status="template", commentary_reason="no_claims")
         stage = "provider"
         raw = await service._llm_call_json_schema(
             getattr(rewrite, "system_prompt", lambda: rewrite.SYSTEM)(), user, model=model, effort=effort,

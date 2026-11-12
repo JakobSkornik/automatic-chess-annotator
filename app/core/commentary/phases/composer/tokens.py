@@ -3,6 +3,8 @@ rendering path (template and LLM) copies unchanged."""
 
 from __future__ import annotations
 
+import re
+
 from app.models.comment_facts import BestAlternative, CommentFacts
 
 EVAL_STORY_MIN_CP = 50  # show before->after eval story when it moved this much
@@ -45,6 +47,28 @@ def _move_label(facts: CommentFacts) -> str:
     move_no = facts.move_number or (facts.ply + 1) // 2
     dots = "." if facts.mover == "White" else "..."
     return f"{move_no}{dots}{facts.san}"
+
+
+def alternative_label(facts: CommentFacts) -> str:
+    """The alternative with its move number (it is a move of the same side as the played one)."""
+    return _move_label(facts)[: -len(facts.san)] + facts.better_alternative.san
+
+
+def reply_label(facts: CommentFacts, san: str) -> str:
+    """The opponent's reply to the played move, with its move number."""
+    move_no = facts.move_number or (facts.ply + 1) // 2
+    return f"{move_no}...{san}" if facts.mover == "White" else f"{move_no + 1}.{san}"
+
+
+_KEEP_CAPITAL = re.compile(r"(White|Black|I)\b|O-O|[KQRBN][a-h1-8x]")
+
+
+def lower_start(text: str) -> str:
+    """A statement that follows a lead-in ('After 27...Rxh2 in the analysed line, ...')
+    starts in lower case, unless it starts with a side, a piece move or a castling."""
+    if not text or _KEEP_CAPITAL.match(text):
+        return text
+    return text[0].lower() + text[1:]
 
 
 def _gerundize(verdict: str) -> str:

@@ -4,6 +4,7 @@ engine's move is "better" or merely "comparable"."""
 
 from __future__ import annotations
 
+from app.core.commentary import pipeline_flags
 from app.models.comment_facts import Claim, CommentFacts
 
 # Below this mover-POV gap the engine's move is a comparable option, not a miss.
@@ -51,6 +52,11 @@ def alternative_comparison(facts: CommentFacts, *, threshold_cp: int = ALT_MATER
     gap = alt_gap_cp(facts)
     if gap is None:
         return "unknown"
+    if (pipeline_flags.enabled("scaled_class_limits") and gap > 0 and not alt.is_inferior
+            and facts.move_quality in ("inaccuracy", "mistake", "blunder")):
+        # With scaled limits an inaccuracy can lose less than the fixed gap; the class
+        # of the move decides, so an error always has a better move beside it.
+        return "better"
     if gap >= threshold_cp:
         return "better"
     if gap <= -threshold_cp:

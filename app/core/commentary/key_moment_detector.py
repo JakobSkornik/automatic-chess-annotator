@@ -64,6 +64,8 @@ KEY_MOMENT_PRIORITY: dict[str, int] = {
 }
 
 
+ERROR_CLASSES = ("inaccuracy", "mistake", "blunder")
+
 # --- Score-swing key-moment bands (centipawns, mover-POV) ---
 BLUNDER_SWING_CP = -200
 MISTAKE_SWING_CP = -100
@@ -289,8 +291,14 @@ class KeyMomentDetector:
         pvs_for_move: list[list[Move]] | None,
         *,
         pv1_change_count: int = 0,
+        move_class: str | None = None,
     ) -> str | None:
-        """Return the highest-priority key moment type, or *None*."""
+        """Return the highest-priority key moment type, or *None*.
+
+        ``move_class`` is the quality class of the move. With the scaled class limits
+        (``scaled_class_limits``) the error label of a key moment is that class, so the
+        symbol in the move list and the class of the move cannot disagree; without them
+        the label comes from the evaluation swing with fixed limits."""
         candidates: list[str] = []
 
         # --- Score-based triggers (require both moves to have scores) ---
@@ -305,6 +313,7 @@ class KeyMomentDetector:
                     previous_move,
                     pvs_for_move,
                     pv1_change_count=pv1_change_count,
+                    move_class=move_class,
                 )
             )
 
@@ -338,6 +347,7 @@ class KeyMomentDetector:
         pvs_for_move: list[list[Move]] | None,
         *,
         pv1_change_count: int = 0,
+        move_class: str | None = None,
     ) -> list[str]:
         is_white_move = _mover_is_white(current_move)
         score_change = current_move.score - previous_move.score  # type: ignore[operator]
@@ -354,8 +364,12 @@ class KeyMomentDetector:
             and abs(previous_move.score) > decisive
             and current_move.score * previous_move.score > 0
         )
+        if pipeline_flags.enabled("scaled_class_limits") and move_class is not None:
+            errors = [move_class] if move_class in ERROR_CLASSES else []
+        else:
+            errors = _eval_swing_class(perspective_change, decided)
         return [
-            *_eval_swing_class(perspective_change, decided),
+            *errors,
             *_good_defense(previous_move.score, is_white_move, perspective_change),
             *([] if pipeline_flags.enabled("no_missed_opportunity")
               else _missed_opportunity(pvs_for_move, current_move, is_white_move, decided)),

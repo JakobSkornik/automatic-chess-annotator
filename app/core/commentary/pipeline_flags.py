@@ -60,6 +60,41 @@ FLAGS: dict[str, tuple[str, str]] = {
         "The separate missed_opportunity event is not raised; such moves are covered by the "
         "blunder class and its gate.",
         "key_moment_detector.py"),
+    # --- after the meeting with the supervisor, 11 Nov 2026 ---
+    "scaled_class_limits": (
+        "The limits of the quality classes depend on the evaluation before the move: a class "
+        "ends where the mover's expected score (logistic curve, 400 cp per decade) has dropped "
+        "by 2, 5, 10 or 20 percentage points, instead of at a loss of 20, 50, 100 or 200 cp.",
+        "event_extractor.py"),
+    "template_without_lines": (
+        "The template comment prints no variation and no numeric evaluation (both are shown "
+        "beside the board), and a statement joined to a lead-in starts in lower case.",
+        "phases/composer/template.py"),
+    "comment_blocks": (
+        "A comment has two blocks, the played move and then the alternative on its own line, "
+        "and every move named in it carries its move number.",
+        "phases/composer/template.py, phases/composer/narrative.py, phases/composer/plain.py"),
+    "hash_cleared_per_game": (
+        "The engine's hash table is cleared before the analysis of each game, so the result "
+        "for a game does not depend on which games were analysed before it.",
+        "engine/engine_connector.py, engine/analysis_retriever.py"),
+    "claimless_parts": (
+        "A part of the comment whose line has no claim is written as its move and the "
+        "assessment only; a move with no claim on either line is not sent to the model and "
+        "keeps the template text.",
+        "phases/composer/narrative.py, phases/composer/__init__.py"),
+    "statement_wording": (
+        "Wording of statements and verdicts: a sound move in a worse position is not said to "
+        "make matters worse, an exchange of equal pieces is named as an exchange, a pawn break "
+        "the pawn could have played at once is not offered, a parried threat is one plain "
+        "sentence, a bishop is hemmed in or freed only when the pawns on its colour change; "
+        "the template names the move of the line a statement first holds after, joins the "
+        "punishing reply with its first statement, leaves out the "
+        "material count in the middle of an exchange, joins at most two statements and gives "
+        "an explanation once.",
+        "rules/verdicts.py, rules/tactical_evidence.py, rules/prophylaxis.py, "
+        "rules/feature_rules.py, features/intent.py, "
+        "phases/composer/template.py"),
 }
 
 _PROFILES = {"v18": set(), "v19": set(FLAGS)}

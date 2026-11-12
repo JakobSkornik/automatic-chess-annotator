@@ -9,6 +9,7 @@ from __future__ import annotations
 import chess
 
 from app.models.comment_facts import Claim
+from app.core.commentary import pipeline_flags
 
 from .constants import SIDES, THRESHOLDS
 from .context import _benef, _benef_opp, _Ctx, _side_label, _toward
@@ -72,12 +73,30 @@ def rule_pawn_advances(ctx: _Ctx) -> list[Claim]:
     return out
 
 
+def _pawns_on_bishop_colour(board: chess.Board, color: chess.Color) -> list[int]:
+    """For each bishop of ``color``, the number of its own pawns on the bishop's colour."""
+    def light(square: int) -> bool:
+        return (chess.square_file(square) + chess.square_rank(square)) % 2 == 1
+
+    pawns = list(board.pieces(chess.PAWN, color))
+    return sorted(sum(1 for pawn in pawns if light(pawn) == light(bishop))
+                  for bishop in board.pieces(chess.BISHOP, color))
+
+
 def rule_bishop_color_complex(ctx: _Ctx) -> list[Claim]:
     """A side's bishop gets more (or fewer) of its own pawns on its colour."""
     out = []
     for side in SIDES:
         pair = ctx.flag_pair(f"{side}_BISHOP_PLUS_PAWNS_ON_COLOR")
         if not pair:
+            continue
+        if (pipeline_flags.enabled("statement_wording") and ctx.start_board is not None
+                and ctx.leaf_board is not None
+                and _pawns_on_bishop_colour(ctx.start_board, ctx.color(side))
+                == _pawns_on_bishop_colour(ctx.leaf_board, ctx.color(side))):
+            # The score is a product (pawns on the colour x blocked central pawns). When only
+            # the second factor moved (5.Nc3 in front of the c2 pawn), the sentence about the
+            # pawns on the bishop's colour would describe something that did not change.
             continue
         change = pair[1] - pair[0]  # count of own pawns on the bishop's colour, weighted
         if change >= THRESHOLDS["bishop_color_complex"]:

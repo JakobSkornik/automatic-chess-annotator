@@ -19,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
-from app.research.survey_grid import MODELS, LEVELS, ROOT, source_record, run_settings
+from app.research.survey_grid import MODELS, LEVELS, ROOT, source_record, run_settings, versions
+from app.core.commentary import pipeline_flags
 from app.core.engine.analysis_retriever import run_engine_analysis_to_json, assemble_game_json, rebuild_comment_facts
 from app.core.engine.engine_connector import get_global_engine_connector, _shutdown_global_engine
 from app.core.commentary.pipeline.game_pipeline import _promote_turning_points, _key_moment_order, _coverage_order
@@ -50,6 +51,13 @@ async def prepare(args):
     chosen = [m for m in MODELS if not args.models or m['id'] in args.models]
     if args.models and set(args.models) != {m['id'] for m in chosen}:
         raise ValueError('Unknown model in requested grid')
+    if args.versions:
+        # Version study: one language model, three ways of writing the comment.
+        model = next((m for m in MODELS if m['id'] == args.versions), None)
+        if model is None or args.models or not args.positions:
+            raise ValueError('--versions needs a known model, no --models and fixed --positions with their types')
+        chosen = versions(model)
+        args.level = args.level or 'expert'
     args.folder.mkdir(parents=True, exist_ok=True)
     source = source_record()
     # Optional fixed positions: {game_id: {"move_index": int | "rule": "earliest_key_moment",
@@ -61,13 +69,19 @@ async def prepare(args):
                   'prompt_version': VERSION, 'prepared_at': datetime.now(timezone.utc).isoformat(),
                   'position_selection': fixed['_description'] if fixed else 'Highest absolute engine evaluation swing among eligible key moments; ties use earliest ply. Chosen before model generation.',
                   'stop_at_comparison': args.stop_at_comparison,
+                  # Questionnaire version 4 (app.grid_survey.VERSION_STUDY): versions, not models.
+                  **({'questionnaire_version': 4, 'rounds_per_type': 2, 'tasks': [], 'task_count': 0,
+                      'language_model': args.versions} if args.versions else {}),
+                  **({'fixed_level': args.level} if args.level else {}),
                   **({'engine_evidence_from': {'folder': args.reuse_engine_from.name,
                       'engine_sha256': {g['id']: g['engine_sha256'] for g in reused['games']
                                         if any(s['id'] == g['id'] and s['pgn_sha256'] == g['pgn_sha256'] for s in selection['games'])},
                       'note': 'Engine search reused for the listed games; move events and comment facts rebuilt with this '
                               'study code. Games not listed got a fresh engine analysis.'}}
                      if reused else {}),
-                  'generation_scope': ('Reverse-order conversation from the last key moment down to the comparison position; earlier moves are not commented. '
+                  'generation_scope': (('Conversation from the first key moment up to the comparison position; later moves are not commented. '
+                                        if pipeline_flags.enabled('writer_forward_order') else
+                                        'Reverse-order conversation from the last key moment down to the comparison position; earlier moves are not commented. ')
                                        if args.stop_at_comparison else 'Complete game conversations; ')
                                       + 'identical frozen engine evidence across all model/level variants.'}
     manifest_path = args.folder / 'grid.json'
@@ -117,7 +131,7 @@ async def prepare(args):
         candidate_state.context.move_events = candidate_state.move_events
         _promote_turning_points(candidate_state.move_events, candidate_state.context)
         _apply_back_to_back_key_moment_suppression(candidate_state.move_events, candidate_state.context)
-        level = fixed.get(entry['id'], {}).get('level') if fixed else None
+        level = args.level or (fixed.get(entry['id'], {}).get('level') if fixed else None)
         if level:
             entry['level'] = level  # this game is written and surveyed at this level only
         if level:
@@ -169,7 +183,8 @@ async def prepare(args):
             else:
                 index = next((i for i in candidates if candidate_state.move_events[i].move_index == chosen_position['move_index']), None)
             if index is None:
-                raise ValueError(f"{entry['id']}: fixed position {chosen_position.get('move_index')} is not an eligible key moment")
+                raise ValueError(f"{entry['id']}: fixed position {chosen_position.get('move_index')} is not an eligible key moment; eligible: "
+                                 f"{sorted(candidate_state.move_events[i].move_index for i in candidates)}")
         else:
             index = max(candidates, key=lambda i: (abs(candidate_state.move_events[i].eval_swing_cp or 0), -candidate_state.move_events[i].ply))
         event = candidate_state.move_events[index]
@@ -189,7 +204,8 @@ async def prepare(args):
         raise RuntimeError('Analysis source changed during preparation; use a new folder')
     definition['engine_preparation_completed_at'] = datetime.now(timezone.utc).isoformat()
     save_json(manifest_path, definition)
-    print(f"Prepared {len(chosen)} models x 10 games x 3 levels. No model API calls made.", flush=True)
+    print(f"Prepared {len(chosen)} {'versions' if args.versions else 'models'} x {len(definition['games'])} games x "
+          f"{1 if args.level else 3} level(s). No model API calls made.", flush=True)
 
 
 if __name__ == '__main__':
@@ -198,6 +214,10 @@ if __name__ == '__main__':
     parser.add_argument('--folder', required=True, type=Path)
     parser.add_argument('--models', nargs='+')
     parser.add_argument('--effort', choices=['low', 'medium', 'high'], default='medium')
+    parser.add_argument('--versions', metavar='MODEL',
+                        help='Version study on this language model: P full system, T template, B model without claims')
+    parser.add_argument('--level', choices=LEVELS,
+                        help='Write and survey every game at this level (default for --versions: expert)')
     parser.add_argument('--positions', type=Path, help='JSON file fixing the comparison position of each game')
     parser.add_argument('--reuse-engine-from', type=Path,
                         help='Study folder whose verified engine caches are reused (facts are rebuilt)')

@@ -33,6 +33,31 @@ _SENTENCE_NOTE = (
     "order; each sentence cites the claim IDs it rests on in main and alternative, and an ID may "
     "appear in at most one sentence. A sentence that names a square or a move needs a citation; only "
     "a pure assessment sentence (no squares, no moves) may be uncited.")
+# v19 comment_blocks: the layout every writer follows (shared with the writer without claims).
+LAYOUT_NOTE = (
+    " LAYOUT: the annotation has two parts and every sentence entry also carries part. part "
+    "'move' is the played move and what follows from it; part 'alternative' is everything about "
+    "the other move (assessment.alternative). All 'move' sentences come first. The application "
+    "prints the alternative part on its own line, so each part reads on its own. Begin the move "
+    "part with the played move written exactly as assessment.move_label ('24...Rhd8 is an "
+    "inaccuracy: ...'). Name the other move in the alternative part exactly as "
+    "assessment.alternative.move_label, at or near its start ('24...Rad8 was better: ...', 'Better "
+    "was 24...Rad8, which ...'). Leave the alternative part out when you do not discuss the other "
+    "move. MOVE NUMBERS: write every move you name with its move number, exactly as "
+    "the supplied lines number it ('27...Rxh2', '28.Kf6').")
+# Only the full writer is checked against its lines.
+_NUMBER_CHECK_NOTE = (" The move numbers are the anchors of the moves in the traces; the application "
+                      "rejects a move whose number does not match its line.")
+# v19 claimless_parts: a part with nothing to cite gets the move and the assessment only.
+_CLAIMLESS_NOTE = (
+    " PARTS WITHOUT CLAIMS: evidence.parts_without_claims lists the parts ('move', "
+    "'alternative') whose line has no claim. Nothing in such a part can be cited, and an "
+    "uncited sentence that names a square or a move is rejected. Write that part as one "
+    "sentence: its own move (the move_label) and the assessment in words (verdict, comparison "
+    "with the other move). No square, no other move, no piece placement, no retelling of the "
+    "line or of earlier moves of the game in it. Explain in the part that has claims.")
+_ONE_PARAGRAPH = "The text is one coherent paragraph. "
+_NO_MOVE_NUMBER = "enumerate facts, repeat the move number, or describe"
 SYSTEM = (
     "Write the COMPLETE chess annotation, as a human annotator explaining the decision. "
     "Return JSON {text, main, alternative}; main and alternative are arrays of the claim IDs "
@@ -175,6 +200,25 @@ SENTENCE_SCHEMA = {
     "properties": {"sentences": {"type": "array", "minItems": 1, "maxItems": 12, "items": SCHEMA}},
     "required": ["sentences"],
 }
+PARTS = ("move", "alternative")
+_PART = {"part": {"type": "string", "enum": list(PARTS)}}
+# v19 comment_blocks: each sentence also says which block it belongs to.
+BLOCK_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"sentences": {"type": "array", "minItems": 1, "maxItems": 12, "items": {
+        "type": "object", "additionalProperties": False,
+        "properties": {**SCHEMA["properties"], **_PART}, "required": [*SCHEMA["required"], "part"]}}},
+    "required": ["sentences"],
+}
+
+
+def blocks_enabled() -> bool:
+    return pipeline_flags.enabled("comment_blocks")
+
+
+def _sentence_form() -> bool:
+    """The block layout is carried by the sentence form, so it implies it."""
+    return pipeline_flags.enabled("validator_sentence_cites") or blocks_enabled()
 
 
 def system_prompt() -> str:
@@ -184,13 +228,18 @@ def system_prompt() -> str:
         text = text.replace(_ORDER_NOTE_BACKWARD, _ORDER_NOTE_FORWARD)
     if pipeline_flags.enabled("transient_at_errors"):
         text += _TRANSIENT_NOTE
-    if pipeline_flags.enabled("validator_sentence_cites"):
+    if _sentence_form():
         text += _SENTENCE_NOTE
+    if blocks_enabled():
+        text = text.replace(_ONE_PARAGRAPH, "").replace(_NO_MOVE_NUMBER, "enumerate facts, or describe")
+        text += LAYOUT_NOTE + _NUMBER_CHECK_NOTE
+    if _sentence_form() and pipeline_flags.enabled("claimless_parts"):
+        text += _CLAIMLESS_NOTE
     return text
 
 
 def schema() -> dict:
-    return SENTENCE_SCHEMA if pipeline_flags.enabled("validator_sentence_cites") else SCHEMA
+    return BLOCK_SCHEMA if blocks_enabled() else SENTENCE_SCHEMA if _sentence_form() else SCHEMA
 REVIEW_SYSTEM = (
     "Review the COMPLETE proposed annotation against its supplied evidence. Return the one "
     "decision for index 0 in the sentences schema. Read every assertion, including assessment "
@@ -401,11 +450,23 @@ def prompt(facts, level, key_moment_type=None):
                         "loss_by_played_move": _size(gap) if gap is not None and gap > 0 else None,
                         "unique_best": bool(unique and not alt.is_inferior)} if alt else None},
         substitutions={key: value for key, value in substitutions.items() if value is not None})
+    if blocks_enabled():
+        add_move_labels(evidence)
     sequence = (facts.selection_metadata or {}).get("sequence")
     if sequence:
         evidence["sequence"] = sequence
     return json.dumps({"prompt_version": VERSION, "audience": level, "evidence": model_view(evidence)},
                       ensure_ascii=False), evidence
+
+
+def add_move_labels(evidence):
+    """The played move and the alternative with their move numbers, as the traces anchor them."""
+    assessment = evidence["assessment"]
+    traces = evidence.get("traces") or {}
+    if traces.get("main"):
+        assessment["move_label"] = traces["main"][0]["anchor"]
+    if assessment.get("alternative") and traces.get("alternative"):
+        assessment["alternative"]["move_label"] = traces["alternative"][0]["anchor"]
 
 
 def model_view(evidence):
@@ -416,6 +477,10 @@ def model_view(evidence):
         branch.pop("eval_cp_white", None)
     view["placeholders"] = sorted(view.pop("substitutions", {}))
     view["citable_ids"] = {branch: list(range(len(view[branch]))) for branch in ("main", "alternative")}
+    if pipeline_flags.enabled("claimless_parts"):
+        view["parts_without_claims"] = [
+            part for part, branch in (("move", "main"), ("alternative", "alternative"))
+            if not view[branch] and (branch == "main" or assessment.get("alternative"))]
     return view
 
 
@@ -441,15 +506,25 @@ def allowed_squares(cited, evidence):
 
 def line_moves_named(text, evidence):
     """Distinct engine-line moves (SAN, beyond each branch's root move) that the text names.
-    Plain pawn pushes are skipped because they read like square names."""
+    Plain pawn pushes are skipped because they read like square names.
+
+    With the two-block layout (v19 comment_blocks) a line is counted in its own block only:
+    the played line in the first block, the alternative's line in the second. A move that
+    both lines contain is then not counted against the line the block is not about."""
     counts = {}
+    blocks = text.split("\n") if blocks_enabled() else None
+    scope = {"main": blocks[0], "alternative": "\n".join(blocks[1:])} if blocks else {}
     for branch, events in (evidence.get("traces") or {}).items():
         named = set()
+        where = scope.get(branch, text)
+        # The block's own move can occur again later in its line (14.Nh4+ ... 18.Nh4); naming
+        # the block's move is then not a line move.
+        root = _san_key(events[0]["anchor"].split(".")[-1]) if blocks and events else None
         for event in events[1:]:
             san = event["anchor"].split(".")[-1]
-            if _SQUARE.fullmatch(san) or san in named:
+            if _SQUARE.fullmatch(san) or san in named or _san_key(san) == root:
                 continue
-            if re.search(r"(?<![A-Za-z0-9])" + re.escape(san) + r"(?![A-Za-z0-9])", text):
+            if re.search(r"(?<![A-Za-z0-9])" + re.escape(san) + r"(?![A-Za-z0-9])", where):
                 named.add(san)
         counts[branch] = len(named)
     return counts
@@ -493,14 +568,27 @@ def _flatten_sentences(proposal, evidence):
         raise ValueError("Expected sentences with their own citations")
     flat = {"text": "", "main": [], "alternative": []}
     parts = []
+    blocks = blocks_enabled()
+    fields = {"text", "main", "alternative", "part"} if blocks else {"text", "main", "alternative"}
+    by_part = {part: [] for part in PARTS}
     for sentence in sentences:
-        if not isinstance(sentence, dict) or set(sentence) != {"text", "main", "alternative"}:
+        if not isinstance(sentence, dict) or set(sentence) != fields:
             raise ValueError("Expected sentences with their own citations")
         text = sentence["text"]
-        if not isinstance(text, str) or not text.strip():
+        if not isinstance(text, str) or not text.strip() or "\n" in text:
             raise ValueError("Empty sentence")
+        if blocks:
+            if sentence["part"] not in PARTS or (sentence["part"] == "move" and by_part["alternative"]):
+                raise ValueError("Sentences of the move part must come before the alternative part")
+            by_part[sentence["part"]].append(text.strip())
         ids = [i for branch in ("main", "alternative") for i in (sentence[branch] or [])]
         plain = _PLACEHOLDER.sub("", text)
+        if blocks:
+            # Naming the move a block is about (which the layout asks for) needs no citation.
+            for branch in ("main", "alternative"):
+                san = _root_san(evidence, branch)
+                if san:
+                    plain = re.sub(r"(?:\d+\s?(?:\.{3}|…|\.)\s?)?" + re.escape(san.rstrip("+#")) + r"[+#]?", "", plain)
         if not ids and (_SQUARE.search(plain) or _SAN_MOVE.search(plain)):
             raise ValueError("Sentence names a square or move without a citation")
         for branch in ("main", "alternative"):
@@ -508,19 +596,113 @@ def _flatten_sentences(proposal, evidence):
                 raise ValueError("Unknown or duplicate branch citation")
             flat[branch].extend(sentence[branch])  # duplicates fail the branch check below
         parts.append(text.strip())
-    flat["text"] = " ".join(parts)
+    flat["text"] = join_blocks(by_part, evidence) if blocks else " ".join(parts)
     return flat
+
+
+# A move named in the text, with the number or the dots written before it (if any).
+_NAMED_MOVE = re.compile(
+    r"(?<![A-Za-z0-9])(?:(?P<number>\d+)\s?(?P<dots>\.{3}|…|\.)\s?|(?P<bare>\.{3}|…)\s?)?"
+    r"(?P<san>O-O(?:-O)?|[KQRBN][a-h]?[1-8]?x?[a-h][1-8]|[a-h]x[a-h][1-8](?:=[QRBN])?|[a-h][18]=[QRBN])"
+    r"(?P<suffix>[+#]?)(?![A-Za-z0-9])")
+
+
+def _root_san(evidence, branch):
+    events = (evidence.get("traces") or {}).get(branch) or []
+    return events[0]["anchor"].split(".")[-1] if events else None
+
+
+def join_blocks(by_part, evidence):
+    """v19 comment_blocks: the played move, then the alternative on its own line. Each block
+    must name its own move."""
+    if not by_part["move"]:
+        raise ValueError("The move part is missing")
+    blocks = [" ".join(by_part["move"])]
+    if by_part["alternative"]:
+        blocks.append(" ".join(by_part["alternative"]))
+    for block, branch in zip(blocks, ("main", "alternative")):
+        san = _root_san(evidence, branch)
+        if san is None or not re.search(r"(?<![A-Za-z0-9])" + re.escape(san.rstrip("+#")) + r"(?![A-Za-z0-9])", block):
+            raise ValueError(f"The {branch} block does not name its move")
+    return "\n".join(blocks)
+
+
+def _line_labels(evidence, branches):
+    """SAN -> numbered label, taking the first of ``branches`` that has the move."""
+    labels = {}
+    for branch in branches:
+        for event in (evidence.get("traces") or {}).get(branch) or []:
+            labels.setdefault(_san_key(event["anchor"].split(".")[-1]), event["anchor"])
+    return labels
+
+
+def _numbers(evidence):
+    """(move number, is Black's move, SAN) of every move of both lines."""
+    known = set()
+    for events in (evidence.get("traces") or {}).values():
+        for event in events:
+            number, _, rest = event["anchor"].partition(".")
+            known.add((int(number), rest.startswith(".."), _san_key(rest.lstrip("."))))
+    return known
+
+
+def misnumbered_moves(text, evidence):
+    """Moves of the lines that the text names with a number their line does not give them."""
+    known = _numbers(evidence)
+    sans = {san for _, _, san in known}
+    wrong = []
+    for m in _NAMED_MOVE.finditer(text):
+        san = _san_key(m["san"])
+        if m["number"] and san in sans and (int(m["number"]), m["dots"] != ".", san) not in known:
+            wrong.append(m[0])
+    return wrong
+
+
+def number_moves(text, evidence):
+    """v19 comment_blocks: a move of the lines that the text names without its number gets it.
+    A block looks up its own line first. Plain pawn pushes read like squares and are left,
+    except the move a block is about when the block starts with it."""
+    out = []
+    traces = evidence.get("traces") or {}
+    for block, branches in zip(text.split("\n"), (("main", "alternative"), ("alternative", "main"))):
+        labels = _line_labels(evidence, branches)
+        root = _root_san(evidence, branches[0])
+        if root and block.startswith(root) and not block[len(root):len(root) + 1].isalnum():
+            block = labels[_san_key(root)] + block[len(root):]
+        # The block's own line in order. The same move can occur twice in a line (a capture
+        # and the recapture on one square, 'axb5' by both sides), so a move without a number
+        # takes the first such move after the last one the text named.
+        own = [event["anchor"] for event in traces.get(branches[0]) or []]
+        keys = [_san_key(anchor.split(".")[-1]) for anchor in own]
+        at = [-1]
+
+        def numbered(m):
+            key = _san_key(m["san"])
+            hits = [i for i, san in enumerate(keys) if san == key]
+            if m["number"]:
+                written = f"{int(m['number'])}{'.' if m['dots'] == '.' else '...'}"
+                at[0] = next((i for i in hits if own[i].startswith(written) and
+                              own[i][len(written):len(written) + 1] != "."), at[0])
+                return m[0]
+            if not hits:
+                return labels.get(key) or m[0]
+            at[0] = next((i for i in hits if i > at[0]), hits[0])
+            return own[at[0]]
+
+        out.append(_NAMED_MOVE.sub(numbered, block))
+    return "\n".join(out)
 
 
 def parse_proposal(raw, evidence):
     proposal = json.loads(raw)
-    sentence_form = pipeline_flags.enabled("validator_sentence_cites")
+    sentence_form = _sentence_form()
     if sentence_form:
         proposal = _flatten_sentences(proposal, evidence)
     if not isinstance(proposal, dict) or set(proposal) != {"text", "main", "alternative"}:
         raise ValueError("Expected complete annotation with branch-local citations")
     text = proposal["text"]
-    if not isinstance(text, str) or not text.strip() or len(text.split()) > MAX_WORDS or any(c in text for c in "[]\n\r"):
+    if (not isinstance(text, str) or not text.strip() or len(text.split()) > MAX_WORDS
+            or any(c in text for c in "[]\r") or ("\n" in text and not blocks_enabled())):
         raise ValueError("Invalid annotation or word budget exceeded")
     for name in _PLACEHOLDER.findall(text):
         if name not in evidence["substitutions"]:
@@ -551,6 +733,10 @@ def parse_proposal(raw, evidence):
     for branch, count in line_moves_named(plain, evidence).items():
         if count > MAX_LINE_MOVES:
             raise ValueError(f"More than {MAX_LINE_MOVES} engine-line moves named in the {branch} branch")
+    if blocks_enabled():
+        wrong = misnumbered_moves(plain, evidence)
+        if wrong:
+            raise ValueError(f"Move number does not match the line: {wrong}")
     resolved = _PLACEHOLDER.sub(lambda m: evidence["substitutions"][m[1]], text).strip()
     review = {"index": 0, "text": resolved, "claims": cited,
               **{key: evidence[key] for key in ("traces", "board_context", "mechanical_relations", "assessment")},
@@ -560,4 +746,5 @@ def parse_proposal(raw, evidence):
 
 def render(proposal, evidence, facts=None, archetype=None):
     # No prose scaffolding: UI facts and exporter carry evaluations/variations.
-    return _PLACEHOLDER.sub(lambda m: evidence["substitutions"][m[1]], proposal["text"]).strip()
+    text = _PLACEHOLDER.sub(lambda m: evidence["substitutions"][m[1]], proposal["text"]).strip()
+    return number_moves(text, evidence) if blocks_enabled() else text

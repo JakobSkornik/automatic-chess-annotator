@@ -19,6 +19,7 @@ from app.core.commentary.features.guid_features.features.pawns import backward a
 from app.core.commentary.features.guid_features.features.pawns import isolated as isolated_feature
 from app.core.commentary.features.see import VALUE, as_side_to_move, best_capture_gain
 from app.models.comment_facts import Claim
+from app.core.commentary import pipeline_flags
 
 from .context import _Ctx, _side_label
 
@@ -81,6 +82,10 @@ def rule_threat_parried(ctx: _Ctx) -> list[Claim]:
             verb = f"the {chess.piece_name(attacker.piece_type)} that attacked it is gone"
         text = (f"{side} {how} the {chess.piece_name(piece.piece_type)} on {chess.square_name(square)}: {verb} "
                 f"(the threat was {start.san(capture) if start.turn == (not mover) else _san_for(start, not mover, capture)}).")
+        if pipeline_flags.enabled("statement_wording"):
+            # One plain sentence, without the bracket and its unnumbered move.
+            subject = f"{side} {how} the {chess.piece_name(piece.piece_type)} on {chess.square_name(square)}"
+            text = f"{subject}, so {verb[len('so that '):]}." if how == "defends" else f"{subject}: {verb}."
         out.append(Claim(rule_id="threat_parried", beneficiary=ctx.mover.lower(), text=text, text_state=text,
                          features_involved=["TACTICAL_EXCHANGE"], delta_cp=PARRY_CP,
                          entity=f"parry:{chess.square_name(square)}",
