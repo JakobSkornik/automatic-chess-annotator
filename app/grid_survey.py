@@ -418,8 +418,14 @@ def get_round(token, response_token, game_id):
             variant = db.execute('SELECT game FROM comparison_variants WHERE survey_id=? AND variant_id=?',
                                  (study['id'], candidate['variant_id'])).fetchone()
             game = json.loads(variant['game'])
+            move = game['moves'][entry['comparison_position']['move_index']]
+            # Every version's links in one form: phrase, line, ply and bare squares. The roles and
+            # files that only the system's statements carry would tell the versions apart.
+            links = [{'phrase': link['phrase'], 'start': link.get('start'), 'part': link['part'], 'ply': link['ply'],
+                      'evidence': {'squares': list((link.get('evidence') or {}).get('squares') or [])}}
+                     for link in move.get('comment_links') or []]
             candidates.append({'id': candidate['id'], 'label': candidate_label(manifest, i),
-                               'comment': game['moves'][entry['comparison_position']['move_index']]['comment']})
+                               'comment': move['comment'], 'links': links})
         # Only what the board needs: the position type and selection notes stay private.
         position = {k: entry['comparison_position'][k] for k in ('move_index', 'ply', 'san', 'fen_before', 'fen_after')}
         return {'game_id': game_id, 'level': assigned['level'], 'bracket': entry['bracket'],
@@ -456,7 +462,7 @@ def get_round_board(token, response_token, game_id):
         lines_only = is_version_study(json.loads(study['manifest']))
     game = json.loads(variant['game'])
     for move in game['moves']:
-        move.update(comment='', resolved_tokens=[], has_comment=False, final_comment=False,
+        move.update(comment='', resolved_tokens=[], comment_links=[], has_comment=False, final_comment=False,
                     comment_kind='none', commentary_status=None, commentary_reason=None)
         # One version of a version study is written without the rule statements, so the
         # rating rounds show the engine lines alone; statements appear only in the tasks.

@@ -16,6 +16,7 @@ import json
 import re
 
 from . import narrative
+from app.core.commentary import pipeline_flags
 
 VERSION = "lines_only_v1"
 # Key moments that follow from the evaluation and the material alone.
@@ -154,6 +155,33 @@ BASE_SYSTEM = (
     "pawn, or a feature such as king safety or the pawn structure). "
     "Return JSON {{text}}."
 )
+# v19 statement_links: the base model also reports which phrase makes which statement.
+BASE_LINKS_VERSION = "base_lines_v3"
+_BASE_RETURN = "Return JSON {{text}}."
+_BASE_STATEMENTS = (
+    "LATER POSITIONS: a statement that holds only after a later move of a line names that "
+    "move with its number ('after 33.h6, ...'), never a paraphrase of it ('after the "
+    "exchanges', 'once the sequence resolves'). "
+    "STATEMENTS: also return statements, a list with one entry for each concrete statement "
+    "your text makes about the board (a piece or pawn, a square, a file, the pawn structure, "
+    "material). Each entry has phrase: the shortest stretch of your text that makes the "
+    "statement, copied exactly from text; line: 'played' when it is about the line after the "
+    "move played, 'other' when it is about the line after the other move; after_move: the move "
+    "of that line after which the statement holds, written with its number as the line gives "
+    "it (the first move of the line when it holds at once); squares: the squares of the pieces "
+    "and pawns the statement is about, as they stand in that position, at most six. One entry "
+    "per statement; phrases do not overlap. "
+    "Return JSON {{text, statements}}.")
+BASE_LINKS_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"text": {"type": "string"}, "statements": {"type": "array", "maxItems": 12, "items": {
+        "type": "object", "additionalProperties": False,
+        "properties": {"phrase": {"type": "string"}, "line": {"type": "string", "enum": ["played", "other"]},
+                       "after_move": {"type": "string"},
+                       "squares": {"type": "array", "maxItems": 6, "items": {"type": "string"}}},
+        "required": ["phrase", "line", "after_move", "squares"]}}},
+    "required": ["text", "statements"],
+}
 BASE_SCHEMA = {
     "type": "object", "additionalProperties": False,
     "properties": {"text": {"type": "string"}}, "required": ["text"],
@@ -165,8 +193,33 @@ def _placement(pieces):
     return "; ".join(f"{name} {', '.join(pieces[name])}" for name in _PIECE_ORDER if pieces.get(name))
 
 
+def base_links() -> bool:
+    return pipeline_flags.enabled("statement_links")
+
+
+def base_version() -> str:
+    return BASE_LINKS_VERSION if base_links() else BASE_VERSION
+
+
+def base_schema() -> dict:
+    return BASE_LINKS_SCHEMA if base_links() else BASE_SCHEMA
+
+
 def base_system(level):
-    return BASE_SYSTEM.format(level=level)
+    text = BASE_SYSTEM
+    if base_links():
+        assert text.endswith(_BASE_RETURN)
+        text = text[:-len(_BASE_RETURN)] + _BASE_STATEMENTS
+    return text.format(level=level)
+
+
+def base_statements(raw):
+    """What the base model reported about its own text (a list, possibly empty)."""
+    try:
+        statements = json.loads(raw).get("statements")
+    except (ValueError, AttributeError):
+        return []
+    return statements if isinstance(statements, list) else []
 
 
 def base_prompt(facts, level, key_moment_type=None):

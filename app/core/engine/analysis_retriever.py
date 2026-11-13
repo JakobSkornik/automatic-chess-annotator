@@ -157,6 +157,14 @@ def _build_game_move(
     debug = _build_move_debug(analyzed_move, move_event, facts, comment, row.phase_raw or "")
     if debug is not None:
         debug.update(status)
+    comment_links = []
+    if comment and facts is not None and pipeline_flags.enabled("statement_links"):
+        from app.core.commentary.phases.composer import links as statement_links
+        written = (analyzed_move.hiddenFeatures or {}).get("_llm") or {}
+        if status.get("comment_kind") == "template":
+            comment_links = statement_links.for_template(facts, comment)
+        elif written.get("comment") == comment and isinstance(written.get("comment_links"), list):
+            comment_links = written["comment_links"]
     return GameMove(
         mn=board_before.fullmove_number,
         color="w" if board_before.turn == chess.WHITE else "b",
@@ -181,6 +189,7 @@ def _build_game_move(
             and not move_event.brief_commentary
         ),
         resolved_tokens=_resolve_comment_tokens(comment, move_event),
+        comment_links=comment_links,
         comment_facts=_facts_to_json(facts) if facts is not None else None,
         debug=debug,
     )

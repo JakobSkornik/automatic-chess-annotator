@@ -117,6 +117,7 @@ class FactsComposeStage:
                 "review_scope": result.get("review_scope"),
                 "selected_claims": result.get("selected_claims"),
                 "raw_proposal": result.get("raw_proposal"),
+                **({"comment_links": result["comment_links"]} if "comment_links" in result else {}),
                 "claim_catalog": result.get("claim_catalog"),
                 "review_decisions": result.get("review_decisions"),
                 "fallback_reason": result.get("fallback_reason"),

@@ -198,7 +198,8 @@ def _write_llm_comment(
                 slot["facts_contract_ok"] = llm_debug["facts_contract_ok"]
             for key in ("rendering_contract", "prompt_version", "semantic_review", "review_scope",
                         "selected_claims", "raw_proposal", "review_decisions", "fallback_reason",
-                        "selection_metadata", "missed_improvement", "claim_catalog", "commentary_status", "commentary_reason"):
+                        "selection_metadata", "missed_improvement", "claim_catalog", "commentary_status", "commentary_reason",
+                        "comment_links"):
                 if key in llm_debug:
                     slot[key] = llm_debug[key]
         return

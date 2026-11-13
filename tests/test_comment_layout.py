@@ -124,6 +124,7 @@ def _sentences(*rows):
 def test_prompt_and_schema_ask_for_the_two_blocks(monkeypatch, stored):
     assert "LAYOUT" not in narrative.system_prompt()
     monkeypatch.setenv("ACA_PROFILE", "v19")
+    monkeypatch.setenv("ACA_V19_STATEMENT_LINKS", "0")   # the links add a field to each sentence
     system = narrative.system_prompt()
     assert "LAYOUT" in system and "one coherent paragraph" not in system and "repeat the move number" not in system
     assert narrative.schema() is narrative.BLOCK_SCHEMA
@@ -593,13 +594,18 @@ def test_lines_only_mode_uses_the_base_model_at_v19(monkeypatch, stored):
         return service.reply
     service.review_json = review_json
     result = asyncio.run(compose_facts_comment(service, stored["game-14"], model="m", effort="low", level="expert"))
-    assert result["rendering"] == "llm" and result["prompt_version"] == "base_lines_v2"
+    assert result["rendering"] == "llm" and result["prompt_version"] == "base_lines_v3"
     assert result["text"] == "Moving this rook leaves the h-pawn loose.\nThe other rook was the one to move."
+    assert result["comment_links"] == []   # it reported no statements; the text stands
     # One request outside the game conversation, so no earlier comment travels with it.
     assert len(independent) == 1 and not service.requests
     system, user, kwargs = independent[0]
-    assert system == plain.base_system("expert") and kwargs["schema"] is plain.BASE_SCHEMA
+    assert system == plain.base_system("expert") and kwargs["schema"] is plain.BASE_LINKS_SCHEMA
     assert user.startswith("Position before the move (FEN): ")
+    # Without the links it is the request of the earlier version.
+    monkeypatch.setenv("ACA_V19_STATEMENT_LINKS", "0")
+    assert plain.base_version() == "base_lines_v2" and plain.base_schema() is plain.BASE_SCHEMA
+    assert plain.base_system("expert").endswith("Return JSON {text}.") and "STATEMENTS" not in plain.base_system("expert")
 
 
 # --- other moves concede (12 Nov) ---
@@ -636,3 +642,75 @@ def test_full_writer_does_not_see_a_much_worse_second_choice(monkeypatch, stored
     assert text == "24...Rhd8 is best.\nOther moves concede a pawn."
     monkeypatch.setenv("ACA_V19_OTHER_MOVES_CONCEDE", "0")
     assert "Rad8" in narrative.prompt(facts, "expert")[0] and "such as Bxf6" in narrative.system_prompt()
+
+
+# --- statement links (13 Nov) ---
+
+def test_full_writer_returns_the_phrase_of_each_cited_statement(monkeypatch, stored):
+    from app.core.commentary.phases.composer import links
+    facts = stored["game-14"]
+    assert "LINKS" not in narrative.system_prompt()
+    monkeypatch.setenv("ACA_PROFILE", "v19")
+    system = narrative.system_prompt()
+    assert "LINKS" in system and "LATER POSITIONS" in system
+    item = narrative.schema()["properties"]["sentences"]["items"]
+    assert "links" in item["required"] and narrative.BLOCK_SCHEMA["properties"]["sentences"]["items"]["required"][-1] == "part"
+    _, evidence = narrative.prompt(facts, "expert")
+    sentence = {"text": "24...Rhd8 is fine.", "main": [0], "alternative": [], "part": "move"}
+    # A link is kept only for a statement its own sentence cites; a sentence may come without links.
+    flat = narrative._flatten_sentences({"sentences": [
+        dict(sentence, links=[{"phrase": "is fine", "branch": "main", "id": 0},
+                              {"phrase": "is fine", "branch": "main", "id": 1}, "noise"]),
+        {"text": "Nothing more.", "main": [], "alternative": [], "part": "move"}]}, evidence)
+    assert flat["links"] == [{"phrase": "is fine", "branch": "main", "id": 0}]
+    # The phrase is found in the final text, where its move has gained a number.
+    claim = facts.claims[0]
+    final = "24...Rhd8 is an inaccuracy: after 25.Rc4 the rook is loose.\n24...Rad8 was better."
+    made = links.for_claims([{"phrase": "after Rc4 the rook is loose", "branch": "main", "id": 0},
+                             {"phrase": "is an inaccuracy", "branch": "main", "id": 0},      # one phrase per statement
+                             {"phrase": "was better", "branch": "main", "id": 99},           # no such statement
+                             {"phrase": "not in the text", "branch": "alternative", "id": 0}], facts, final)
+    assert len(made) == 1
+    link = made[0]
+    assert link["phrase"] == "after 25.Rc4 the rook is loose" and final[link["start"]:].startswith(link["phrase"])
+    assert link["part"] == "main" and link["ply"] == claim.support_ply
+    assert link["evidence"]["squares"] == list(claim.evidence.squares)
+
+
+def test_template_phrases_are_found_again_in_its_text(monkeypatch, stored):
+    from app.core.commentary.phases.composer import links
+    monkeypatch.setenv("ACA_PROFILE", "v19")
+    facts = stored["game-14"]
+    text = render_facts_template(facts, archetype=comment_archetype(None))
+    made = links.for_template(facts, text)
+    assert made and made == sorted(made, key=lambda link: link["start"])
+    first_line = text.index("\n")
+    spans = []
+    for link in made:
+        assert text[link["start"]:link["start"] + len(link["phrase"])] == link["phrase"]
+        assert link["part"] == "main" and link["start"] < first_line and link["ply"] >= 1
+        spans.append((link["start"], link["start"] + len(link["phrase"])))
+    assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:]))   # no two links share a word
+    assert len(made) == len(facts.claims)   # every statement of the played line is found
+
+
+def test_base_model_reports_its_own_statements(monkeypatch, stored):
+    from app.core.commentary.phases.composer import links
+    monkeypatch.setenv("ACA_PROFILE", "v19")
+    system = plain.base_system("expert")
+    assert system.endswith("Return JSON {text, statements}.") and "LATER POSITIONS" in system
+    for word in ("assessment.", "evidence.", "claim", "citable", "placeholder"):
+        assert word not in system
+    _, evidence = plain.base_prompt(stored["game-14"], "expert")
+    raw = json.dumps({"text": "Rhd8 leaves Black\u2019s pawn on h7 loose after Rc4.\nRad8 was better.", "statements": [
+        {"phrase": "Black\u2019s pawn on h7 loose after Rc4", "line": "played", "after_move": "25.Rc4", "squares": ["h7", "z9", 7]},
+        {"phrase": "was better", "line": "other", "after_move": "24...Rad8", "squares": []},
+        {"phrase": "was better", "line": "other", "after_move": "24...Rad8", "squares": ["d8"]},   # the words are taken
+        {"phrase": "leaves", "line": "played", "after_move": "30.Qh5", "squares": []},              # not a move of the line
+        {"phrase": "not in the text", "line": "played", "after_move": "24...Rhd8", "squares": []}]})
+    final = plain.base_parse(raw, evidence)
+    made = links.for_base(plain.base_statements(raw), evidence, final)
+    assert [(link["phrase"], link["part"], link["ply"], link["evidence"]) for link in made] == [
+        ("Black's pawn on h7 loose after 25.Rc4", "main", 2, {"squares": ["h7"]}),
+        ("was better", "alt", 1, {"squares": []})]
+    assert plain.base_statements("{}") == [] and plain.base_statements("not json") == []

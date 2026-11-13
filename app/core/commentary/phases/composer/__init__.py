@@ -267,18 +267,21 @@ async def _compose_plain(service, facts, level, template, *, model, effort, key_
         if pipeline_flags.enabled("base_writer"):
             # The base model: position and engine lines only, each move on its own (no game
             # conversation), the text taken as written.
-            result.update(prompt_version=plain.BASE_VERSION, rendering_contract=plain.BASE_VERSION)
+            result.update(prompt_version=plain.base_version(), rendering_contract=plain.base_version())
             user, evidence = plain.base_prompt(facts, level, key_moment_type=key_moment_type)
             call = (service.review_json if getattr(service, "is_commentary_session", False)
                     else service._llm_call_json_schema)
             stage = "provider"
             raw = await call(plain.base_system(level), user, model=model, effort=effort,
-                             schema=plain.BASE_SCHEMA, schema_name="base_comment",
+                             schema=plain.base_schema(), schema_name="base_comment",
                              max_output_tokens=commentary_output_limit())
             result["raw_proposal"] = raw
             stage = "validation"
             result.update(text=plain.base_parse(raw, evidence), rendering="llm",
                           commentary_status="llm_unreviewed")
+            if plain.base_links():
+                from . import links
+                result["comment_links"] = links.for_base(plain.base_statements(raw), evidence, result["text"])
             return result
         user, evidence = plain.prompt(facts, level, key_moment_type=key_moment_type,
                                       moves_before=moves_before)
@@ -340,6 +343,9 @@ async def _compose_rewrite(service, facts, level, archetype, template, *, model,
             result.update(text=rewrite.render(proposal, evidence, facts, archetype),
                           rendering="llm", semantic_review="disabled",
                           commentary_status="llm_unreviewed")
+            if not legacy and rewrite.links_enabled():
+                from . import links
+                result["comment_links"] = links.for_claims(proposal.get("links"), facts, result["text"])
             return result
         stage = "review"
         review = await service.review_json(

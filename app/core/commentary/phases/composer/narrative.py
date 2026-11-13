@@ -56,6 +56,25 @@ _CLAIMLESS_NOTE = (
     "sentence: its own move (the move_label) and the assessment in words (verdict, comparison "
     "with the other move). No square, no other move, no piece placement, no retelling of the "
     "line or of earlier moves of the game in it. Explain in the part that has claims.")
+# v19 statement_links: the phrase of each cited claim, and later statements name their move.
+LATER_NOTE = (
+    " LATER POSITIONS: a statement that holds only after a later move of a line names that "
+    "move with its number ('after 33.h6, ...'), never a paraphrase of it ('after the "
+    "exchanges', 'once the sequence resolves').")
+_LINKS_NOTE = (
+    " LINKS: every sentence entry also carries links, a list of {phrase, branch, id}: for each "
+    "claim the sentence cites, the shortest stretch of that sentence's text that states the "
+    "claim, copied exactly from text, with the claim's branch ('main' or 'alternative') and "
+    "ID. One phrase per claim; phrases do not overlap; a sentence without citations has an "
+    "empty list. For a claim whose timing is after_forced_sequence or in_line, the move to "
+    "name is its holds_from; the limit of two line moves per line still applies, so name the "
+    "moves your statements rest on.")
+_LINK_ITEM = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"phrase": {"type": "string"}, "branch": {"type": "string", "enum": ["main", "alternative"]},
+                   "id": {"type": "integer"}},
+    "required": ["phrase", "branch", "id"],
+}
 _ONE_PARAGRAPH = "The text is one coherent paragraph. "
 _NO_MOVE_NUMBER = "enumerate facts, repeat the move number, or describe"
 SYSTEM = (
@@ -221,6 +240,11 @@ def _sentence_form() -> bool:
     return pipeline_flags.enabled("validator_sentence_cites") or blocks_enabled()
 
 
+def links_enabled() -> bool:
+    """Phrase links ride on the sentence entries."""
+    return _sentence_form() and pipeline_flags.enabled("statement_links")
+
+
 def system_prompt() -> str:
     """The writer instructions for the active switches (SYSTEM is the v18 text)."""
     text = SYSTEM
@@ -238,6 +262,8 @@ def system_prompt() -> str:
     if pipeline_flags.enabled("other_moves_concede"):
         assert _RUNNER_UP_OLD in text
         text = text.replace(_RUNNER_UP_OLD, _RUNNER_UP_NEW)
+    if links_enabled():
+        text += LATER_NOTE + _LINKS_NOTE
     return text
 
 
@@ -257,7 +283,14 @@ _RUNNER_UP_NEW = (
 
 
 def schema() -> dict:
-    return BLOCK_SCHEMA if blocks_enabled() else SENTENCE_SCHEMA if _sentence_form() else SCHEMA
+    chosen = BLOCK_SCHEMA if blocks_enabled() else SENTENCE_SCHEMA if _sentence_form() else SCHEMA
+    if not links_enabled():
+        return chosen
+    chosen = copy.deepcopy(chosen)
+    item = chosen["properties"]["sentences"]["items"]
+    item["properties"]["links"] = {"type": "array", "maxItems": 6, "items": _LINK_ITEM}
+    item["required"] = [*item["required"], "links"]
+    return chosen
 REVIEW_SYSTEM = (
     "Review the COMPLETE proposed annotation against its supplied evidence. Return the one "
     "decision for index 0 in the sentences schema. Read every assertion, including assessment "
@@ -600,9 +633,13 @@ def _flatten_sentences(proposal, evidence):
     parts = []
     blocks = blocks_enabled()
     fields = {"text", "main", "alternative", "part"} if blocks else {"text", "main", "alternative"}
+    linked = links_enabled()
+    if linked:
+        flat["links"] = []
     by_part = {part: [] for part in PARTS}
     for sentence in sentences:
-        if not isinstance(sentence, dict) or set(sentence) != fields:
+        # A sentence may come without its links: they are never a reason to reject.
+        if not isinstance(sentence, dict) or set(sentence) - ({"links"} if linked else set()) != fields:
             raise ValueError("Expected sentences with their own citations")
         text = sentence["text"]
         if not isinstance(text, str) or not text.strip() or "\n" in text:
@@ -625,6 +662,12 @@ def _flatten_sentences(proposal, evidence):
             if not isinstance(sentence[branch], list):
                 raise ValueError("Unknown or duplicate branch citation")
             flat[branch].extend(sentence[branch])  # duplicates fail the branch check below
+        if linked:
+            # Links are never a reason to reject: one that does not fit its sentence is left out.
+            flat["links"] += [
+                link for link in (sentence["links"] if isinstance(sentence.get("links"), list) else [])
+                if isinstance(link, dict) and isinstance(link.get("phrase"), str)
+                and link.get("branch") in ("main", "alternative") and link.get("id") in sentence[link["branch"]]]
         parts.append(text.strip())
     flat["text"] = join_blocks(by_part, evidence) if blocks else " ".join(parts)
     return flat
@@ -730,6 +773,7 @@ def parse_proposal(raw, evidence):
     sentence_form = _sentence_form()
     if sentence_form:
         proposal = _flatten_sentences(proposal, evidence)
+    phrase_links = proposal.pop("links", None) if isinstance(proposal, dict) else None
     if not isinstance(proposal, dict) or set(proposal) != {"text", "main", "alternative"}:
         raise ValueError("Expected complete annotation with branch-local citations")
     text = proposal["text"]
@@ -773,6 +817,8 @@ def parse_proposal(raw, evidence):
     review = {"index": 0, "text": resolved, "claims": cited,
               **{key: evidence[key] for key in ("traces", "board_context", "mechanical_relations", "assessment")},
               "lines": evidence.get("lines") or {}}
+    if phrase_links is not None:
+        proposal["links"] = phrase_links
     return proposal, [review]
 
 

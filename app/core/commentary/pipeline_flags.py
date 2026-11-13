@@ -107,6 +107,17 @@ FLAGS: dict[str, tuple[str, str]] = {
         "of the full writer (numbered moves, sides named, no figures, paragraph rule, other "
         "moves concede) and none of its evidence; only the length is checked.",
         "phases/composer/plain.py, phases/composer/__init__.py"),
+    "statement_links": (
+        "Every comment carries links from its phrases to the position and squares they are "
+        "about (stored on the move as comment_links), so the interface can play the line to "
+        "that position and highlight them. The full writer returns the phrase of each cited "
+        "statement, the template's phrases are found again in its text, and the base model "
+        "reports phrase, line, move and squares itself (unverified). Both writers are also told "
+        "to name the move after which a later statement holds. A link that cannot be placed is "
+        "dropped; no text is rejected for it.",
+        "phases/composer/links.py, phases/composer/narrative.py, phases/composer/plain.py, "
+        "phases/composer/__init__.py, pipeline/move_pipeline.py, pipeline/game_pipeline.py, "
+        "engine/analysis_retriever.py"),
 }
 
 _PROFILES = {"v18": set(), "v19": set(FLAGS)}

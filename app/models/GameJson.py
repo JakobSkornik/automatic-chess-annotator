@@ -58,6 +58,9 @@ class GameMove(BaseModel):
     # back-to-back stub) — lets a reviewer see the curated commentary set.
     final_comment: bool = False
     resolved_tokens: list[dict[str, Any]] = []
+    # v19 statement_links: phrases of the comment with the line position and the squares
+    # they are about ({phrase, start, part, ply, evidence}); empty when the switch is off.
+    comment_links: list[dict[str, Any]] = []
     # Trimmed CommentFacts for the structured comment renderer (assessment /
     # reasons / better alternative, each with its own line).
     comment_facts: dict[str, Any] | None = None
