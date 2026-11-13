@@ -61,6 +61,9 @@ class GameMove(BaseModel):
     # v19 statement_links: phrases of the comment with the line position and the squares
     # they are about ({phrase, start, part, ply, evidence}); empty when the switch is off.
     comment_links: list[dict[str, Any]] = []
+    # The template text of this key moment and its links, also when a model wrote the comment.
+    machine_comment: str | None = None
+    machine_comment_links: list[dict[str, Any]] = []
     # Trimmed CommentFacts for the structured comment renderer (assessment /
     # reasons / better alternative, each with its own line).
     comment_facts: dict[str, Any] | None = None

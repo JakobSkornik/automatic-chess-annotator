@@ -462,7 +462,8 @@ def get_round_board(token, response_token, game_id):
         lines_only = is_version_study(json.loads(study['manifest']))
     game = json.loads(variant['game'])
     for move in game['moves']:
-        move.update(comment='', resolved_tokens=[], comment_links=[], has_comment=False, final_comment=False,
+        move.update(comment='', resolved_tokens=[], comment_links=[], machine_comment=None,
+                    machine_comment_links=[], has_comment=False, final_comment=False,
                     comment_kind='none', commentary_status=None, commentary_reason=None)
         # One version of a version study is written without the rule statements, so the
         # rating rounds show the engine lines alone; statements appear only in the tasks.

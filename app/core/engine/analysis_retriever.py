@@ -54,6 +54,7 @@ from .analysis.comment_assembly import (
     _build_move_debug,
     _comment_status,
     _build_variations,
+    _facts_floor_comment,
     _resolve_comment_tokens,
     _resolve_move_comment,
 )
@@ -165,6 +166,15 @@ def _build_game_move(
             comment_links = statement_links.for_template(facts, comment)
         elif written.get("comment") == comment and isinstance(written.get("comment_links"), list):
             comment_links = written["comment_links"]
+    # The template text of a key moment, kept beside a model-written comment so the
+    # interface can show both (the template is what the comment falls back to).
+    machine_comment, machine_comment_links = None, []
+    if (comment and facts is not None and prose_ok and move_event and move_event.key_moment_type
+            and not facts.terminal_result):
+        machine_comment = _facts_floor_comment(move_event)
+        if machine_comment and pipeline_flags.enabled("statement_links"):
+            from app.core.commentary.phases.composer import links as statement_links
+            machine_comment_links = statement_links.for_template(facts, machine_comment)
     return GameMove(
         mn=board_before.fullmove_number,
         color="w" if board_before.turn == chess.WHITE else "b",
@@ -190,6 +200,8 @@ def _build_game_move(
         ),
         resolved_tokens=_resolve_comment_tokens(comment, move_event),
         comment_links=comment_links,
+        machine_comment=machine_comment,
+        machine_comment_links=machine_comment_links,
         comment_facts=_facts_to_json(facts) if facts is not None else None,
         debug=debug,
     )
